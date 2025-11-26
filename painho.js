@@ -23,6 +23,25 @@ function changeSigil(s) {
     SIGIL = s;
 }
 
+// delimitadores de pattern
+const patternDelims = [
+    ["{", "}"] // padrão
+];
+
+function registerDelimiter(open, close) {
+    patternDelims.push([open, close]);
+}
+
+function findClosingDelim(open) {
+    for (const [o, c] of patternDelims) {
+        if (o === open) return c;
+    }
+    return null;
+}
+
+function isRegisteredOpen(ch) {
+    return patternDelims.some(([o, _]) => o === ch);
+}
 
 function extractBlock(src, openpos, open = OPEN, close = CLOSE) {
     let i = openpos;
@@ -99,41 +118,27 @@ function patternToRegex(pattern) {
         }
 
         // captura delimitador + sigil + var
-        if (i + 1 < pattern.length &&
-            (pattern[i] === OPEN || pattern[i] === CLOSE ||
-             pattern[i] === '{' || pattern[i] === '(' || pattern[i] === '[' || pattern[i] === '<' ||
-             pattern[i] === '"' || pattern[i] === "'" || pattern[i] === '`')
-            &&
-            pattern[i + 1] === S) {
+        if (isRegisteredOpen(pattern[i]) && pattern.startsWith(S, i + 1)) {
 
             const openDelim = pattern[i];
-            const closeDelim =
-                openDelim === OPEN ? CLOSE :
-                openDelim === '{' ? '}' :
-                openDelim === '(' ? ')' :
-                openDelim === '[' ? ']' :
-                openDelim === '<' ? '>' :
-                openDelim === '"' ? '"' :
-                openDelim === "'" ? "'" :
-                openDelim === '`' ? '`' : openDelim;
+            const closeDelim = findClosingDelim(openDelim);
 
             let j = i + 1 + S.length;
             while (j < pattern.length && /[A-Za-z0-9_]/.test(pattern[j])) j++;
 
             if (j < pattern.length && pattern[j] === closeDelim) {
+
                 const escapedOpen = escapeRegex(openDelim);
                 const escapedClose = escapeRegex(closeDelim);
 
-                const innerRegex =
-                    (openDelim === '"' || openDelim === "'" || openDelim === '`')
-                    ? `[^${escapedOpen}]*`
-                    : buildBalancedBlockRegex(openDelim, closeDelim);
+                const innerRegex = buildBalancedBlockRegex(openDelim, closeDelim);
 
                 regex += `${escapedOpen}(${innerRegex})${escapedClose}`;
                 i = j + 1;
                 continue;
             }
         }
+
 
         // captura $var...token genérico
         if (pattern[i] === S) {
@@ -208,36 +213,28 @@ function extractVarNames(pattern) {
     while (i < pattern.length) {
 
         // delimitadores com ${sigil}var
-        if (
-            (pattern[i] === '{' || pattern[i] === '(' || pattern[i] === '[' ||
-             pattern[i] === '<' || pattern[i] === '"' || pattern[i] === "'" ||
-             pattern[i] === '`')
-            &&
-            pattern.startsWith(S, i + 1)
-        ) {
-            const closeDelim =
-                pattern[i] === '{' ? '}' :
-                pattern[i] === '(' ? ')' :
-                pattern[i] === '[' ? ']' :
-                pattern[i] === '<' ? '>' :
-                pattern[i] === '"' ? '"' :
-                pattern[i] === "'" ? "'" :
-                pattern[i] === '`' ? '`' :
-                pattern[i];
+        if (isRegisteredOpen(pattern[i]) && pattern.startsWith(S, i + 1)) {
+
+            const openDelim = pattern[i];
+            const closeDelim = findClosingDelim(openDelim);
 
             let j = i + 1 + S.length;
             while (j < pattern.length && /[A-Za-z0-9_]/.test(pattern[j])) j++;
 
             if (j < pattern.length && pattern[j] === closeDelim) {
+
                 const varName = pattern.slice(i + 1 + S.length, j);
+
                 if (!seen.has(varName)) {
                     vars.push(S + varName);
                     seen.add(varName);
                 }
+
                 i = j + 1;
                 continue;
             }
         }
+
 
         // $var...token
         if (pattern.startsWith(S, i)) {
@@ -560,13 +557,13 @@ function processEvalBlocks(src) {
 }
 
 // === PROCESSAMENTO DE BLOCOS ISOLADOS ===
-function processNamespaceBlocks(src) {
-    const namespaceRegex = new RegExp(`\\bnamespace\\s*\\${OPEN}`, "g");
+function processLocalBlocks(src) {
+    const localRegex = new RegExp(`\\blocal\\s*\\${OPEN}`, "g");
 
     let match;
     const matches = [];
 
-    while ((match = namespaceRegex.exec(src)) !== null) {
+    while ((match = localRegex.exec(src)) !== null) {
         matches.push({
             matchStart: match.index,
             openPos: match.index + match[0].length - 1
@@ -594,21 +591,77 @@ function processNamespaceBlocks(src) {
     return src;
 }
 
+function processEarlyBlocks(src) {
+    const re = new RegExp(`\\bearly\\s*\\${OPEN}`, "g");
+    let match;
+    const matches = [];
+
+    while ((match = re.exec(src)) !== null) {
+        matches.push({
+            matchStart: match.index,
+            openPos: match.index + match[0].length - 1
+        });
+    }
+
+    for (let j = matches.length - 1; j >= 0; j--) {
+        const m = matches[j];
+
+        const [content, posAfter] = extractBlock(src, m.openPos, OPEN, CLOSE);
+
+        const out = processEarlyBlocks(content); // recursivo
+
+        src = src.substring(0, m.matchStart) + out + src.substring(posAfter);
+    }
+
+    return src;
+}
+
+function processLateBlocks(src) {
+    const re = new RegExp(`\\blate\\s*\\${OPEN}`, "g");
+    let match;
+    const matches = [];
+
+    while ((match = re.exec(src)) !== null) {
+        matches.push({
+            matchStart: match.index,
+            openPos: match.index + match[0].length - 1
+        });
+    }
+
+    for (let j = matches.length - 1; j >= 0; j--) {
+        const m = matches[j];
+
+        const [content, posAfter] = extractBlock(src, m.openPos, OPEN, CLOSE);
+
+        const out = processLateBlocks(content); // recursivo
+
+        src = src.substring(0, m.matchStart) + out + src.substring(posAfter);
+    }
+
+    return src;
+}
 
 function painho(input) {
     let src = input;
 
-    src = processNamespaceBlocks(src);
-    src = processEvalBlocks(src);        // << novo bloco
+    // pré-passagem
+    src = processEarlyBlocks(src);
 
-    const [macros, srcAfterMacros] = collectMacros(src);
-    src = srcAfterMacros;
+    // passagem principal
+    src = processLocalBlocks(src);
+    src = processEvalBlocks(src);
 
-    const [patterns, srcAfterPatterns] = collectPatterns(src);
-    src = srcAfterPatterns;
+    const [macros, s1] = collectMacros(src);
+    src = s1;
+
+    const [patterns, s2] = collectPatterns(src);
+    src = s2;
 
     src = applyPatterns(src, patterns);
     src = expandMacros(src, macros);
+
+    // pós-passagem
+    src = processLateBlocks(src);
 
     return src;
 }
