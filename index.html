@@ -150,8 +150,16 @@
             <button onclick="processCode()">▶ process</button>
             <button onclick="downloadResult()" class="secondary">⬇ download</button>
             <button onclick="clearAll()" class="secondary">🗑 clean all</button>
+
+            <label style="margin-left:20px; font-size:14px; font-weight:600;">quotes:</label>
+            <input id="openQuote" type="text" placeholder="{" style="width:45px; padding:5px;">
+            <input id="closeQuote" type="text" placeholder="}" style="width:45px; padding:5px;">
+            <button onclick="applyQuotes()" style="background:#28a745;">apply</button>
+            <button onclick="resetQuotes()" style="background:#dc3545;">reset</button>
+
             <input type="file" id="fileInput" class="file-input" onchange="handleFileSelect()">
         </div>
+
         <div class="content">
             <div class="panel">
                 <h2>input...</h2>
@@ -250,6 +258,35 @@
                 painho();
             }
         });
+
+        function applyQuotes() {
+            const o = document.getElementById('openQuote').value;
+            const c = document.getElementById('closeQuote').value;
+            if (!o || !c) {
+                alert('invalid quotes');
+                return;
+            }
+            if (!window.changeQuote) {
+                alert('changeQuote() not available');
+                return;
+            }
+            changeQuote(o, c);
+            document.getElementById('status').textContent = `quotes updated to ${o} ${c}`;
+            document.getElementById('status').classList.remove('error');
+        }
+
+        function resetQuotes() {
+            if (!window.changeQuote) {
+                alert('changeQuote() not available');
+                return;
+            }
+            changeQuote('{', '}');
+            document.getElementById('openQuote').value = '';
+            document.getElementById('closeQuote').value = '';
+            document.getElementById('status').textContent = 'quotes reset';
+            document.getElementById('status').classList.remove('error');
+        }
+
     </script>
 </body>
 </html>

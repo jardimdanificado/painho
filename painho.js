@@ -2,66 +2,63 @@
 // painho
 // ============================================
 
-const painho_version = "0.0.6"
+const painho_version = "0.0.7"
 const MAX_ITERATIONS = 512;
 let globalClearFlag = false;
 
-function stripDoubleHashWS(s) {
-    // remove whitespace adjacente à esquerda e direita de cada ##
-    return s.replace(/(\s*)##(\s*)/g, "");
+// ============================================
+// CONFIG GLOBAL DE DELIMITADORES
+// ============================================
+let OPEN = "{";
+let CLOSE = "}";
+
+function changeQuote(open, close) {
+    OPEN = open;
+    CLOSE = close;
 }
 
-
-// === EXTRAÇÃO DE BLOCO BALANCEADO ===
-function extractBlock(src, openpos, open, close) {
+function extractBlock(src, openpos, open = OPEN, close = CLOSE) {
     let i = openpos;
     let depth = 0;
     let startInner = null;
     let inString = false;
     let strChar = '';
+
     while (i < src.length) {
         let ch = src[i];
+
         if (inString) {
-            if (ch === '\\') {
-                i += 2;
-                continue;
-            }
-            if (ch === strChar) {
-                inString = false;
-                strChar = '';
-            }
+            if (ch === '\\') { i += 2; continue; }
+            if (ch === strChar) { inString = false; strChar = ''; }
             i++;
             continue;
         } else {
-            if (ch === '"' || ch === "'") {
+            if (ch === '"' || ch === "'" || ch === "`") {
                 inString = true;
                 strChar = ch;
                 i++;
                 continue;
             }
         }
+
         if (ch === open) {
             depth++;
-            if (startInner === null) {
-                startInner = i + 1;
-            }
+            if (startInner === null) startInner = i + 1;
         } else if (ch === close) {
             depth--;
             if (depth === 0) {
-                const inner = startInner !== null 
-                    ? src.substring(startInner, i) 
-                    : '';
-                const posAfterClose = i + 1;
-                return [inner, posAfterClose];
+                const inner = startInner !== null ? src.substring(startInner, i) : '';
+                return [inner, i + 1];
             }
         }
+
         i++;
     }
-    const inner = startInner !== null 
-        ? src.substring(startInner) 
-        : '';
+
+    const inner = startInner !== null ? src.substring(startInner) : '';
     return [inner, src.length];
 }
+
 
 // ============================================
 // SISTEMA GLOBAL DE CONTADOR + UNIQUE
@@ -79,72 +76,37 @@ const counterState = {
 };
 
 
-
 function patternToRegex(pattern) {
     let regex = '';
     let i = 0;
     let varCounter = 0;
 
     while (i < pattern.length) {
-        // --- match exclusivo de whitespace personalizado ---
-        // #n  -> exatamente "\n"
-        // ##n -> zero ou mais "\n"
-        // #s  -> exatamente " "
-        // ##s -> zero ou mais " "
-        // #t  -> exatamente "\t"
-        // ##t -> zero ou mais "\t"
-        if (pattern[i] === '#') {
-            let count = 1;
-            let j = i + 1;
 
-            // conta quantidade de #
-            while (j < pattern.length && pattern[j] === '#') {
-                count++;
-                j++;
-            }
-
-            // pega o tipo (#n #s #t)
-            const type = pattern[j];
-            if (type === 'n' || type === 's' || type === 't') {
-                const unit =
-                    type === 'n' ? '\\n' :
-                    type === 's' ? ' '   :
-                                '\\t';
-
-                // 1 # → 1 unidade literal
-                // 2+ # → zero ou mais
-                if (count === 1) {
-                    regex += unit;
-                } else {
-                    regex += unit + '*';
-                }
-
-                i = j + 1;
-                continue;
-            }
-        }
-
-        // Verifica por $$
         if (i + 1 < pattern.length && pattern[i] === '$' && pattern[i + 1] === '$') {
+            // aqui é o $$ "concat"
             regex += '\\s*';
             i += 2;
             continue;
         }
 
-        // Verifica por delimitadores com variáveis: {$var}, ($var), [$var], <$var>, "$var", '$var', `$var`
-        if ((pattern[i] === '{' || pattern[i] === '(' || pattern[i] === '[' || pattern[i] === '<' ||
-             pattern[i] === '"' || pattern[i] === "'" || pattern[i] === '`') &&
+        // --- resto inalterado: delimitadores com variáveis, $var..., etc. ---
+        // Verifica por delimitadores com variáveis: {$var}, ($var), ...
+        if ((pattern[i] === OPEN || pattern[i] === CLOSE ||
+            pattern[i] === '{' || pattern[i] === '(' || pattern[i] === '[' || pattern[i] === '<' ||
+            pattern[i] === '"' || pattern[i] === "'" || pattern[i] === '`') &&
             i + 1 < pattern.length && pattern[i + 1] === '$') {
 
             const openDelim = pattern[i];
-            const closeDelim = openDelim === '{' ? '}' : 
-                               openDelim === '(' ? ')' : 
-                               openDelim === '[' ? ']' :
-                               openDelim === '<' ? '>' :
-                               openDelim === '"' ? '"' :
-                               openDelim === "'" ? "'" :
-                               openDelim === '`' ? '`' :
-                               openDelim;
+            const closeDelim =
+                openDelim === OPEN ? CLOSE :
+                openDelim === '{' ? '}' :
+                openDelim === '(' ? ')' :
+                openDelim === '[' ? ']' :
+                openDelim === '<' ? '>' :
+                openDelim === '"' ? '"' :
+                openDelim === "'" ? "'" :
+                openDelim === '`' ? '`' : openDelim;
 
             // Captura nome da variável
             let j = i + 2; // pula o delimitador e o $
@@ -221,6 +183,7 @@ function patternToRegex(pattern) {
                 varCounter++;
                 i = j;
             } else {
+                // isolado: só um $ literal
                 regex += '\\$';
                 i++;
             }
@@ -249,6 +212,7 @@ function patternToRegex(pattern) {
     return new RegExp(regex, 'g');
 }
 
+
 // Função auxiliar para gerar regex que captura blocos balanceados
 function buildBalancedBlockRegex(open, close) {
     const escapedOpen = open === '(' ? '\\(' : (open === '[' ? '\\[' : open === '{' ? '\\{' : open === '<' ? '\\<' : open);
@@ -266,11 +230,6 @@ function extractVarNames(pattern) {
     let i = 0;
 
     while (i < pattern.length) {
-        // Verifica por $$
-        if (i + 1 < pattern.length && pattern[i] === '$' && pattern[i + 1] === '$') {
-            i += 2;
-            continue;
-        }
 
         // Verifica por delimitadores com variáveis (incluindo aspas e angle brackets)
         if ((pattern[i] === '{' || pattern[i] === '(' || pattern[i] === '[' || pattern[i] === '<' ||
@@ -341,28 +300,6 @@ function extractVarNames(pattern) {
     return vars;
 }
 
-// Processa operadores de contador ($counter, $counter++, $counter--)
-function processCounterOperators(str) {
-    // $counter++ -> incrementa
-    str = str.replace(/\$counter\+\+/g, () => {
-        counterState.value++;
-        return "";
-    });
-    
-    // $counter-- -> decrementa
-    str = str.replace(/\$counter--/g, () => {
-        counterState.value--;
-        return "";
-    });
-    
-    // $counter -> retorna valor atual (sem modificar)
-    str = str.replace(/\$counter(?!\+|-)/g, () => {
-        return counterState.value.toString();
-    });
-    
-    return str;
-}
-
 // ============================================
 // INTEGRAÇÕES PRINCIPAIS
 // ============================================
@@ -370,9 +307,13 @@ function processCounterOperators(str) {
 // === COLETA DE MACROS (MODIFICADA) ===
 function collectMacros(src) {
     const macros = {};
-    const macroRegex = /\bmacro\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{/g;
+
+    // exemplo: macro nome {
+    const macroRegex = new RegExp(`\\bmacro\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*\\${OPEN}`, "g");
+
     let match;
     const matches = [];
+
     while ((match = macroRegex.exec(src)) !== null) {
         matches.push({
             name: match[1],
@@ -380,54 +321,60 @@ function collectMacros(src) {
             openPos: match.index + match[0].length - 1
         });
     }
+
     for (let j = matches.length - 1; j >= 0; j--) {
         const m = matches[j];
-        const [body, posAfter] = extractBlock(src, m.openPos, '{', '}');
-        // Processa contadores no corpo do macro
-        macros[m.name] = processCounterOperators(body);
-        // remove também whitespace adjacente
+        const [body, posAfter] = extractBlock(src, m.openPos, OPEN, CLOSE);
+        macros[m.name] = body;
+
         let left = src.substring(0, m.matchStart);
         let right = src.substring(posAfter);
         src = collapseLocalNewlines(left, right);
     }
+
     return [macros, src];
 }
 
 // === COLETA DE PATTERNS (MODIFICADA) ===
 function collectPatterns(src) {
     const patterns = [];
-    const patternRegex = /\bpattern\s*\{/g;
+
+    const patternRegex = new RegExp(`\\bpattern\\s*\\${OPEN}`, "g");
+
     let match;
     const matches = [];
-    
+
     while ((match = patternRegex.exec(src)) !== null) {
         matches.push({
             matchStart: match.index,
             openPos: match.index + match[0].length - 1
         });
     }
-    
+
     for (let j = matches.length - 1; j >= 0; j--) {
         const m = matches[j];
-        const [matchPattern, posAfterMatch] = extractBlock(src, m.openPos, '{', '}');
-        
+        const [matchPattern, posAfterMatch] = extractBlock(src, m.openPos, OPEN, CLOSE);
+
         let k = posAfterMatch;
         while (k < src.length && /\s/.test(src[k])) k++;
-        
-        if (k < src.length && src[k] === '{') {
-            const [replacePattern, posAfterReplace] = extractBlock(src, k, '{', '}');
+
+        if (k < src.length && src[k] === OPEN) {
+            const [replacePattern, posAfterReplace] = extractBlock(src, k, OPEN, CLOSE);
+
             patterns.push({
-                match: stripDoubleHashWS(matchPattern.trim()),
-                replace: processCounterOperators(stripDoubleHashWS(replacePattern.trim()))
+                match: matchPattern.trim(),
+                replace: replacePattern.trim()
             });
+
             let left = src.substring(0, m.matchStart);
             let right = src.substring(posAfterReplace);
             src = collapseLocalNewlines(left, right);
         }
     }
-    
+
     return [patterns, src];
 }
+
 
 function applyPatterns(src, patterns) {
     let globalClearFlag = false;
@@ -475,20 +422,6 @@ function applyPatterns(src, patterns) {
                 result = result.replace(/\$unique\b/g, () =>
                     counterState.genUnique()
                 );
-
-                // eval
-                result = result.replace(/\$eval\{([^}]*)\}/g, (_, code) => {
-                    try {
-                        return String(Function("ctx", `"use strict"; return (${code})`)({
-                            _pre, _post, match: fullMatch, vars: varMap
-                        }));
-                    } catch {
-                        return "";
-                    }
-                });
-
-                // counters
-                result = processCounterOperators(result);
 
                 // concat ($$ → nada)
                 result = result.replace(/\$\$/g, '');
@@ -584,8 +517,6 @@ function expandMacros(src, macros) {
                     exp = exp.replace(new RegExp(`\\$${paramNum}(?!\\d)`, 'g'), paramVal);
                 }
                 exp = exp.replace(/\$\d+\b/g, '');
-                // Processa contadores na expansão do macro
-                exp = processCounterOperators(exp);
                 result += exp;
             }
             
@@ -623,59 +554,96 @@ function collapseLocalNewlines(left, right) {
     return left + right;
 }
 
-// === PROCESSAMENTO DE BLOCOS ISOLADOS ===
-function processNamespaceBlocks(src) {
-    const namespaceRegex = /\bnamespace\s*\{/g;
+function processEvalBlocks(src) {
+    const evalRegex = new RegExp(`\\beval\\s*\\${OPEN}`, "g");
+
     let match;
     const matches = [];
-    
+
+    while ((match = evalRegex.exec(src)) !== null) {
+        matches.push({
+            matchStart: match.index,
+            openPos: match.index + match[0].length - 1
+        });
+    }
+
+    for (let j = matches.length - 1; j >= 0; j--) {
+        const m = matches[j];
+
+        const [content, posAfter] = extractBlock(src, m.openPos, OPEN, CLOSE);
+
+        let out = "";
+        try {
+            out = String(
+                Function("painho", "ctx", `"use strict"; return (${content});`)
+                (painho, { })
+            );
+        } catch (e) {
+            out = "";
+        }
+
+        let left = src.substring(0, m.matchStart);
+        let right = src.substring(posAfter);
+        src = left + out + right;
+    }
+
+    return src;
+}
+
+// === PROCESSAMENTO DE BLOCOS ISOLADOS ===
+function processNamespaceBlocks(src) {
+    const namespaceRegex = new RegExp(`\\bnamespace\\s*\\${OPEN}`, "g");
+
+    let match;
+    const matches = [];
+
     while ((match = namespaceRegex.exec(src)) !== null) {
         matches.push({
             matchStart: match.index,
             openPos: match.index + match[0].length - 1
         });
     }
-    
-    // Processa de trás para frente para não corromper índices
+
     for (let j = matches.length - 1; j >= 0; j--) {
         const m = matches[j];
-        const [content, posAfter] = extractBlock(src, m.openPos, '{', '}');
-        
-        // Processa o conteúdo em contexto isolado
+        const [content, posAfter] = extractBlock(src, m.openPos, OPEN, CLOSE);
+
         const processedContent = painho(content);
-        
-        // Remove a declaração 'namespace {}' e substitui pelo conteúdo processado
+
         let left = src.substring(0, m.matchStart);
         let right = src.substring(posAfter);
-        
-        // Preserva newline antes de namespace se existir
-        let prefix = '';
-        if (left.endsWith('\n')) {
-            prefix = '\n';
+
+        let prefix = "";
+        if (left.endsWith("\n")) {
+            prefix = "\n";
             left = left.slice(0, -1);
         }
-        
+
         src = left + prefix + processedContent + right;
     }
-    
+
     return src;
 }
 
-// === FUNÇÃO PÚBLICA PRINCIPAL ===
+
 function painho(input) {
     let src = input;
-    
-    // Processa blocos isolados primeiro
+
     src = processNamespaceBlocks(src);
-    
+    src = processEvalBlocks(src);        // << novo bloco
+
     const [macros, srcAfterMacros] = collectMacros(src);
     src = srcAfterMacros;
+
     const [patterns, srcAfterPatterns] = collectPatterns(src);
     src = srcAfterPatterns;
-    src = applyPatterns(src, patterns);  // Aplica patterns antes de expandir macros
+
+    src = applyPatterns(src, patterns);
     src = expandMacros(src, macros);
+
     return src;
 }
+
 
 // Export para diferentes ambientes
 if (typeof module !== 'undefined' && module.exports) {
