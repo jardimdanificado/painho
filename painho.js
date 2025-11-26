@@ -2,7 +2,7 @@
 // painho
 // ============================================
 
-const painho_version = "0.0.3"
+const painho_version = "0.0.4"
 const MAX_ITERATIONS = 512;
 let globalClearFlag = false;
 
@@ -131,12 +131,19 @@ function patternToRegex(pattern) {
             continue;
         }
 
-        // Verifica por delimitadores com variáveis: {$var}, ($var), [$var]
-        if ((pattern[i] === '{' || pattern[i] === '(' || pattern[i] === '[') &&
+        // Verifica por delimitadores com variáveis: {$var}, ($var), [$var], "$var", '$var', `$var`
+        if ((pattern[i] === '{' || pattern[i] === '(' || pattern[i] === '[' || 
+             pattern[i] === '"' || pattern[i] === "'" || pattern[i] === '`') &&
             i + 1 < pattern.length && pattern[i + 1] === '$') {
 
             const openDelim = pattern[i];
-            const closeDelim = openDelim === '{' ? '}' : (openDelim === '(' ? ')' : ']');
+            const closeDelim = openDelim === '{' ? '}' : 
+                               openDelim === '(' ? ')' : 
+                               openDelim === '[' ? ']' :
+                               openDelim === '"' ? '"' :
+                               openDelim === "'" ? "'" :
+                               openDelim === '`' ? '`' :
+                               openDelim;
 
             // Captura nome da variável
             let j = i + 2; // pula o delimitador e o $
@@ -146,11 +153,28 @@ function patternToRegex(pattern) {
 
             // Verifica se fecha com o delimitador correto
             if (j < pattern.length && pattern[j] === closeDelim) {
-                const escapedOpen = openDelim === '(' ? '\\(' : (openDelim === '[' ? '\\[' : openDelim === '{' ? '\\{' : openDelim);
-                const escapedClose = closeDelim === ')' ? '\\)' : (closeDelim === ']' ? '\\]' : closeDelim === '}' ? '\\}' : closeDelim);
+                const escapedOpen = openDelim === '(' ? '\\(' : 
+                                   openDelim === '[' ? '\\[' : 
+                                   openDelim === '{' ? '\\{' : 
+                                   openDelim === '"' ? '"' :
+                                   openDelim === "'" ? "'" :
+                                   openDelim === '`' ? '`' :
+                                   openDelim;
+                const escapedClose = closeDelim === ')' ? '\\)' : 
+                                    closeDelim === ']' ? '\\]' : 
+                                    closeDelim === '}' ? '\\}' :
+                                    closeDelim === '"' ? '"' :
+                                    closeDelim === "'" ? "'" :
+                                    closeDelim === '`' ? '`' :
+                                    closeDelim;
 
-                // Usa a função auxiliar para capturar blocos balanceados
-                const innerRegex = buildBalancedBlockRegex(openDelim, closeDelim);
+                // Para aspas, usa regex simples; para delimitadores, usa blocos balanceados
+                let innerRegex;
+                if (openDelim === '"' || openDelim === "'" || openDelim === '`') {
+                    innerRegex = '[^' + escapedOpen + ']*';
+                } else {
+                    innerRegex = buildBalancedBlockRegex(openDelim, closeDelim);
+                }
 
                 regex += escapedOpen + '(' + innerRegex + ')' + escapedClose;
                 varCounter++;
@@ -245,11 +269,18 @@ function extractVarNames(pattern) {
             continue;
         }
 
-        // Verifica por delimitadores com variáveis
-        if ((pattern[i] === '{' || pattern[i] === '(' || pattern[i] === '[') &&
+        // Verifica por delimitadores com variáveis (incluindo aspas)
+        if ((pattern[i] === '{' || pattern[i] === '(' || pattern[i] === '[' ||
+             pattern[i] === '"' || pattern[i] === "'" || pattern[i] === '`') &&
             i + 1 < pattern.length && pattern[i + 1] === '$') {
 
-            const closeDelim = pattern[i] === '{' ? '}' : (pattern[i] === '(' ? ')' : ']');
+            const closeDelim = pattern[i] === '{' ? '}' : 
+                               pattern[i] === '(' ? ')' : 
+                               pattern[i] === '[' ? ']' :
+                               pattern[i] === '"' ? '"' :
+                               pattern[i] === "'" ? "'" :
+                               pattern[i] === '`' ? '`' :
+                               pattern[i];
             let j = i + 2;
 
             while (j < pattern.length && /[A-Za-z0-9_]/.test(pattern[j])) {
@@ -393,6 +424,7 @@ function collectPatterns(src) {
     
     return [patterns, src];
 }
+
 function applyPatterns(src, patterns) {
     let globalClearFlag = false;
     let lastResult = "";
@@ -564,7 +596,7 @@ function expandMacros(src, macros) {
 }
 
 function escapeRegex(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\        src = src.replace(/(@?[A-Za-z_][@A-Za-z0-9_]*)\s*<<=\s*(@?[A-Za-z0-9_()]+(?:\s*\([^)]*\))?)/g');
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function collapseLocalNewlines(left, right) {
