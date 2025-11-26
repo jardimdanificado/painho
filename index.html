@@ -157,6 +157,12 @@
             <button onclick="applyQuotes()" style="background:#28a745;">apply</button>
             <button onclick="resetQuotes()" style="background:#dc3545;">reset</button>
 
+            <label style="margin-left:20px; font-size:14px; font-weight:600;">sigil:</label>
+            <input id="sigilInput" type="text" placeholder="$" style="width:45px; padding:5px;">
+            <button onclick="applySigil()" style="background:#17a2b8;">apply</button>
+            <button onclick="resetSigil()" style="background:#dc3545;">reset</button>
+
+
             <input type="file" id="fileInput" class="file-input" onchange="handleFileSelect()">
         </div>
 
@@ -285,6 +291,39 @@
             document.getElementById('closeQuote').value = '';
             document.getElementById('status').textContent = 'quotes reset';
             document.getElementById('status').classList.remove('error');
+        }
+
+
+        function applySigil() {
+            const s = document.getElementById('sigilInput').value;
+            const status = document.getElementById('status');
+
+            if (!s) {
+                alert('invalid sigil');
+                return;
+            }
+            if (!window.changeSigil) {
+                alert('changeSigil() not available');
+                return;
+            }
+
+            changeSigil(s);
+            status.textContent = `sigil updated to ${s}`;
+            status.classList.remove('error');
+        }
+
+        function resetSigil() {
+            const status = document.getElementById('status');
+
+            if (!window.changeSigil) {
+                alert('changeSigil() not available');
+                return;
+            }
+
+            changeSigil('$');
+            document.getElementById('sigilInput').value = '';
+            status.textContent = 'sigil reset';
+            status.classList.remove('error');
         }
 
     </script>

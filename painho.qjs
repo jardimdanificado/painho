@@ -5,7 +5,9 @@ import * as std from 'std';
 // Carregar o core
 std.loadScript('./src/painho.js');
 
-// Função para ler arquivo
+// -----------------------------
+// Helpers
+// -----------------------------
 function readFileSync(filename) {
     try {
         const file = std.open(filename, 'r');
@@ -18,7 +20,6 @@ function readFileSync(filename) {
     }
 }
 
-// === LEITURA DE STDIN (QuickJS) ===
 function readStdin() {
     let input = '';
     try {
@@ -27,31 +28,99 @@ function readStdin() {
             if (!chunk || chunk.length === 0) break;
             input += chunk;
         }
-    } catch (e) {
-        // EOF ou erro, tudo bem
-    }
+    } catch (e) {}
     return input;
 }
 
-// === MAIN ===
+// -----------------------------
+// Parse CLI
+// -----------------------------
+function parseArgs(args) {
+    const out = {
+        open: null,
+        close: null,
+        sigil: null,
+        file: null
+    };
+
+    for (let i = 0; i < args.length; i++) {
+        const a = args[i];
+
+        if (a === "--open" && args[i + 1]) {
+            out.open = args[++i];
+            continue;
+        }
+        if (a === "--close" && args[i + 1]) {
+            out.close = args[++i];
+            continue;
+        }
+        if (a === "--sigil" && args[i + 1]) {
+            out.sigil = args[++i];
+            continue;
+        }
+        if ((a === "--file" || a === "-f") && args[i + 1]) {
+            out.file = args[++i];
+            continue;
+        }
+    }
+    return out;
+}
+
+// -----------------------------
+// MAIN
+// -----------------------------
 function main() {
     try {
-        // Ler o conteúdo de build/urb.rap e adicionar ao início da entrada
+        const args = scriptArgs.slice(1);
+        const opts = parseArgs(args);
+
+        // Configurações globais
+        if (opts.open !== null || opts.close !== null) {
+            if (!globalThis.changeQuote) {
+                std.err.printf("Erro: changeQuote() não disponível no core\n");
+                std.exit(1);
+            }
+            const o = opts.open ?? '{';
+            const c = opts.close ?? '}';
+            changeQuote(o, c);
+        }
+
+        if (opts.sigil !== null) {
+            if (!globalThis.changeSigil) {
+                std.err.printf("Erro: changeSigil() não disponível no core\n");
+                std.exit(1);
+            }
+            changeSigil(opts.sigil);
+        }
+
+        // Header
         const headerContent = readFileSync('./build/urb.rap');
-        const stdinContent = readStdin();
-        
-        // Concatenar conteúdo do header com a entrada stdin
-        const fullInput = headerContent + stdinContent;
-        
+
+        // Input prioritário: file > stdin
+        let content = "";
+
+        if (opts.file) {
+            content = readFileSync(opts.file);
+            if (!content) {
+                std.err.printf("Erro: não foi possível ler o arquivo '%s'\n", opts.file);
+                std.exit(1);
+            }
+        } else {
+            content = readStdin();
+        }
+
+        const fullInput = headerContent + content;
+
         if (!fullInput.trim()) {
-            std.err.printf('Erro: entrada vazia (nem o header nem stdin)\n');
+            std.err.printf("Erro: entrada vazia (nem header, nem arquivo, nem stdin)\n");
             std.exit(1);
         }
-        
-        const output = painho(fullInput);
-        std.out.printf('%s', output);
+
+        const out = painho(fullInput);
+        std.out.printf("%s", out);
+
     } catch (err) {
-        std.err.printf('Erro: %s\n', err.message);
+        std.err.printf("Erro: %s\n", err.message);
         std.exit(1);
     }
 }

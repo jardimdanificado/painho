@@ -2,7 +2,7 @@
 // painho
 // ============================================
 
-const painho_version = "0.0.7"
+const painho_version = "0.0.8"
 const MAX_ITERATIONS = 512;
 let globalClearFlag = false;
 
@@ -16,6 +16,13 @@ function changeQuote(open, close) {
     OPEN = open;
     CLOSE = close;
 }
+
+let SIGIL = "$";
+
+function changeSigil(s) {
+    SIGIL = s;
+}
+
 
 function extractBlock(src, openpos, open = OPEN, close = CLOSE) {
     let i = openpos;
@@ -75,27 +82,29 @@ const counterState = {
     }
 };
 
-
 function patternToRegex(pattern) {
     let regex = '';
     let i = 0;
-    let varCounter = 0;
+
+    const S = SIGIL;
+    const S2 = SIGIL + SIGIL;
 
     while (i < pattern.length) {
 
-        if (i + 1 < pattern.length && pattern[i] === '$' && pattern[i + 1] === '$') {
-            // aqui é o $$ "concat"
+        // $$ → concat
+        if (pattern.startsWith(S2, i)) {
             regex += '\\s*';
-            i += 2;
+            i += S2.length;
             continue;
         }
 
-        // --- resto inalterado: delimitadores com variáveis, $var..., etc. ---
-        // Verifica por delimitadores com variáveis: {$var}, ($var), ...
-        if ((pattern[i] === OPEN || pattern[i] === CLOSE ||
-            pattern[i] === '{' || pattern[i] === '(' || pattern[i] === '[' || pattern[i] === '<' ||
-            pattern[i] === '"' || pattern[i] === "'" || pattern[i] === '`') &&
-            i + 1 < pattern.length && pattern[i + 1] === '$') {
+        // captura delimitador + sigil + var
+        if (i + 1 < pattern.length &&
+            (pattern[i] === OPEN || pattern[i] === CLOSE ||
+             pattern[i] === '{' || pattern[i] === '(' || pattern[i] === '[' || pattern[i] === '<' ||
+             pattern[i] === '"' || pattern[i] === "'" || pattern[i] === '`')
+            &&
+            pattern[i + 1] === S) {
 
             const openDelim = pattern[i];
             const closeDelim =
@@ -108,109 +117,77 @@ function patternToRegex(pattern) {
                 openDelim === "'" ? "'" :
                 openDelim === '`' ? '`' : openDelim;
 
-            // Captura nome da variável
-            let j = i + 2; // pula o delimitador e o $
-            while (j < pattern.length && /[A-Za-z0-9_]/.test(pattern[j])) {
-                j++;
-            }
+            let j = i + 1 + S.length;
+            while (j < pattern.length && /[A-Za-z0-9_]/.test(pattern[j])) j++;
 
-            // Verifica se fecha com o delimitador correto
             if (j < pattern.length && pattern[j] === closeDelim) {
-                const escapedOpen = openDelim === '(' ? '\\(' : 
-                                   openDelim === '[' ? '\\[' : 
-                                   openDelim === '{' ? '\\{' :
-                                   openDelim === '<' ? '\\<' :
-                                   openDelim === '"' ? '"' :
-                                   openDelim === "'" ? "'" :
-                                   openDelim === '`' ? '`' :
-                                   openDelim;
-                const escapedClose = closeDelim === ')' ? '\\)' : 
-                                    closeDelim === ']' ? '\\]' : 
-                                    closeDelim === '}' ? '\\}' :
-                                    closeDelim === '>' ? '\\>' :
-                                    closeDelim === '"' ? '"' :
-                                    closeDelim === "'" ? "'" :
-                                    closeDelim === '`' ? '`' :
-                                    closeDelim;
+                const escapedOpen = escapeRegex(openDelim);
+                const escapedClose = escapeRegex(closeDelim);
 
-                // Para aspas, usa regex simples; para delimitadores, usa blocos balanceados
-                let innerRegex;
-                if (openDelim === '"' || openDelim === "'" || openDelim === '`') {
-                    innerRegex = '[^' + escapedOpen + ']*';
-                } else {
-                    innerRegex = buildBalancedBlockRegex(openDelim, closeDelim);
-                }
+                const innerRegex =
+                    (openDelim === '"' || openDelim === "'" || openDelim === '`')
+                    ? `[^${escapedOpen}]*`
+                    : buildBalancedBlockRegex(openDelim, closeDelim);
 
-                regex += escapedOpen + '(' + innerRegex + ')' + escapedClose;
-                varCounter++;
+                regex += `${escapedOpen}(${innerRegex})${escapedClose}`;
                 i = j + 1;
                 continue;
             }
         }
 
-        // Verifica por captura até token: $var...token
-        if (pattern[i] === '$') {
-            let j = i + 1;
+        // captura $var...token genérico
+        if (pattern[i] === S) {
+            let j = i + S.length;
             let varName = '';
             while (j < pattern.length && /[A-Za-z0-9_]/.test(pattern[j])) {
                 varName += pattern[j];
                 j++;
             }
 
-            if (varName && j < pattern.length && pattern[j] === '.' && j + 2 < pattern.length && pattern[j + 1] === '.' && pattern[j + 2] === '.') {
-                // Achamos $var...
-                j += 3; // pula ...
+            if (
+                varName &&
+                pattern.slice(j, j + 3) === '...' // mantém sintaxe ... igual
+            ) {
+                j += 3;
                 let token = '';
-                while (j < pattern.length && /\S/.test(pattern[j])) { // Lê até encontrar um espaço ou fim
+                while (j < pattern.length && /\S/.test(pattern[j])) {
                     token += pattern[j];
                     j++;
                 }
 
                 if (token) {
-                    // Escapa o token para regex
-                    const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    // Captura qualquer coisa até o token (não-greedy)
-                    regex += '((?:.|\\r|\\n)*?)' + escapedToken;
-                    varCounter++;
+                    const escapedToken = escapeRegex(token);
+                    regex += `((?:.|\\r|\\n)*?)${escapedToken}`;
                     i = j;
                     continue;
                 }
             }
 
-            // Se não for ...token, apenas captura variável normal
             if (varName) {
                 regex += '(\\S+)';
-                varCounter++;
                 i = j;
-            } else {
-                // isolado: só um $ literal
-                regex += '\\$';
-                i++;
+                continue;
             }
+
+            regex += escapeRegex(S);
+            i += S.length;
             continue;
         }
 
         if (/\s/.test(pattern[i])) {
-            // Qualquer whitespace vira \s+
             regex += '\\s+';
-            // Pula todos os espaços consecutivos no pattern
-            while (i < pattern.length && /\s/.test(pattern[i])) {
-                i++;
-            }
-        } else {
-            // Caractere literal (escapa se necessário)
-            const char = pattern[i];
-            if (/[.*+?^${}()|[\]\\]/.test(char)) {
-                regex += '\\' + char;
-            } else {
-                regex += char;
-            }
-            i++;
+            while (i < pattern.length && /\s/.test(pattern[i])) i++;
+            continue;
         }
+
+        const char = pattern[i];
+        regex += /[.*+?^${}()|[\]\\]/.test(char) ? '\\' + char : char;
+        i++;
     }
 
     return new RegExp(regex, 'g');
 }
+
 
 
 // Função auxiliar para gerar regex que captura blocos balanceados
@@ -222,38 +199,39 @@ function buildBalancedBlockRegex(open, close) {
     // Ex: {a{b}c} -> captura a{b}c
     return `(?:[^${escapedOpen}${escapedClose}\\\\]|\\\\.|${escapedOpen}(?:[^${escapedOpen}${escapedClose}\\\\]|\\\\.)*${escapedClose})*`;
 }
-
-// Versão corrigida de extractVarNames
 function extractVarNames(pattern) {
     const vars = [];
     const seen = new Set();
+    const S = SIGIL;
     let i = 0;
 
     while (i < pattern.length) {
 
-        // Verifica por delimitadores com variáveis (incluindo aspas e angle brackets)
-        if ((pattern[i] === '{' || pattern[i] === '(' || pattern[i] === '[' || pattern[i] === '<' ||
-             pattern[i] === '"' || pattern[i] === "'" || pattern[i] === '`') &&
-            i + 1 < pattern.length && pattern[i + 1] === '$') {
+        // delimitadores com ${sigil}var
+        if (
+            (pattern[i] === '{' || pattern[i] === '(' || pattern[i] === '[' ||
+             pattern[i] === '<' || pattern[i] === '"' || pattern[i] === "'" ||
+             pattern[i] === '`')
+            &&
+            pattern.startsWith(S, i + 1)
+        ) {
+            const closeDelim =
+                pattern[i] === '{' ? '}' :
+                pattern[i] === '(' ? ')' :
+                pattern[i] === '[' ? ']' :
+                pattern[i] === '<' ? '>' :
+                pattern[i] === '"' ? '"' :
+                pattern[i] === "'" ? "'" :
+                pattern[i] === '`' ? '`' :
+                pattern[i];
 
-            const closeDelim = pattern[i] === '{' ? '}' : 
-                               pattern[i] === '(' ? ')' : 
-                               pattern[i] === '[' ? ']' :
-                               pattern[i] === '<' ? '>' :
-                               pattern[i] === '"' ? '"' :
-                               pattern[i] === "'" ? "'" :
-                               pattern[i] === '`' ? '`' :
-                               pattern[i];
-            let j = i + 2;
-
-            while (j < pattern.length && /[A-Za-z0-9_]/.test(pattern[j])) {
-                j++;
-            }
+            let j = i + 1 + S.length;
+            while (j < pattern.length && /[A-Za-z0-9_]/.test(pattern[j])) j++;
 
             if (j < pattern.length && pattern[j] === closeDelim) {
-                const varName = pattern.substring(i + 2, j);
+                const varName = pattern.slice(i + 1 + S.length, j);
                 if (!seen.has(varName)) {
-                    vars.push('$' + varName);
+                    vars.push(S + varName);
                     seen.add(varName);
                 }
                 i = j + 1;
@@ -261,26 +239,25 @@ function extractVarNames(pattern) {
             }
         }
 
-        // Verifica por captura até token: $var...token
-        if (pattern[i] === '$') {
-            let j = i + 1;
+        // $var...token
+        if (pattern.startsWith(S, i)) {
+            let j = i + S.length;
             let varName = '';
+
             while (j < pattern.length && /[A-Za-z0-9_]/.test(pattern[j])) {
                 varName += pattern[j];
                 j++;
             }
 
-            if (varName && j < pattern.length && pattern[j] === '.' && j + 2 < pattern.length && pattern[j + 1] === '.' && pattern[j + 2] === '.') {
-                // Achamos $var...
-                j += 3; // pula ...
+            if (varName && pattern.slice(j, j + 3) === '...') {
+                j += 3;
                 let token = '';
-                while (j < pattern.length && /\S/.test(pattern[j])) { // Lê até encontrar um espaço ou fim
+                while (j < pattern.length && /\S/.test(pattern[j])) {
                     token += pattern[j];
                     j++;
                 }
-
-                if (token && !seen.has(varName)) {
-                    vars.push('$' + varName);
+                if (!seen.has(varName)) {
+                    vars.push(S + varName);
                     seen.add(varName);
                 }
                 i = j;
@@ -288,17 +265,19 @@ function extractVarNames(pattern) {
             }
 
             if (varName && !seen.has(varName)) {
-                vars.push('$' + varName);
+                vars.push(S + varName);
                 seen.add(varName);
             }
             i = j;
-        } else {
-            i++;
+            continue;
         }
+
+        i++;
     }
 
     return vars;
 }
+
 
 // ============================================
 // INTEGRAÇÕES PRINCIPAIS
@@ -375,10 +354,10 @@ function collectPatterns(src) {
     return [patterns, src];
 }
 
-
 function applyPatterns(src, patterns) {
     let globalClearFlag = false;
     let lastResult = "";
+    const S = SIGIL;
 
     for (const pattern of patterns) {
         let changed = true;
@@ -393,64 +372,57 @@ function applyPatterns(src, patterns) {
 
             src = src.replace(regex, (...args) => {
                 changed = true;
-
                 const fullMatch = args[0];
                 const captures = args.slice(1, -2);
                 const matchStart = args[args.length - 2];
                 const matchEnd = matchStart + fullMatch.length;
 
-                // monta varMap
                 const varMap = {};
                 for (let i = 0; i < varNames.length; i++) {
                     varMap[varNames[i]] = captures[i] || '';
                 }
 
-                const _pre   = src.slice(0, matchStart);
-                const _post  = src.slice(matchEnd);
+                const _pre  = src.slice(0, matchStart);
+                const _post = src.slice(matchEnd);
 
                 let result = pattern.replace;
 
-                // --------------------------
-                // substitui variáveis normais
-                // --------------------------
-                for (const [varName, value] of Object.entries(varMap)) {
-                    const escaped = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    result = result.replace(new RegExp(escaped + '(?![A-Za-z0-9_])', 'g'), value);
+                // variáveis normais
+                for (const [key, val] of Object.entries(varMap)) {
+                    const escaped = escapeRegex(key);
+                    result = result.replace(new RegExp(escaped + '(?![A-Za-z0-9_])', 'g'), val);
                 }
 
                 // unique
-                result = result.replace(/\$unique\b/g, () =>
-                    counterState.genUnique()
+                result = result.replace(new RegExp(`${escapeRegex(S)}unique\\b`, 'g'),
+                    () => counterState.genUnique()
                 );
 
-                // concat ($$ → nada)
-                result = result.replace(/\$\$/g, '');
+                // concat sigil-sigil
+                const S2 = S + S;
+                result = result.replace(new RegExp(escapeRegex(S2), 'g'), '');
 
-                // ======================================================
-                // PATCH ESSENCIAL:
-                // detectar $clear ANTES de expandir $pre/$post/$match
-                // evita que "$clear##$pre" vire "$clearasddasda",
-                // o que impediria a regex de detectar.
-                // ======================================================
-                if (/\$clear\b/.test(result)) {
-                    result = result.replace(/\$clear\b/g, '');
+                // clear
+                const clearRe = new RegExp(`${escapeRegex(S)}clear\\b`, 'g');
+                if (clearRe.test(result)) {
+                    result = result.replace(clearRe, '');
                     globalClearFlag = true;
                 }
 
-                // agora expande $pre/$post/$match
-                result = result.replace(/\$pre\b/g, _pre);
-                result = result.replace(/\$post\b/g, _post);
-                result = result.replace(/\$match\b/g, fullMatch);
+                // pre/post/match
+                result = result
+                    .replace(new RegExp(`${escapeRegex(S)}pre\\b`, 'g'), _pre)
+                    .replace(new RegExp(`${escapeRegex(S)}post\\b`, 'g'), _post)
+                    .replace(new RegExp(`${escapeRegex(S)}match\\b`, 'g'), fullMatch);
 
                 lastResult = result;
                 return result;
             });
 
-            // aplica clear no final da rodada
             if (globalClearFlag) {
                 src = lastResult;
                 globalClearFlag = false;
-                changed = true; // força nova rodada com src limpo
+                changed = true;
             }
         }
     }
@@ -458,77 +430,74 @@ function applyPatterns(src, patterns) {
     return src;
 }
 
-
-
-// === EXPANSÃO DE MACROS (MODIFICADA) ===
 function expandMacros(src, macros) {
+    const S = SIGIL;
+
     for (const name of Object.keys(macros)) {
         const body = macros[name];
         let changed = true;
         let iterations = 0;
-        
+
         while (changed && iterations < MAX_ITERATIONS) {
             changed = false;
             iterations++;
+
             const originalSrc = src;
-            
             let i = 0;
             let result = '';
-            
+
             while (i < src.length) {
-                const remaining = src.substring(i);
+                const remaining = src.slice(i);
                 const nameMatch = remaining.match(new RegExp(`^(.*?)\\b${escapeRegex(name)}\\b`, 's'));
-                
-                if (!nameMatch) {
-                    result += remaining;
-                    break;
-                }
-                
+                if (!nameMatch) { result += remaining; break; }
+
                 result += nameMatch[1];
                 i += nameMatch[0].length;
-                
+
                 let k = i;
                 while (k < src.length && src[k] === ' ') k++;
-                
+
                 let vals = [];
-                
+
                 if (k < src.length && src[k] === '(') {
                     const [argsStr, posAfter] = extractBlock(src, k, '(', ')');
                     vals = argsStr.split(',').map(v => v.trim());
                     i = posAfter;
                     changed = true;
                 } else {
-                    const spaceMatch = src.substring(i).match(/^(\s+([^\s{};()]+(?:\s+[^\s{};()]+)*?))?(?=\s*[{};()$]|\n|$)/);
-                    if (spaceMatch && spaceMatch[2]) {
-                        vals = spaceMatch[2].split(/\s+/);
-                        i += spaceMatch[0].length;
+                    const m = src.slice(i).match(/^(\s+([^\s{};()]+(?:\s+[^\s{};()]+)*?))?(?=\s*[{};()$]|\n|$)/);
+                    if (m && m[2]) {
+                        vals = m[2].split(/\s+/);
+                        i += m[0].length;
                         changed = true;
                     } else {
                         result += name;
                         continue;
                     }
                 }
-                
+
                 let exp = body;
-                exp = exp.replace(/\$0\b/g, name);
+
+                exp = exp.replace(new RegExp(`${escapeRegex(S)}0\\b`, 'g'), name);
+
                 for (let j = 0; j < vals.length; j++) {
-                    const paramNum = j + 1;
-                    const paramVal = vals[j];
-                    exp = exp.replace(new RegExp(`\\$${paramNum}(?!\\d)`, 'g'), paramVal);
+                    const num = j + 1;
+                    exp = exp.replace(new RegExp(`${escapeRegex(S)}${num}\\b`, 'g'), vals[j]);
                 }
-                exp = exp.replace(/\$\d+\b/g, '');
+
+                exp = exp.replace(new RegExp(`${escapeRegex(S)}\\d+\\b`, 'g'), '');
+
                 result += exp;
             }
-            
+
             src = result;
-            
-            if (src === originalSrc) {
-                changed = false;
-            }
+            if (src === originalSrc) changed = false;
         }
     }
+
     return src;
 }
+
 
 function escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
