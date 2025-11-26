@@ -2,7 +2,7 @@
 // painho
 // ============================================
 
-const painho_version = "0.0.4"
+const painho_version = "0.0.5"
 const MAX_ITERATIONS = 512;
 let globalClearFlag = false;
 
@@ -619,10 +619,46 @@ function collapseLocalNewlines(left, right) {
     return left + right;
 }
 
+// === PROCESSAMENTO DE BLOCOS ISOLADOS ===
+function processNamespaceBlocks(src) {
+    const namespaceRegex = /\bnamespace\s*\{/g;
+    let match;
+    const matches = [];
+    
+    while ((match = namespaceRegex.exec(src)) !== null) {
+        matches.push({
+            matchStart: match.index,
+            openPos: match.index + match[0].length - 1
+        });
+    }
+    
+    // Processa de trás para frente para não corromper índices
+    for (let j = matches.length - 1; j >= 0; j--) {
+        const m = matches[j];
+        const [content, posAfter] = extractBlock(src, m.openPos, '{', '}');
+        
+        // Processa o conteúdo em contexto isolado
+        const processedContent = painho(content);
+        
+        // Remove a declaração 'namespace {}' e substitui pelo conteúdo processado
+        let left = src.substring(0, m.matchStart);
+        let right = src.substring(posAfter);
+        src = collapseLocalNewlines(left, right);
+        
+        // Insere o conteúdo processado no lugar
+        src = src.substring(0, m.matchStart) + processedContent + src.substring(m.matchStart);
+    }
+    
+    return src;
+}
 
 // === FUNÇÃO PÚBLICA PRINCIPAL ===
 function painho(input) {
     let src = input;
+    
+    // Processa blocos isolados primeiro
+    src = processNamespaceBlocks(src);
+    
     const [macros, srcAfterMacros] = collectMacros(src);
     src = srcAfterMacros;
     const [patterns, srcAfterPatterns] = collectPatterns(src);
