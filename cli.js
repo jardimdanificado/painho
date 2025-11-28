@@ -1,10 +1,27 @@
 #!/usr/bin/env node
 import { Papagaio } from "./papagaio.js";
 import fs from "fs";
+import pkg from "./package.json" assert { type: "json" };
 
-const file = process.argv[2];
+// Help & Version
+const args = process.argv.slice(2);
+if (args.includes("-v") || args.includes("--version")) {
+  console.log(pkg.version);
+  process.exit(0);
+}
+if (args.includes("-h") || args.includes("--help")) {
+  console.log(`Usage: papagaio [options] <file>
+
+Options:
+  -h, --help      Show this help message
+  -v, --version   Show version number`);
+  process.exit(0);
+}
+
+// File input
+const file = args.find(arg => !arg.startsWith("-"));
 if (!file) {
-  console.error("usage: papagaio <file>");
+  console.error("Error: no input file specified.\nUse --help for usage.");
   process.exit(1);
 }
 
