@@ -1,331 +1,817 @@
 # Papagaio
 
-Papagaio is a lightweight text preprocessor designed to support pattern rewriting, macro expansion, scoped transforms, and embedded JavaScript evaluation.  It's heavily inspired by m4 and the C preprocessor.
+Papagaio is a flexible text preprocessor. It allows defining patterns, context blocks, dynamic variable capture, and runtime transformations directly within text. It is ideal for templates, macros, DSLs, or any structured text manipulation.
+
+The JavaScript API is minimal: just instantiate and call `process(input)`. Everything else happens in the text itself.
 
 ---
 
-## Installation
+# Core Concepts
 
-Papagaio ships as a standalone ES module.
+Papagaio operates with four central mechanisms:
 
-```js
-import { Papagaio } from "./papagaio.js";
-```
+1. **pattern{match}{replace}**  
+   Defines transformation rules. Can capture arbitrary content from the input.
 
-You can also install it as a standalone program:
+2. **context{...}**  
+   Processes its content recursively before reinserting it into the output.
 
-```bash
-npm install -g papagaio
-```
+3. **Sigils (default `$`)**  
+   Introduce variables, special operations, optional spaces, and greedy captures.
 
----
+4. **Configurable delimiters**  
+   Define which pairs of characters are recognized as block boundaries (`{}`, `[]`, `()`, etc.).
 
-## Basic Usage
-
-```js
-const p = new Papagaio();
-const output = p.process("pattern {a} {b}  a a a");
-console.log(output); // "b b b"
-```
-
-If using the standalone use:
-
-```bash
-papagaio file.c
-```
+The engine processes text in layers: it detects patterns and contexts, applies transformations, and repeats until the text stabilizes.
 
 ---
 
-## Core Features
-
-### 1. Pattern Blocks
-
-Patterns rewrite text using a match → replacement structure:
+# 1. Patterns
 
 ```
-pattern { MATCH } { REPLACEMENT }
-```
 
-Patterns are collected once per iteration and applied globally.
-
-Example:
+pattern{MATCH}{REPLACE}
 
 ```
-pattern {hello} {hi}
-hello world
+
+- **MATCH**: the string or structure to detect.
+- **REPLACE**: the replacement string, which may include captured variables.
+
+---
+
+## 1.1 Simple variables
+
+```
+
+pattern{Hello $name}{Hi $name}
+Hello John
+
 ```
 
 Output:
 
 ```
-hi world
-```
 
-#### Variables
-
-Variables use the configured **sigil** (default `$`).
+Hi John
 
 ```
-pattern {say $x} {[$x]}
-say hello
-```
 
-→ `[hello]`
+`$name` captures a single token (non-whitespace).
 
-#### Balanced Block Variables
+---
 
-Papagaio supports deep matching of balanced blocks:
+## 1.2 Greedy variables: `$var...TOKEN`
 
-```
-pattern {{$x}} {[BLOCK:$x]}
-(do something)
-```
-
-→ `[BLOCK:do something]`
-
-#### Complex Variables
-
-Complex variables capture until a terminating token:
+Captures everything until it encounters `TOKEN`.
 
 ```
-pattern {from $x...to} {$x}
-from A B C to
-```
 
-→ `A B C`
-
-#### Metavariables
-
-Papagaio provides special `$keywords` inside replacements:
-
-| Variable  | Meaning                                    |
-| --------- | ------------------------------------------ |
-| `$match`  | Full matched text                          |
-| `$pre`    | Text before match                          |
-| `$post`   | Text after match                           |
-| `$unique` | Auto‑increment unique token                |
-| `$$`      | Whitespace wildcard in patterns            |
-| `$clear`  | Triggers clear‑rewrite of last replacement |
-
-Example:
+pattern{start $x...end}{X=$x}
+start abc def end
 
 ```
-pattern {x} {$pre[${unique}]$post}
-abcxdef
+
+Output:
+
+```
+
+X=abc def
+
+```
+
+`TOKEN` can include spaces, and you can use `$$` for zero or more optional spaces.
+
+```
+
+pattern{A $y...B$$C}{Y=$y}
+A hello world B   C
+
+```
+
+Also matches:
+
+```
+
+A hello world BC
+
 ```
 
 ---
 
-### 2. Macro Blocks
+## 1.3 Balanced variables: `<$var>`
 
-Macros behave like simple template functions.
-
-```
-macro name { BODY }
-name(arg1, arg2)
-```
-
-Example:
+Captures content inside delimiters, respecting nested structures.
 
 ```
-macro wrap {[$1][$2]}
-wrap(a, b)
-```
 
-→ `[a][b]`
-
-#### Argument Mapping
-
-Arguments map to `$1`, `$2`, … automatically. `$0` expands to the macro name.
-
-Example:
+pattern{<$c>}{C=$c}
+<one {two} three>
 
 ```
-macro tag {<$0 $1>}  
-tag(title)
+
+Output:
+
 ```
 
-→ `<tag title>`
+C=one {two} three
+
+```
 
 ---
 
-### 3. Eval Blocks
-
-Executes embedded JavaScript and returns the result as a string.
+## 1.4 Multiple captures
 
 ```
-eval { return 3 + 7 }
+
+pattern{$a + $b}{sum($a,$b)}
+2 + 3
+
 ```
 
-→ `10`
+Output:
 
-Eval executes inside a strict IIFE.
+```
 
-You may access:
+sum(2,3)
 
-* `papagaio` → the processor instance
-* `ctx` → an empty object for temporary state
+```
+
+---
+
+## 1.5 Special substitutions in REPLACE
+
+- `$pre` — text before the match
+- `$post` — text after the match
+- `$match` — the raw matched content
+- `$unique` — generates unique identifiers
+- `$eval{JS}` — executes JavaScript and substitutes the return value
 
 Example:
 
 ```
-pattern {sum $a $b} {eval { return Number($a) + Number($b) }}
-sum 2 8
+
+pattern{calc $num}{value=$eval{return $num*2;} }
+calc 21
+
 ```
 
-→ `10`
+Output:
+
+```
+
+value=42
+
+```
 
 ---
 
-### 4. Scope Blocks
+## 1.6 Clearing the content with `$clear`
 
-Scope blocks create isolated processing regions using the same pipeline.
+If `$clear` appears in REPLACE, the entire current text is replaced with the latest result.
 
 ```
-scope {
-    pattern {x} {y}
-    x x x
+
+pattern{reset}{RESULT$clear}
+x y z reset aaa
+
+```
+
+Output:
+
+```
+
+RESULT
+
+```
+
+---
+
+## 1.7 Recursive patterns
+
+Papagaio applies patterns until text stabilizes:
+
+```
+
+pattern{a}{b}
+pattern{b}{c}
+pattern{c}{stop}
+a
+
+```
+
+Output:
+
+```
+
+stop
+
+```
+
+---
+
+# 2. Context
+
+Blocks `context{}` process their content recursively.
+
+```
+
+context{
+pattern{Hi $x}{Hello $x}
+Hi Alice
+}
+
+```
+
+Output:
+
+```
+
+Hello Alice
+
+```
+
+---
+
+## 2.1 Empty context
+
+```
+
+before context{} after
+
+```
+
+Output:
+
+```
+
+before  after
+
+```
+
+---
+
+## 2.2 Nested contexts
+
+```
+
+context{
+pattern{X}{$unique}
+context{
+X
+X
+}
+}
+
+```
+
+Generates two different unique IDs.
+
+---
+
+## 2.3 Sandbox behavior
+
+Patterns defined inside a context do not affect outer text.
+
+```
+
+context{
+pattern{A}{1}
+A
+}
+A
+
+```
+
+Output:
+
+```
+
+1
+A
+
+```
+
+---
+
+# 3. Custom delimiters
+
+`delimiters` define block boundaries. Defaults: `{}`, `[]`, `()`.
+
+You can change them at runtime:
+
+```
+
+pap.delimiters = [["<", ">"], ["{", "}"]];
+
+```
+
+### Example: XML-style parsing
+
+```
+
+pap.delimiters = [["<", ">"]];
+
+pattern{<tag $x>}{TAG=$x} <tag content>
+
+```
+
+Output:
+
+```
+
+TAG=content
+
+```
+
+---
+
+# 4. Custom sigil
+
+Default: `$`. Can be changed:
+
+```
+
+pap.sigil = "@";
+pattern{hello @x}{H=@x}
+hello world
+
+```
+
+Output:
+
+```
+
+H=world
+
+```
+
+---
+
+# 5. Custom keywords
+
+`pattern` and `context` words can be redefined:
+
+```
+
+pap.keywords.pattern = "macro";
+pap.keywords.context = "scope";
+
+```
+```
+
+macro{Hello $x}{Hi $x}
+Hello World
+
+```
+
+Output:
+
+```
+
+Hi World
+
+```
+
+---
+
+# 6. Advanced hacks
+
+## 6.1 Dynamic delimiter changes mid-process
+
+```
+
+pattern{setdelim}{$eval{ pap.delimiters=[["<",">"]]; return "";} }
+setdelim <hello>
+
+```
+
+---
+
+## 6.2 Custom syntax macros
+
+```
+
+pap.keywords.pattern = "::";
+pap.sigil = "%";
+
+::{hello %x}{HELLO %x}
+hello world
+
+```
+
+Output:
+
+```
+
+HELLO world
+
+```
+
+---
+
+## 6.3 Mini DSL creation
+
+```
+
+pattern{IF $cond THEN $body}{if ($cond) { $body }}
+pattern{PRINT $x}{console.log($x)}
+
+IF x > 10 THEN PRINT x
+
+```
+
+---
+
+## 6.4 Template engine
+
+```
+
+pattern{{{$var}}}{$var}
+Hello {{{$user}}}
+
+```
+
+---
+
+## 6.5 Multiline captures
+
+```
+
+pattern{BEGIN $x...END}{[$x]}
+BEGIN
+multi
+line
+text
+END
+
+```
+
+---
+
+## 6.6 $pre and $post example
+
+```
+
+pattern{<$x>}{($pre|$x|$post)}
+A <mid> B
+
+```
+
+Output:
+
+```
+
+A (A | mid |  B) B
+
+```
+
+---
+
+## 6.7 Full rewrite via $clear
+
+```
+
+pattern{main}{program initialized$clear}
+xxx main yyy
+
+```
+
+---
+
+# 7. Depth-isolated patterns
+
+Inner patterns are ignored until outer patterns resolve:
+
+```
+
+pattern{A}{1}
+pattern{
+B
+}{
+context{
+pattern{C}{2}
+C
+}
+}
+B
+
+```
+
+---
+
+# 8. Complete Examples
+
+### Example 1: Components DSL
+
+```
+
+pattern{component $name { $body...} }
+{
+function $name(){return `$body`;}
+}
+
+component Button { <button>click</button>
+}
+
+Button
+
+```
+
+---
+
+### Example 2: Sequential expansion with $unique
+
+```
+
+pattern{ID}{id_$unique}
+X: ID, Y: ID, Z: ID
+
+```
+
+---
+
+### Example 3: Markdown preprocessor
+
+```
+
+pattern{# $t}{<h1>$t</h1>}
+pattern{## $t}{<h2>$t</h2>}
+
+# Title
+
+## Subtitle
+
+```
+
+---
+
+### Example 4: Embedded interpreter
+
+```
+
+pattern{calc $x + $y}{ $eval{return Number($x)+Number($y);} }
+calc 2 + 5
+
+```
+
+---
+
+### Example 5: Selective removal with context
+
+```
+
+context{
+pattern{debug $x}{}
+debug remove this
+}
+debug keep
+
+```
+
+Output:
+
+```
+
+debug keep
+
+```
+
+---
+
+# 9. Public properties
+
+- `maxRecursion`
+- `delimiters`
+- `sigil`
+- `keywords.pattern`
+- `keywords.context`
+- `content`
+
+All mutable at runtime.
+
+---
+
+# 10. Summary
+
+Papagaio is a powerful text transformation engine. By combining recursive patterns, isolated contexts, configurable sigils, mutable delimiters, and `$eval`, you can build full DSLs, templating engines, mini-transpilers, or entirely new macro systems directly within text.
+
+Perfect. Let’s expand the README with **advanced topics** that push Papagaio into full meta-programming territory. I’ll add new sections on **self-modifying patterns, hybrid pipelines, self-referential patterns, Lisp-style macros, and advanced transpiler flows**. Everything stays text-focused; JavaScript API calls remain just `process(text)`.
+
+---
+
+# 11. Self-Modifying Patterns
+
+Papagaio patterns can modify themselves or other patterns at runtime using `$eval` and `$unique`. This allows dynamic generation of rules inside the same preprocessing pass.
+
+### Example: generating numbered variables
+
+```
+
+pattern{define $x}{pattern{$x}{$x_$unique}}
+define foo
+foo
+foo
+
+```
+
+Output:
+
+```
+
+foo_u0
+foo_u1
+
+```
+
+The first line defines a new pattern dynamically; subsequent uses expand into unique identifiers.
+
+---
+
+# 12. Hybrid Parsing Pipelines
+
+You can combine multiple processing passes with different delimiters, sigils, and keywords.
+
+### Example: XML and Markdown pipeline
+
+```
+
+pap.delimiters = [["<", ">"], ["{", "}"]];
+pap.sigil = "$";
+
+pattern{<bold $x>}{**$x**}
+pattern{# $t}{<h1>$t</h1>}
+
+```
+
+Text:
+
+```
+
+# Title
+
+<bold text>
+```
+
+Output:
+
+```
+<h1>Title</h1>
+**text**
+```
+
+This allows building multi-layer pre-processing pipelines where each pass targets different syntax conventions.
+
+---
+
+# 13. Self-Referential Patterns
+
+Patterns can reference themselves or other patterns recursively.
+
+### Example: expanding repeated lists
+
+```
+pattern{LIST $x}{ITEM $x LIST $x}
+pattern{LIST $x}{ITEM $x}
+LIST A
+```
+
+Output:
+
+```
+ITEM A
+```
+
+Patterns resolve recursively until the text stabilizes. Use `maxRecursion` to prevent infinite loops.
+
+---
+
+# 14. Lisp-Style Macro Systems
+
+Papagaio can emulate a Lisp-like macro expansion engine using contexts and dynamic patterns.
+
+### Example: defining macros inside contexts
+
+```
+context{
+  pattern{defmacro $name { $body... }}{pattern{$name}{$body}}
+  defmacro greet {Hello $1}
+  greet John
 }
 ```
 
-→ `y y y`
+Output:
 
-Scopes do not leak macros or patterns to the outside.
+```
+Hello John
+```
+
+Inside a `context`, macro definitions are local and can create arbitrary code expansions dynamically.
 
 ---
 
-## Delimiters
+# 15. Advanced Transpiler Flows
 
-Papagaio supports configurable opening/closing pairs.
+Papagaio can be used to build mini-transpilers by chaining pattern expansions and contexts.
 
-```js
-p.delimiters = [["{", "}"], ["(", ")"]];
+### Example: pseudo-language to JavaScript
+
+```
+context{
+  pattern{PRINT $x}{console.log($x);}
+  pattern{IF $cond THEN $body}{if ($cond) { $body }}
+  PRINT 42
+  IF x > 10 THEN PRINT x
+}
 ```
 
-Balanced variable matching works across all registered delimiter pairs.
+Output:
+
+```
+console.log(42);
+if (x > 10) { console.log(x); }
+```
+
+You can extend this by defining multiple layers of contexts, dynamically switching delimiters, or even generating patterns on the fly.
 
 ---
 
-## Recursion Model
+# 16. Dynamic Runtime Hacks
 
-Papagaio runs a fixed‑point loop:
+### 16.1 Change delimiters mid-process
 
-1. Process scopes
-2. Process eval blocks
-3. Collect macros
-4. Collect top‑level patterns
-5. Apply patterns
-6. Expand macros
+```
+pattern{switch}{ $eval{ pap.delimiters=[["<",">"]]; return ""; } }
+switch
+<hello>
+```
 
-If any Papagaio keyword remains in the output, it repeats.
+Output:
 
-You can configure the iteration cap:
+```
+hello
+```
 
-```js
-p.maxRecursion = 256;
+### 16.2 Dynamic sigil change
+
+```
+pattern{sigil}{ $eval{ pap.sigil="@"; return ""; } }
+sigil
+@var
+```
+
+Output:
+
+```
+var
+```
+
+### 16.3 Keywords swapping
+
+```
+pattern{switch_keywords}{ $eval{ pap.keywords.pattern="macro"; pap.keywords.context="scope"; return ""; } }
+switch_keywords
+macro{X}{Y}
+```
+
+Output:
+
+```
+Y
 ```
 
 ---
 
-## Error Handling
+# 17. Meta-Programming Examples
 
-Eval blocks are wrapped in a try/catch. Exceptions produce empty output.
-
-Pattern/macro recursion halts upon reaching `maxRecursion`.
-
----
-
-## Advanced Examples
-
-### Nested Macros
-
-```
-macro A {($1)}
-macro B {A($1)}
-B(hello)
-```
-
-→ `(hello)`
-
-### Dynamic Rewriting with `$unique`
-
-```
-pattern {node} {id_$unique}
-node node node
-```
-
-→ `id_u0 id_u1 id_2`
-
-### Working with Pre/Post Context
-
-```
-pattern {x} {$pre|X|$post}
-a x b
-```
-
-→ `a |X| b`
-
-### Spread Matching
-
-```
-pattern {let $name = $v...;} {[decl $name $v]}
-let x = 1 + 2 + 3;
-```
-
-→ `[decl x 1 + 2 + 3]`
+* **Dynamic template engines**: generate arbitrary nested templates inside contexts.
+* **Self-expanding DSLs**: macros that define other macros.
+* **Text-based code generation**: precompile repetitive boilerplate using `$unique` and `$eval`.
+* **Hybrid syntaxes**: combine HTML, Markdown, custom DSL, and other syntaxes in a single pipeline.
+* **Sandboxed rule execution**: define rules inside a context that never leak to the global scope.
 
 ---
 
-## API Reference
+# 18. Practical Guidelines
 
-### Class: `Papagaio`
-
-#### `process(input: string): string`
-
-Runs the full pipeline and returns the transformed text.
-
-#### `delimiters: Array<[string, string]>`
-
-List of opening/closing delimiter pairs.
-
-#### `sigil: string`
-
-Variable prefix. Default `$`.
-
-#### `keywords`
-
-Keyword configuration:
-
-* `pattern`
-* `macro`
-* `eval`
-* `scope`
-
-#### Internal State
-
-For debugging only:
-
-* `content` → latest processed text
-* `#matchContent`
-* `#scopeContent`
-* `#evalContent`
+* Use `$eval` carefully; errors will produce empty output.
+* `$unique` is essential for safe auto-generated identifiers.
+* `maxRecursion` prevents infinite loops with recursive or self-referential patterns.
+* Contexts act like local scopes for patterns; define macros or temporary rules inside them.
+* Delimiters and sigils can be swapped mid-processing for DSL adaptation.
+* Always trim input to avoid unintended whitespace captures with `...` patterns.
 
 ---
 
-## Embedding
+# 19. Summary
 
-Papagaio is pure JS and safe to embed in build pipelines, CLIs, game engines, or runtime scripting layers.
+With self-modifying patterns, hybrid pipelines, recursive expansions, Lisp-style macros, and dynamic runtime hacks, Papagaio is a **full meta-programming framework** entirely based on text. You can:
 
-Example minimal CLI wrapper:
+* Build DSLs
+* Create macro engines
+* Implement templating pipelines
+* Write mini-transpilers
+* Automate complex text generation
 
-```js
-#!/usr/bin/env node
-const fs = require("fs");
-const { Papagaio } = require("./papagaio");
-
-const input = fs.readFileSync(0, "utf8");
-const out = new Papagaio().process(input);
-process.stdout.write(out);
-```
+Everything is declarative in the text, and runtime manipulation of delimiters, sigils, and keywords allows infinite flexibility.
 
 ---
