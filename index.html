@@ -254,7 +254,7 @@
     <div class="container">
         <div class="header" id="header">
             <h1>papagaio</h1>
-            easy generic text preprocessor
+            easy text preprocessor
         </div>
         
         <div class="main-controls">
@@ -300,156 +300,125 @@
         </div>
     </div>
 
-    <script>
-        let processor = null;
-        let headerContent = '';
+        <script type="module">
+            import { Papagaio } from './papagaio.js';
 
-        // Simulação do Papagaio class (seria importado do papagaio.js)
-        // Assumindo que a classe está disponível como window.Papagaio
-        
-        function initProcessor() {
-            if (typeof Papagaio !== 'undefined') {
+            let processor = null;
+
+            function initProcessor() {
                 processor = new Papagaio();
                 updateStatus('CORE LOADED');
-            } else {
-                updateStatus('CORE NOT LOADED');
             }
-        }
 
-        // Tenta inicializar quando a página carrega
-        window.addEventListener('load', initProcessor);
+            window.addEventListener('load', initProcessor);
 
-        // Se o Papagaio for carregado dinamicamente
-        const script = document.createElement('script');
-        script.src = 'papagaio.js';
-        script.onload = initProcessor;
-        document.head.appendChild(script);
+            function animateParrot() {
+                const header = document.getElementById('header');
+                header.classList.add('animate-parrot');
+                setTimeout(() => header.classList.remove('animate-parrot'), 500);
+            }
 
-        function animateParrot() {
-            const header = document.getElementById('header');
-            header.classList.add('animate-parrot');
-            setTimeout(() => {
-                header.classList.remove('animate-parrot');
-            }, 500);
-        }
+            function updateStatus(message) {
+                document.getElementById('status').textContent = message;
+            }
 
-        function updateStatus(message) {
-            document.getElementById('status').textContent = message;
-        }
-
-        function processCode() {
-            try {
-                if (!processor) {
-                    updateStatus('CORE NOT LOADED');
-                    return;
+            function processCode() {
+                try {
+                    if (!processor) {
+                        updateStatus('CORE NOT LOADED');
+                        return;
+                    }
+                    updateStatus('PROCESSING...');
+                    const input = document.getElementById('input').value;
+                    const output = processor.process(input);
+                    document.getElementById('output').value = output;
+                    updateStatus('COMPLETED');
+                } catch (err) {
+                    document.getElementById('output').value = `Error: ${err.message}`;
+                    updateStatus('ERROR');
                 }
-                updateStatus('PROCESSING...');
-                const input = document.getElementById('input').value;
-                const fullInput = headerContent + input;
-                const output = processor.process(fullInput);
-                document.getElementById('output').value = output;
-                updateStatus('COMPLETED ✅');
-            } catch (err) {
-                document.getElementById('output').value = `Error: ${err.message}`;
-                updateStatus('ERROR ❌');
             }
-        }
 
-        function loadFile() {
-            document.getElementById('fileInput').click();
-        }
+            window.processCode = processCode;
+            window.animateParrot = animateParrot;
+            window.loadFile = loadFile;
+            window.handleFileSelect = handleFileSelect;
+            window.downloadResult = downloadResult;
+            window.clearAll = clearAll;
+            window.applyQuotes = applyQuotes;
+            window.resetQuotes = resetQuotes;
+            window.applySigil = applySigil;
+            window.resetSigil = resetSigil;
 
-        function handleFileSelect() {
-            const file = document.getElementById('fileInput').files[0];
-            if (file) {
+            function loadFile() {
+                document.getElementById('fileInput').click();
+            }
+
+            function handleFileSelect() {
+                const file = document.getElementById('fileInput').files[0];
+                if (!file) return;
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = e => {
                     document.getElementById('input').value = e.target.result;
-                    document.getElementById('fileInput').value = '';
                     updateStatus('FILE LOADED');
                 };
                 reader.readAsText(file);
             }
-        }
 
-        function downloadResult() {
-            const output = document.getElementById('output').value;
-            if (!output) {
-                alert('Nothing to download!');
-                return;
+            function downloadResult() {
+                const output = document.getElementById('output').value;
+                if (!output) return alert('Nothing to download!');
+                const blob = new Blob([output], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'output.txt';
+                a.click();
+                URL.revokeObjectURL(url);
+                updateStatus('DOWNLOAD COMPLETED');
             }
-            const blob = new Blob([output], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'output.txt';
-            a.click();
-            URL.revokeObjectURL(url);
-            updateStatus('DOWNLOAD COMPLETED');
-        }
 
-        function clearAll() {
-            document.getElementById('input').value = '';
-            document.getElementById('output').value = '';
-            updateStatus('CLEARED 🗑️');
-        }
+            function clearAll() {
+                document.getElementById('input').value = '';
+                document.getElementById('output').value = '';
+                updateStatus('CLEARED');
+            }
 
-        document.getElementById('input').addEventListener('keydown', (e) => {
-            if (e.ctrlKey && e.key === 'Enter') {
-                animateParrot();
-                processCode();
-            }
-        });
+            document.getElementById('input').addEventListener('keydown', e => {
+                if (e.ctrlKey && e.key === 'Enter') {
+                    animateParrot();
+                    processCode();
+                }
+            });
 
-        function applyQuotes() {
-            const o = document.getElementById('openQuote').value;
-            const c = document.getElementById('closeQuote').value;
-            if (!o || !c) {
-                alert('Enter both delimiters');
-                return;
+            function applyQuotes() {
+                const o = document.getElementById('openQuote').value;
+                const c = document.getElementById('closeQuote').value;
+                if (!o || !c) return alert('Enter both delimiters');
+                processor.changeDelimiters(o, c);
+                updateStatus('DELIMITERS APPLIED');
             }
-            if (!processor) {
-                alert('Processor not available');
-                return;
-            }
-            processor.changeDelimiters(o, c);
-            updateStatus('DELIMITERS APPLIED');
-        }
 
-        function resetQuotes() {
-            if (!processor) {
-                alert('Processor not available');
-                return;
+            function resetQuotes() {
+                processor.changeDelimiters('{', '}');
+                document.getElementById('openQuote').value = '';
+                document.getElementById('closeQuote').value = '';
+                updateStatus('DELIMITERS RESET');
             }
-            processor.changeDelimiters('{', '}');
-            document.getElementById('openQuote').value = '';
-            document.getElementById('closeQuote').value = '';
-            updateStatus('DELIMITERS RESET');
-        }
 
-        function applySigil() {
-            const s = document.getElementById('sigilInput').value;
-            if (!s) {
-                alert('Enter a sigil');
-                return;
+            function applySigil() {
+                const s = document.getElementById('sigilInput').value;
+                if (!s) return alert('Enter a sigil');
+                processor.changeSigil(s);
+                updateStatus('SIGIL APPLIED');
             }
-            if (!processor) {
-                alert('Processor not available');
-                return;
-            }
-            processor.changeSigil(s);
-            updateStatus('SIGIL APPLIED');
-        }
 
-        function resetSigil() {
-            if (!processor) {
-                alert('Processor not available');
-                return;
+            function resetSigil() {
+                processor.changeSigil('$');
+                document.getElementById('sigilInput').value = '';
+                updateStatus('SIGIL RESET');
             }
-            processor.changeSigil('$');
-            document.getElementById('sigilInput').value = '';
-            updateStatus('SIGIL RESET');
-        }
-    </script>
+        </script>
+
 </body>
 </html>

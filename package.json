@@ -1,0 +1,28 @@
+{
+  "name": "papagaio",
+  "version": "0.1.4",
+  "description": "easy yet powerful preprocessor",
+  "main": "papagaio.js",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jardimdanificado/papagaio.git"
+  },
+  "keywords": [
+    "preprocessor",
+    "macro",
+    "pattern",
+    "eval",
+    "isolate",
+    "parser"
+  ],
+  "author": "jardimdanificado",
+  "bugs": {
+    "url": "https://github.com/jardimdanificado/papagaio/issues"
+  },
+  "homepage": "https://github.com/jardimdanificado/papagaio#readme"
+,
+  "bin": {
+    "papagaio": "./node.js"
+  }
+}

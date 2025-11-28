@@ -2,8 +2,7 @@
 // papagaio - a easy to use preprocessor
 // ============================================
 
-class Papagaio {
-    version = "0.1.1";
+export class Papagaio {
     maxRecursion = 512;
     
     // Private state
@@ -12,6 +11,12 @@ class Papagaio {
     // Public configuration
     delimiters = [["{", "}"]];
     sigil = "$";
+    keywords = {
+        pattern: "pattern",
+        macro: "macro", 
+        eval: "eval",
+        scope: "scope"
+    };
     
     // Public state - processing state
     content = "";
@@ -39,10 +44,10 @@ class Papagaio {
 
         // regex para detectar blocos papagaio remanescentes
         const pending = () => {
-            const rEval    = new RegExp(`\\beval\\s*\\${open}`, "g");
-            const rScope   = new RegExp(`\\bscope\\s*\\${open}`, "g");
-            const rPattern = new RegExp(`\\bpattern\\s*\\${open}`, "g");
-            const rMacro   = new RegExp(`\\bmacro\\s+[A-Za-z_][A-Za-z0-9_]*\\s*\\${open}`, "g");
+            const rEval    = new RegExp(`\\b${this.keywords.eval}\\s*\\${open}`, "g");
+            const rScope   = new RegExp(`\\b${this.keywords.scope}\\s*\\${open}`, "g");
+            const rPattern = new RegExp(`\\b${this.keywords.pattern}\\s*\\${open}`, "g");
+            const rMacro   = new RegExp(`\\b${this.keywords.macro}\\s+[A-Za-z_][A-Za-z0-9_]*\\s*\\${open}`, "g");
             return rEval.test(src)
                 || rScope.test(src)
                 || rPattern.test(src)
@@ -310,7 +315,7 @@ class Papagaio {
     #collectMacros(src) {
         const macros = {};
         const open = this.#getDefaultOpen();
-        const macroRegex = new RegExp(`\\bmacro\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*\\${open}`, "g");
+        const macroRegex = new RegExp(`\\b${this.keywords.macro}\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*\\${open}`, "g");
 
         let match;
         const matches = [];
@@ -337,15 +342,15 @@ class Papagaio {
     }
 
     #patternDepthAt(src, pos) {
-        const open = "pattern";
+        const open = this.keywords.pattern;
         let depth = 0;
 
         // scaneia até 'pos' contando quantos pattern{ e } ocorreram
         let i = 0;
         while (i < pos) {
             // identificação de pattern{
-            if (src.startsWith("pattern", i)) {
-                let j = i + 7;
+            if (src.startsWith(this.keywords.pattern, i)) {
+                let j = i + this.keywords.pattern.length;
                 while (j < src.length && /\s/.test(src[j])) j++;
 
                 if (src[j] === "{") {
@@ -368,7 +373,7 @@ class Papagaio {
         const patterns = [];
         const open = this.#getDefaultOpen();
         const close = this.#getDefaultClose();
-        const patternRegex = /\bpattern\s*\{/g;
+        const patternRegex = new RegExp(`\\b${this.keywords.pattern}\\s*\\{`, "g");
 
         let resultSrc = src;
         let out = "";
@@ -565,7 +570,7 @@ class Papagaio {
 
     #processEvalBlocks(src) {
         const open = this.#getDefaultOpen();
-        const evalRegex = new RegExp(`\\beval\\s*\\${open}`, "g");
+        const evalRegex = new RegExp(`\\b${this.keywords.eval}\\s*\\${open}`, "g");
 
         let match;
         const matches = [];
@@ -605,7 +610,7 @@ class Papagaio {
 
     #processScopeBlocks(src) {
         const open = this.#getDefaultOpen();
-        const scopeRegex = new RegExp(`\\bscope\\s*\\${open}`, "g");
+        const scopeRegex = new RegExp(`\\b${this.keywords.scope}\\s*\\${open}`, "g");
 
         let match;
         const matches = [];
@@ -640,11 +645,4 @@ class Papagaio {
     }
 
 
-}
-
-// Export para diferentes ambientes
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { Papagaio };
-} else if (typeof exports !== 'undefined') {
-    exports.Papagaio = Papagaio;
 }
