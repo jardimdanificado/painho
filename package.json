@@ -1,6 +1,6 @@
 {
   "name": "papagaio",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "easy yet powerful preprocessor",
   "main": "papagaio.js",
   "type": "module",
@@ -23,6 +23,6 @@
   "homepage": "https://github.com/jardimdanificado/papagaio#readme"
 ,
   "bin": {
-    "papagaio": "./node.js"
+    "papagaio": "./cli.js"
   }
 }

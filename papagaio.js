@@ -207,12 +207,22 @@ export class Papagaio {
                         j++;
                     }
 
-                    if (token) {
-                        const escapedToken = this.#escapeRegex(token);
-                        regex += `((?:.|\\r|\\n)*?)${escapedToken}`;
-                        i = j;
-                        continue;
+                    // Aqui convertemos o token em uma parte de regex:
+                    // - qualquer ocorrência de $$ (S2) vira \s*
+                    // - o restante é escapado apropriadamente
+                    let tokenRegex = '';
+                    if (token.length === 0) {
+                        tokenRegex = ''; // sem token → apenas captura sem terminador
+                    } else {
+                        // dividir pelo S2 e escapar cada pedaço literal
+                        const parts = token.split(S2);
+                        tokenRegex = parts.map(p => this.#escapeRegex(p)).join('\\s*');
                     }
+
+                    // captura não-gulosa para o ... seguida do token interpretado
+                    regex += `((?:.|\\r|\\n)*?)${tokenRegex}`;
+                    i = j;
+                    continue;
                 }
 
                 if (varName) {
@@ -239,6 +249,7 @@ export class Papagaio {
 
         return new RegExp(regex, 'g');
     }
+
 
     #buildBalancedBlockRegex(open, close) {
         const escapedOpen = open === '(' ? '\\(' : (open === '[' ? '\\[' : open === '{' ? '\\{' : open === '<' ? '\\<' : open);
