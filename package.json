@@ -1,6 +1,6 @@
 {
   "name": "papagaio",
-  "version": "0.1.7",
+  "version": "0.1.9",
   "description": "easy yet powerful preprocessor",
   "main": "papagaio.js",
   "type": "module",
@@ -13,7 +13,6 @@
     "macro",
     "pattern",
     "eval",
-    "isolate",
     "parser"
   ],
   "author": "jardimdanificado",

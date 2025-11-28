@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 import { Papagaio } from "./papagaio.js";
 import fs from "fs";
-import pkg from "./package.json" assert { type: "json" };
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const pkg = require("./package.json");
+
 
 // Help & Version
 const args = process.argv.slice(2);

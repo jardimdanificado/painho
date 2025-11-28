@@ -1,23 +1,6 @@
-# Papagaio Preprocessor
+# Papagaio
 
-Papagaio is a lightweight, class‑based text preprocessor designed to support pattern rewriting, macro expansion, scoped transforms, and embedded JavaScript evaluation. It is engineered to be predictable, recursion‑safe, and easily embeddable in any JavaScript runtime.
-
----
-
-## Overview
-
-Papagaio processes an input string through a deterministic multi‑stage pipeline:
-
-1. **Scope blocks** (recursive processing)
-2. **Eval blocks** (JS execution)
-3. **Macro collection**
-4. **Pattern collection**
-5. **Pattern application**
-6. **Macro expansion**
-
-The engine runs until it reaches a fixed point or hits the recursion limit.
-
-Papagaio supports **nested delimiters**, **custom sigils**, and **configurable keywords**.
+Papagaio is a lightweight text preprocessor designed to support pattern rewriting, macro expansion, scoped transforms, and embedded JavaScript evaluation.  It's heavily inspired by m4 and the C preprocessor.
 
 ---
 
@@ -29,6 +12,12 @@ Papagaio ships as a standalone ES module.
 import { Papagaio } from "./papagaio.js";
 ```
 
+You can also install it as a standalone program:
+
+```bash
+npm install -g papagaio
+```
+
 ---
 
 ## Basic Usage
@@ -37,6 +26,12 @@ import { Papagaio } from "./papagaio.js";
 const p = new Papagaio();
 const output = p.process("pattern {a} {b}  a a a");
 console.log(output); // "b b b"
+```
+
+If using the standalone use:
+
+```bash
+papagaio file.c
 ```
 
 ---
@@ -82,15 +77,15 @@ say hello
 Papagaio supports deep matching of balanced blocks:
 
 ```
-pattern {($x)} {[BLOCK:$x]}
+pattern {{$x}} {[BLOCK:$x]}
 (do something)
 ```
 
 → `[BLOCK:do something]`
 
-#### Spread Variables
+#### Complex Variables
 
-Spread variables capture until a terminating token:
+Complex variables capture until a terminating token:
 
 ```
 pattern {from $x...to} {$x}
@@ -259,7 +254,7 @@ pattern {node} {id_$unique}
 node node node
 ```
 
-→ `id_0 id_1 id_2`
+→ `id_u0 id_u1 id_2`
 
 ### Working with Pre/Post Context
 

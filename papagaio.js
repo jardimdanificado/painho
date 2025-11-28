@@ -13,16 +13,11 @@ export class Papagaio {
     sigil = "$";
     keywords = {
         pattern: "pattern",
-        macro: "macro", 
-        eval: "eval",
         scope: "scope"
     };
     
     // Public state - processing state
     content = "";
-    #matchContent = "";
-    #scopeContent = "";
-    #evalContent = "";
 
     constructor() {
         this.#resetCounterState();
@@ -44,14 +39,10 @@ export class Papagaio {
 
         // regex para detectar blocos papagaio remanescentes
         const pending = () => {
-            const rEval    = new RegExp(`\\b${this.keywords.eval}\\s*\\${open}`, "g");
             const rScope   = new RegExp(`\\b${this.keywords.scope}\\s*\\${open}`, "g");
             const rPattern = new RegExp(`\\b${this.keywords.pattern}\\s*\\${open}`, "g");
-            const rMacro   = new RegExp(`\\b${this.keywords.macro}\\s+[A-Za-z_][A-Za-z0-9_]*\\s*\\${open}`, "g");
-            return rEval.test(src)
-                || rScope.test(src)
+            return rScope.test(src)
                 || rPattern.test(src)
-                || rMacro.test(src);
         };
 
         // fixpoint loop
@@ -61,16 +52,11 @@ export class Papagaio {
 
             // --- pipeline padrão ---
             src = this.#processScopeBlocks(src);
-            src = this.#processEvalBlocks(src);
-
-            const [macros, s1] = this.#collectMacros(src);
-            src = s1;
 
             const [patterns, s2] = this.#collectPatterns(src);
             src = s2;
 
             src = this.#applyPatterns(src, patterns);
-            src = this.#expandMacros(src, macros);
 
             // --- se sobrou bloco papagaio → roda de novo ---
             if (!pending()) break;
@@ -323,35 +309,6 @@ export class Papagaio {
         return vars;
     }
 
-    #collectMacros(src) {
-        const macros = {};
-        const open = this.#getDefaultOpen();
-        const macroRegex = new RegExp(`\\b${this.keywords.macro}\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*\\${open}`, "g");
-
-        let match;
-        const matches = [];
-
-        while ((match = macroRegex.exec(src)) !== null) {
-            matches.push({
-                name: match[1],
-                matchStart: match.index,
-                openPos: match.index + match[0].length - 1
-            });
-        }
-
-        for (let j = matches.length - 1; j >= 0; j--) {
-            const m = matches[j];
-            const [body, posAfter] = this.#extractBlock(src, m.openPos);
-            macros[m.name] = body;
-
-            let left = src.substring(0, m.matchStart);
-            let right = src.substring(posAfter);
-            src = this.#collapseLocalNewlines(left, right);
-        }
-
-        return [macros, src];
-    }
-
     #patternDepthAt(src, pos) {
         const open = this.keywords.pattern;
         let depth = 0;
@@ -465,8 +422,6 @@ export class Papagaio {
                         varMap[varNames[i]] = captures[i] || '';
                     }
 
-                    this.#matchContent = fullMatch;
-
                     const _pre = src.slice(0, matchStart);
                     const _post = src.slice(matchEnd);
 
@@ -480,6 +435,20 @@ export class Papagaio {
                     result = result.replace(new RegExp(`${this.#escapeRegex(S)}unique\\b`, 'g'),
                         () => this.#genUnique()
                     );
+
+                    result = result.replace(/\$eval\{([^}]*)\}/g, (_, code) => {
+                        try {
+                            // O conteúdo é o corpo de uma função autoinvocada
+                            const wrappedCode = `"use strict"; return (function() { ${code} })();`;
+
+                            let out = String(
+                                Function("papagaio", "ctx", wrappedCode)(this, {})
+                            );
+                            return out;
+                        } catch {
+                            return "";
+                        }
+                    });
 
                     const S2 = S + S;
                     result = result.replace(new RegExp(this.#escapeRegex(S2), 'g'), '');
@@ -510,113 +479,8 @@ export class Papagaio {
         return src;
     }
 
-    #expandMacros(src, macros) {
-        const S = this.sigil;
-
-        for (const name of Object.keys(macros)) {
-            const body = macros[name];
-            let changed = true;
-            let iterations = 0;
-
-            while (changed && iterations < this.maxRecursion) {
-                changed = false;
-                iterations++;
-
-                const callRegex = new RegExp(`\\b${this.#escapeRegex(name)}\\s*\\(`, 'g');
-                
-                let match;
-                const matches = [];
-
-                while ((match = callRegex.exec(src)) !== null) {
-                    matches.push({
-                        matchStart: match.index,
-                        openPos: match.index + match[0].length - 1
-                    });
-                }
-
-                for (let j = matches.length - 1; j >= 0; j--) {
-                    const m = matches[j];
-                    const [argsStr, posAfter] = this.#extractBlock(src, m.openPos, '(', ')');
-                    const vals = argsStr.split(',').map(v => v.trim());
-
-                    let exp = body;
-
-                    // Substituição flexível de $0, $1, $2 etc, mesmo dentro de palavras
-                    for (let k = vals.length; k >= 0; k--) {
-                        const sigil = k === 0 ? S + '0' : S + k;
-                        const pattern = new RegExp(this.#escapeRegex(sigil) + '(?![0-9])', 'g');
-                        const replacement = k === 0 ? name : (vals[k - 1] !== undefined ? vals[k - 1] : '');
-                        exp = exp.replace(pattern, replacement);
-                    }
-
-                    let left = src.substring(0, m.matchStart);
-                    let right = src.substring(posAfter);
-                    src = left + exp + right;
-                    changed = true;
-                }
-            }
-        }
-
-        return src;
-    }
-
     #escapeRegex(str) {
         return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    }
-
-    #collapseLocalNewlines(left, right) {
-        left = left.replace(/\n+$/, '\n');
-        right = right.replace(/^\n+/, '\n');
-
-        if (left.endsWith('\n') && right.startsWith('\n')) {
-            right = right.replace(/^\n+/, '\n');
-        }
-
-        if (left === '' && right.startsWith('\n')) {
-            right = right.replace(/^\n+/, '');
-        }
-
-        return left + right;
-    }
-
-    #processEvalBlocks(src) {
-        const open = this.#getDefaultOpen();
-        const evalRegex = new RegExp(`\\b${this.keywords.eval}\\s*\\${open}`, "g");
-
-        let match;
-        const matches = [];
-
-        while ((match = evalRegex.exec(src)) !== null) {
-            matches.push({
-                matchStart: match.index,
-                openPos: match.index + match[0].length - 1
-            });
-        }
-
-        for (let j = matches.length - 1; j >= 0; j--) {
-            const m = matches[j];
-
-            const [content, posAfter] = this.#extractBlock(src, m.openPos);
-            this.#evalContent = content;
-
-            let out = "";
-            try {
-                // O conteúdo é o corpo de uma função autoinvocada
-                const wrappedCode = `"use strict"; return (function() { ${content} })();`;
-
-                out = String(
-                    Function("papagaio", "ctx", wrappedCode)(this, {})
-                );
-            } catch (e) {
-                out = "";
-            }
-
-            let left = src.substring(0, m.matchStart);
-            let right = src.substring(posAfter);
-            src = left + out + right;
-        }
-
-        return src;
     }
 
     #processScopeBlocks(src) {
@@ -637,7 +501,6 @@ export class Papagaio {
             const m = matches[j];
             const [content, posAfter] = this.#extractBlock(src, m.openPos);
 
-            this.#scopeContent = content;
             const processedContent = this.process(content);
 
             let left = src.substring(0, m.matchStart);
