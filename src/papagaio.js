@@ -1,5 +1,7 @@
+// https://github.com/jardimdanificado/papagaio
+
 function processContext(papagaio, src) {
-  const ctxRe = new RegExp(`\\b${papagaio.keywords.context}\\s*\\${papagaio.open}`, "g");
+  const ctxRe = new RegExp(`\\b${papagaio.symbols.context}\\s*\\${papagaio.symbols.open}`, "g");
   let m, matches = [];
   while ((m = ctxRe.exec(src)) !== null)
     matches.push({ idx: m.index, pos: m.index + m[0].length - 1 });
@@ -18,7 +20,7 @@ function processContext(papagaio, src) {
   return src;
 }
 
-function extractBlock(papagaio, src, openPos, openDelim = papagaio.open, closeDelim = papagaio.close) {
+function extractBlock(papagaio, src, openPos, openDelim = papagaio.symbols.open, closeDelim = papagaio.symbols.close) {
   let i = openPos;
   if (openDelim.length > 1 || closeDelim.length > 1) {
     if (src.substring(i, i + openDelim.length) === openDelim) {
@@ -60,7 +62,7 @@ function extractBlock(papagaio, src, openPos, openDelim = papagaio.open, closeDe
 function parsePattern(papagaio, pattern) {
   const tokens = [];
   let i = 0;
-  const S = papagaio.sigil, S2 = S + S;
+  const S = papagaio.symbols.sigil, S2 = S + S;
   while (i < pattern.length) {
     if (pattern.startsWith(S2, i)) {
       tokens.push({ type: 'whitespace-optional' });
@@ -74,17 +76,17 @@ function parsePattern(papagaio, pattern) {
       while (j < pattern.length && /[A-Za-z0-9_]/.test(pattern[j])) varName += pattern[j++];
       if (varName) {
         while (j < pattern.length && /\s/.test(pattern[j])) j++;
-        let openDelim = papagaio.open;
-        if (j < pattern.length && pattern[j] === papagaio.open) {
+        let openDelim = papagaio.symbols.open;
+        if (j < pattern.length && pattern[j] === papagaio.symbols.open) {
           const [c, e] = extractBlock(papagaio, pattern, j);
-          openDelim = unescapeDelimiter(c.trim()) || papagaio.open;
+          openDelim = unescapeDelimiter(c.trim()) || papagaio.symbols.open;
           j = e;
           while (j < pattern.length && /\s/.test(pattern[j])) j++;
         }
-        let closeDelim = papagaio.close;
-        if (j < pattern.length && pattern[j] === papagaio.open) {
+        let closeDelim = papagaio.symbols.close;
+        if (j < pattern.length && pattern[j] === papagaio.symbols.open) {
           const [c, e] = extractBlock(papagaio, pattern, j);
-          closeDelim = unescapeDelimiter(c.trim()) || papagaio.close;
+          closeDelim = unescapeDelimiter(c.trim()) || papagaio.symbols.close;
           j = e;
         }
         tokens.push({ type: 'block', varName, openDelim, closeDelim });
@@ -154,14 +156,14 @@ function matchPattern(papagaio, src, tokens, startPos = 0) {
         while (pos < src.length && !/\s/.test(src[pos])) varValue += src[pos++];
       }
       if (!varValue) return null;
-      captures[papagaio.sigil + token.varName] = varValue;
+      captures[papagaio.symbols.sigil + token.varName] = varValue;
       continue;
     }
     if (token.type === 'block') {
       const { varName, openDelim, closeDelim } = token;
       if (!src.startsWith(openDelim, pos)) return null;
       const [blockContent, endPos] = extractBlock(papagaio, src, pos, openDelim, closeDelim);
-      captures[papagaio.sigil + varName] = blockContent;
+      captures[papagaio.symbols.sigil + varName] = blockContent;
       pos = endPos;
       continue;
     }
@@ -171,7 +173,7 @@ function matchPattern(papagaio, src, tokens, startPos = 0) {
 
 function collectPatterns(papagaio, src) {
   const patterns = [];
-  const patRe = new RegExp(`\\b${papagaio.keywords.pattern}\\s*\\${papagaio.open}`, "g");
+  const patRe = new RegExp(`\\b${papagaio.symbols.pattern}\\s*\\${papagaio.symbols.open}`, "g");
   let result = src;
   while (true) {
     patRe.lastIndex = 0;
@@ -182,7 +184,7 @@ function collectPatterns(papagaio, src) {
     const [matchPat, posAfterMatch] = extractBlock(papagaio, result, openPos);
     let k = posAfterMatch;
     while (k < result.length && /\s/.test(result[k])) k++;
-    if (k < result.length && result[k] === papagaio.open) {
+    if (k < result.length && result[k] === papagaio.symbols.open) {
       const [replacePat, posAfterReplace] = extractBlock(papagaio, result, k);
       patterns.push({ match: matchPat.trim(), replace: replacePat.trim() });
       result = result.slice(0, start) + result.slice(posAfterReplace);
@@ -194,7 +196,7 @@ function collectPatterns(papagaio, src) {
 }
 
 function applyPatterns(papagaio, src, patterns) {
-  let clearFlag = false, lastResult = "", S = papagaio.sigil;
+  let clearFlag = false, lastResult = "", S = papagaio.symbols.sigil;
   for (const pat of patterns) {
     const tokens = parsePattern(papagaio, pat.match);
     let newSrc = '';
@@ -209,7 +211,9 @@ function applyPatterns(papagaio, src, patterns) {
           const keyEsc = escapeRegex(k);
           result = result.replace(new RegExp(keyEsc + '(?![A-Za-z0-9_])', 'g'), v);
         }
-        result = result.replace(new RegExp(`${escapeRegex(S)}unique\\b`, 'g'), () => genUnique(papagaio));
+        
+        const uniqueId = papagaio.unique_id++;
+        result = result.replace(new RegExp(`${escapeRegex(S)}unique\\b`, 'g'), () => String(uniqueId));
         result = result.replace(/\$eval\{([^}]*)\}/g, (_, code) => {
           try {
             const wrapped = `"use strict"; return (function() { ${code} })();`;
@@ -220,10 +224,12 @@ function applyPatterns(papagaio, src, patterns) {
         });
         const S2 = S + S;
         result = result.replace(new RegExp(escapeRegex(S2), 'g'), '');
+        
         if (new RegExp(`${escapeRegex(S)}clear\\b`, 'g').test(result)) {
-          result = result.replace(new RegExp(`${escapeRegex(S)}clear\\b`, 'g'), '');
+          result = result.replace(new RegExp(`${escapeRegex(S)}clear\\b\\s?`, 'g'), '');
           clearFlag = true;
         }
+        
         const matchStart = pos, matchEnd = endPos;
         result = result
           .replace(new RegExp(`${escapeRegex(S)}prefix\\b`, 'g'), src.slice(0, matchStart))
@@ -243,10 +249,6 @@ function applyPatterns(papagaio, src, patterns) {
     }
   }
   return src;
-}
-
-function genUnique(papagaio) {
-  return "u" + (papagaio.counter.unique++).toString(36);
 }
 
 function escapeRegex(str) {
@@ -273,12 +275,15 @@ function unescapeDelimiter(str) {
 
 export class Papagaio {
   constructor() {
-    this.maxRecursion = 512;
-    this.counter = { value: 0, unique: 0 };
-    this.open = "{";
-    this.close = "}";
-    this.sigil = "$";
-    this.keywords = { pattern: "pattern", context: "context" };
+    this.recursion_limit = 512;
+    this.unique_id = 0;
+    this.symbols = {
+      pattern: "pattern",
+      context: "context",
+      open: "{",
+      close: "}",
+      sigil: "$"
+    };
     this.content = "";
   }
 
@@ -286,11 +291,11 @@ export class Papagaio {
     this.content = input;
     let src = input, last = null, iter = 0;
     const pending = () => {
-      const rCtx = new RegExp(`\\b${this.keywords.context}\\s*\\${this.open}`, "g");
-      const rPat = new RegExp(`\\b${this.keywords.pattern}\\s*\\${this.open}`, "g");
+      const rCtx = new RegExp(`\\b${this.symbols.context}\\s*\\${this.symbols.open}`, "g");
+      const rPat = new RegExp(`\\b${this.symbols.pattern}\\s*\\${this.symbols.open}`, "g");
       return rCtx.test(src) || rPat.test(src);
     };
-    while (src !== last && iter < this.maxRecursion) {
+    while (src !== last && iter < this.recursion_limit) {
       iter++;
       last = src;
       src = processContext(this, src);

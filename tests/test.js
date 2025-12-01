@@ -20,8 +20,6 @@ const testsPath = path.join(__dirname, 'tests.json');
 const testsData = JSON.parse(fs.readFileSync(testsPath, 'utf-8'));
 const tests = testsData.tests;
 
-const p = new Papagaio();
-
 console.log(`${colors.cyan}[TEST] PAPAGAIO - TEST RUNNER${colors.reset}\n`);
 console.log('='.repeat(80));
 
@@ -30,22 +28,25 @@ let failed = 0;
 const failedTests = [];
 
 for (const test of tests) {
+  // Criar nova instância de Papagaio para cada teste
+  const p = new Papagaio();
+  
   try {
     const result = p.process(test.code).trim();
-    const success = result.includes(test.shouldContain);
+    const success = result.includes(test.expected);
     
     if (success) {
       console.log(`${colors.green}[PASS]${colors.reset} [${test.id}] ${test.name}`);
       passed++;
     } else {
       console.log(`${colors.red}[FAIL]${colors.reset} [${test.id}] ${test.name}`);
-      console.log(`       ${colors.yellow}Expected:${colors.reset} "${test.shouldContain}"`);
+      console.log(`       ${colors.yellow}Expected:${colors.reset} "${test.expected}"`);
       console.log(`       ${colors.yellow}Got:${colors.reset}      "${result.substring(0, 80)}${result.length > 80 ? '...' : ''}"`);
       failed++;
       failedTests.push({
         id: test.id,
         name: test.name,
-        expected: test.shouldContain,
+        expected: test.expected,
         got: result.substring(0, 150)
       });
     }
@@ -93,6 +94,7 @@ const report = {
 
 const reportPath = path.join(__dirname, 'test-report.json');
 fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+
 console.log(`\n${colors.cyan}[INFO]${colors.reset} Report saved at: ${reportPath}`);
 
 process.exit(failed > 0 ? 1 : 0);
