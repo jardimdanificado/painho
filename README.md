@@ -13,10 +13,15 @@ const result = p.process(input);
 ## Configuration
 
 ```javascript
-p.open = "{";           // opening delimiter
-p.close = "}";          // closing delimiter
-p.sigil = "$";          // variable marker
-p.maxRecursion = 512;   // iteration limit
+p.symbols = {
+  pattern: "pattern",      // pattern keyword
+  context: "context",      // context keyword
+  open: "{",               // opening delimiter
+  close: "}",              // closing delimiter
+  sigil: "$"               // variable marker
+};
+p.recursion_limit = 512;   // iteration limit
+p.unique_id = 0;           // unique ID counter
 ```
 
 ---
@@ -65,8 +70,8 @@ $block name {open}{close}
 ### Example
 
 ```
-pattern {$block content {(}{)}} {[$content]}
-data ( hello world )
+pattern {$name $block content {(}{)}} {[$content]}
+data (hello world)
 ```
 Output: `[hello world]`
 
@@ -131,7 +136,7 @@ context {
 Output:
 ```
 <apple>
-<banana>
+ <banana>
 ```
 
 **Empty contexts are automatically removed.**
@@ -141,15 +146,21 @@ Output:
 ## Special Keywords
 
 ### $unique
-Generate unique incremental IDs for each pattern call.
+Generate unique incremental IDs for each pattern call. All occurrences of `$unique` within the same pattern replacement share the same ID.
 
 ```
-pattern {item} {item_$unique}
+pattern {item} {[$unique]item_$unique}
 item
 item
 item
 ```
-Output: `item_u0`, `item_u1`, `item_u2`
+Output: `[0]item_0`, `[1]item_1`, `[2]item_2`
+
+```
+pattern {a} {$unique $unique}
+a
+```
+Output: `0 0` (same ID for both occurrences)
 
 ### $match
 Return the full match.
@@ -164,10 +175,9 @@ Output: `FOUND: [data]`
 Text before and after the match.
 
 ```
-pattern {$x} {BEFORE:$prefix | AFTER:$suffix}
-hello world test
+pattern {world} {$prefix$suffix}hello world test
 ```
-Output: `BEFORE: | AFTER: world test`
+Output: `hello hello  test test`
 
 ### $clear
 Remove everything before the match.
@@ -195,8 +205,8 @@ Output: `10`
 
 ```
 context {
-  pattern {# $t} {<h1>$t</h1>}
   pattern {## $t} {<h2>$t</h2>}
+  pattern {# $t} {<h1>$t</h1>}
   pattern {**$t**} {<strong>$t</strong>}
   pattern {*$t*} {<em>$t</em>}
   pattern {- $i} {<li>$i</li>}
@@ -282,7 +292,7 @@ Output:
 | Pattern doesn't match | Use `$$` between elements for flexible whitespace |
 | Variable not captured | Check space between variables |
 | Block not working | Verify balanced delimiters `{` `}` |
-| Infinite recursion | Use `$clear` or reduce `maxRecursion` |
+| Infinite recursion | Use `$clear` or reduce `recursion_limit` |
 | $eval not working | Errors return empty string, use try-catch |
 
 ## Known Bugs
@@ -298,7 +308,7 @@ pattern {$x $y} {$y, $x}               # basic pattern
 pattern {$x$$y} {$x-$y}                # flexible whitespace
 pattern {$block n {o}{c}} {$n}         # block
 context { ... }                        # recursive scope
-$unique                                # unique ID
+$unique                                # unique ID per pattern
 $match                                 # full match
 $prefix / $suffix                      # before/after
 $clear                                 # clear before
