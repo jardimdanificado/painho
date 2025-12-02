@@ -1,73 +1,17 @@
-// https://github.com/jardimdanificado/papagaio
-
-function processContext(papagaio, src) {
-  const ctxRe = new RegExp(`\\b${papagaio.symbols.context}\\s*\\${papagaio.symbols.open}`, "g");
-  let m, matches = [];
-  while ((m = ctxRe.exec(src)) !== null)
-    matches.push({ idx: m.index, pos: m.index + m[0].length - 1 });
-  for (let j = matches.length - 1; j >= 0; j--) {
-    const x = matches[j], [content, posAfter] = extractBlock(papagaio, src, x.pos);
-    if (!content.trim()) {
-      src = src.slice(0, x.idx) + src.slice(posAfter);
-      continue;
-    }
-    const proc = papagaio.process(content);
-    let left = src.substring(0, x.idx), right = src.substring(posAfter);
-    let prefix = left.endsWith("\n") ? "\n" : "";
-    if (prefix) left = left.slice(0, -1);
-    src = left + prefix + proc + right;
-  }
-  return src;
-}
-
-function extractBlock(papagaio, src, openPos, openDelim = papagaio.symbols.open, closeDelim = papagaio.symbols.close) {
-  let i = openPos;
-  if (openDelim.length > 1 || closeDelim.length > 1) {
-    if (src.substring(i, i + openDelim.length) === openDelim) {
-      i += openDelim.length;
-      const innerStart = i;
-      let d = 0;
-      while (i < src.length) {
-        if (src.substring(i, i + openDelim.length) === openDelim) {
-          d++;
-          i += openDelim.length;
-        } else if (src.substring(i, i + closeDelim.length) === closeDelim) {
-          if (d === 0) return [src.substring(innerStart, i), i + closeDelim.length];
-          d--;
-          i += closeDelim.length;
-        } else i++;
-      }
-      return [src.substring(innerStart), src.length];
-    }
-  }
-  if (src[i] === openDelim) {
-    i++;
-    const innerStart = i;
-    if (openDelim === closeDelim) {
-      while (i < src.length && src[i] !== closeDelim) i++;
-      return [src.substring(innerStart, i), i + 1];
-    } else {
-      let depth = 1;
-      while (i < src.length && depth > 0) {
-        if (src[i] === openDelim) depth++;
-        else if (src[i] === closeDelim) depth--;
-        if (depth > 0) i++;
-      }
-      return [src.substring(innerStart, i), i + 1];
-    }
-  }
-  return ['', i];
-}
-
 function parsePattern(papagaio, pattern) {
-  const tokens = [];
-  let i = 0;
+  const tokens = []; let i = 0;
   const S = papagaio.symbols.sigil, S2 = S + S;
   while (i < pattern.length) {
+    if (pattern.startsWith(S2 + S, i)) {
+      let j = i + S2.length + S.length, varName = '';
+      while (j < pattern.length && /[A-Za-z0-9_]/.test(pattern[j])) varName += pattern[j++];
+      if (varName) { tokens.push({ type: 'var-ws-optional', varName }); i = j; continue; }
+    }
     if (pattern.startsWith(S2, i)) {
-      tokens.push({ type: 'whitespace-optional' });
-      i += S2.length;
-      continue;
+      let j = i + S2.length, varName = '';
+      while (j < pattern.length && /[A-Za-z0-9_]/.test(pattern[j])) varName += pattern[j++];
+      if (varName) { tokens.push({ type: 'var-ws', varName }); i = j; continue; }
+      tokens.push({ type: 'whitespace-optional' }); i += S2.length; continue;
     }
     if (pattern.startsWith(S + 'block', i)) {
       let j = i + S.length + 'block'.length;
@@ -80,8 +24,7 @@ function parsePattern(papagaio, pattern) {
         if (j < pattern.length && pattern[j] === papagaio.symbols.open) {
           const [c, e] = extractBlock(papagaio, pattern, j);
           openDelim = unescapeDelimiter(c.trim()) || papagaio.symbols.open;
-          j = e;
-          while (j < pattern.length && /\s/.test(pattern[j])) j++;
+          j = e; while (j < pattern.length && /\s/.test(pattern[j])) j++;
         }
         let closeDelim = papagaio.symbols.close;
         if (j < pattern.length && pattern[j] === papagaio.symbols.open) {
@@ -89,28 +32,18 @@ function parsePattern(papagaio, pattern) {
           closeDelim = unescapeDelimiter(c.trim()) || papagaio.symbols.close;
           j = e;
         }
-        tokens.push({ type: 'block', varName, openDelim, closeDelim });
-        i = j;
-        continue;
+        tokens.push({ type: 'block', varName, openDelim, closeDelim }); i = j; continue;
       }
     }
     if (pattern[i] === S) {
       let j = i + S.length, varName = '';
       while (j < pattern.length && /[A-Za-z0-9_]/.test(pattern[j])) varName += pattern[j++];
-      if (varName) {
-        tokens.push({ type: 'var', varName });
-        i = j;
-        continue;
-      }
-      tokens.push({ type: 'literal', value: S });
-      i += S.length;
-      continue;
+      if (varName) { tokens.push({ type: 'var', varName }); i = j; continue; }
+      tokens.push({ type: 'literal', value: S }); i += S.length; continue;
     }
     if (/\s/.test(pattern[i])) {
-      let ws = '';
-      while (i < pattern.length && /\s/.test(pattern[i])) ws += pattern[i++];
-      tokens.push({ type: 'whitespace', value: ws });
-      continue;
+      while (i < pattern.length && /\s/.test(pattern[i])) i++;
+      tokens.push({ type: 'whitespace-optional' }); continue;
     }
     let literal = '';
     while (i < pattern.length && !pattern.startsWith(S, i) && !/\s/.test(pattern[i])) literal += pattern[i++];
@@ -120,188 +53,158 @@ function parsePattern(papagaio, pattern) {
 }
 
 function matchPattern(papagaio, src, tokens, startPos = 0) {
-  let pos = startPos;
-  const captures = {};
+  let pos = startPos, captures = {};
   for (let ti = 0; ti < tokens.length; ti++) {
     const token = tokens[ti];
-    if (token.type === 'whitespace-optional') {
-      while (pos < src.length && /\s/.test(src[pos])) pos++;
-      continue;
-    }
-    if (token.type === 'whitespace') {
-      if (pos >= src.length || !/\s/.test(src[pos])) return null;
-      while (pos < src.length && /\s/.test(src[pos])) pos++;
-      continue;
-    }
-    if (token.type === 'literal') {
-      if (!src.startsWith(token.value, pos)) return null;
-      pos += token.value.length;
-      continue;
-    }
+    if (token.type === 'whitespace-optional') { while (pos < src.length && /\s/.test(src[pos])) pos++; continue; }
+    if (token.type === 'literal') { if (!src.startsWith(token.value, pos)) return null; pos += token.value.length; continue; }
     if (token.type === 'var') {
-      const nextToken = ti + 1 < tokens.length ? tokens[ti + 1] : null;
-      let varValue = '';
-      if (nextToken) {
-        if (nextToken.type === 'whitespace' || nextToken.type === 'whitespace-optional') {
-          while (pos < src.length && !/\s/.test(src[pos])) varValue += src[pos++];
-        } else if (nextToken.type === 'literal') {
-          const stopChar = nextToken.value[0];
-          while (pos < src.length && src[pos] !== stopChar && !/\s/.test(src[pos])) varValue += src[pos++];
-        } else if (nextToken.type === 'block') {
-          while (pos < src.length && !src.startsWith(nextToken.openDelim, pos) && !/\s/.test(src[pos])) varValue += src[pos++];
-        } else {
-          while (pos < src.length && !/\s/.test(src[pos])) varValue += src[pos++];
-        }
-      } else {
-        while (pos < src.length && !/\s/.test(src[pos])) varValue += src[pos++];
+      let v = ''; while (pos < src.length && !/\s/.test(src[pos])) v += src[pos++];
+      if (!v) return null; captures[papagaio.symbols.sigil + token.varName] = v; continue;
+    }
+    if (token.type === 'var-ws' || token.type === 'var-ws-optional') {
+      while (pos < src.length && /\s/.test(src[pos])) pos++;
+      const n = findNextSignificantToken(tokens, ti); let v = '';
+      if (!n || ['var','var-ws','var-ws-optional','block'].includes(n.type)) {
+        while (pos < src.length && !/\s/.test(src[pos])) v += src[pos++];
+      } else if (n.type === 'literal') {
+        while (pos < src.length && !src.startsWith(n.value, pos) && src[pos] !== '\n') v += src[pos++];
+        v = v.trimEnd();
       }
-      if (!varValue) return null;
-      captures[papagaio.symbols.sigil + token.varName] = varValue;
-      continue;
+      if (token.type === 'var-ws' && !v) return null;
+      captures[papagaio.symbols.sigil + token.varName] = v; continue;
     }
     if (token.type === 'block') {
       const { varName, openDelim, closeDelim } = token;
       if (!src.startsWith(openDelim, pos)) return null;
-      const [blockContent, endPos] = extractBlock(papagaio, src, pos, openDelim, closeDelim);
-      captures[papagaio.symbols.sigil + varName] = blockContent;
-      pos = endPos;
-      continue;
+      const [c, e] = extractBlock(papagaio, src, pos, openDelim, closeDelim);
+      captures[papagaio.symbols.sigil + varName] = c; pos = e; continue;
     }
   }
   return { captures, endPos: pos };
 }
 
-function collectPatterns(papagaio, src) {
-  const patterns = [];
-  const patRe = new RegExp(`\\b${papagaio.symbols.pattern}\\s*\\${papagaio.symbols.open}`, "g");
-  let result = src;
-  while (true) {
-    patRe.lastIndex = 0;
-    const m = patRe.exec(result);
-    if (!m) break;
-    const start = m.index;
-    const openPos = m.index + m[0].length - 1;
-    const [matchPat, posAfterMatch] = extractBlock(papagaio, result, openPos);
-    let k = posAfterMatch;
-    while (k < result.length && /\s/.test(result[k])) k++;
-    if (k < result.length && result[k] === papagaio.symbols.open) {
-      const [replacePat, posAfterReplace] = extractBlock(papagaio, result, k);
-      patterns.push({ match: matchPat.trim(), replace: replacePat.trim() });
-      result = result.slice(0, start) + result.slice(posAfterReplace);
-      continue;
+function findNextSignificantToken(t, i) { for (let k = i + 1; k < t.length; k++) if (t[k].type !== 'whitespace-optional') return t[k]; return null; }
+
+function extractBlock(p, src, openPos, openDelim = p.symbols.open, closeDelim = p.symbols.close) {
+  let i = openPos;
+  if (openDelim.length > 1 || closeDelim.length > 1) {
+    if (src.substring(i, i + openDelim.length) === openDelim) {
+      i += openDelim.length; const s = i; let d = 0;
+      while (i < src.length) {
+        if (src.substring(i, i + openDelim.length) === openDelim) { d++; i += openDelim.length; }
+        else if (src.substring(i, i + closeDelim.length) === closeDelim) {
+          if (!d) return [src.substring(s, i), i + closeDelim.length];
+          d--; i += closeDelim.length;
+        } else i++;
+      }
+      return [src.substring(s), src.length];
     }
-    result = result.slice(0, start) + result.slice(posAfterMatch);
   }
-  return [patterns, result];
+  if (src[i] === openDelim) {
+    i++; const s = i;
+    if (openDelim === closeDelim) { while (i < src.length && src[i] !== closeDelim) i++; return [src.substring(s, i), i + 1]; }
+    let d = 1;
+    while (i < src.length && d > 0) { if (src[i] === openDelim) d++; else if (src[i] === closeDelim) d--; if (d > 0) i++; }
+    return [src.substring(s, i), i + 1];
+  }
+  return ['', i];
 }
 
-function applyPatterns(papagaio, src, patterns) {
-  let clearFlag = false, lastResult = "", S = papagaio.symbols.sigil;
-  for (const pat of patterns) {
-    const tokens = parsePattern(papagaio, pat.match);
-    let newSrc = '';
-    let pos = 0, matched = false;
-    while (pos < src.length) {
-      const matchResult = matchPattern(papagaio, src, tokens, pos);
-      if (matchResult) {
-        matched = true;
-        const { captures, endPos } = matchResult;
-        let result = pat.replace;
-        for (const [k, v] of Object.entries(captures)) {
-          const keyEsc = escapeRegex(k);
-          result = result.replace(new RegExp(keyEsc + '(?![A-Za-z0-9_])', 'g'), v);
-        }
-        
-        const uniqueId = papagaio.unique_id++;
-        result = result.replace(new RegExp(`${escapeRegex(S)}unique\\b`, 'g'), () => String(uniqueId));
-        result = result.replace(/\$eval\{([^}]*)\}/g, (_, code) => {
-          try {
-            const wrapped = `"use strict"; return (function() { ${code} })();`;
-            return String(Function("papagaio", "ctx", wrapped)(papagaio, {}));
-          } catch {
-            return "";
-          }
-        });
-        const S2 = S + S;
-        result = result.replace(new RegExp(escapeRegex(S2), 'g'), '');
-        
-        if (new RegExp(`${escapeRegex(S)}clear\\b`, 'g').test(result)) {
-          result = result.replace(new RegExp(`${escapeRegex(S)}clear\\b\\s?`, 'g'), '');
-          clearFlag = true;
-        }
-        
-        const matchStart = pos, matchEnd = endPos;
-        result = result
-          .replace(new RegExp(`${escapeRegex(S)}prefix\\b`, 'g'), src.slice(0, matchStart))
-          .replace(new RegExp(`${escapeRegex(S)}suffix\\b`, 'g'), src.slice(matchEnd))
-          .replace(new RegExp(`${escapeRegex(S)}match\\b`, 'g'), src.slice(matchStart, matchEnd));
-        newSrc += result;
-        lastResult = result;
-        pos = endPos;
-      } else {
-        newSrc += src[pos];
-        pos++;
-      }
-    }
-    if (matched) {
-      src = clearFlag ? lastResult : newSrc;
-      clearFlag = false;
-    }
+function processContext(p, src) {
+  const r = new RegExp(`\\b${p.symbols.context}\\s*\\${p.symbols.open}`, "g"); let m, a = [];
+  while ((m = r.exec(src)) !== null) a.push({ idx: m.index, pos: m.index + m[0].length - 1 });
+  for (let j = a.length - 1; j >= 0; j--) {
+    const x = a[j], [c, e] = extractBlock(p, src, x.pos);
+    if (!c.trim()) { src = src.slice(0, x.idx) + src.slice(e); continue; }
+    const r2 = p.process(c); let L = src.substring(0, x.idx), R = src.substring(e);
+    let pre = L.endsWith("\n") ? "\n" : ""; if (pre) L = L.slice(0, -1);
+    src = L + pre + r2 + R;
   }
   return src;
 }
 
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\""']/g, '\\$&');
+function collectPatterns(p, src) {
+  const A = [], r = new RegExp(`\\b${p.symbols.pattern}\\s*\\${p.symbols.open}`, "g"); let out = src;
+  while (1) {
+    r.lastIndex = 0; const m = r.exec(out); if (!m) break;
+    const s = m.index, o = m.index + m[0].length - 1;
+    const [mp, em] = extractBlock(p, out, o); let k = em;
+    while (k < out.length && /\s/.test(out[k])) k++;
+    if (k < out.length && out[k] === p.symbols.open) {
+      const [rp, er] = extractBlock(p, out, k);
+      A.push({ match: mp.trim(), replace: rp.trim() });
+      out = out.slice(0, s) + out.slice(er); continue;
+    }
+    out = out.slice(0, s) + out.slice(em);
+  }
+  return [A, out];
 }
 
-function unescapeDelimiter(str) {
-  let result = '';
-  for (let i = 0; i < str.length; i++) {
-    if (str[i] === '\\' && i + 1 < str.length) {
-      const next = str[i + 1];
-      if (next === '"' || next === "'" || next === '\\') {
-        result += next;
-        i++;
-      } else {
-        result += str[i];
-      }
-    } else {
-      result += str[i];
+function applyPatterns(p, src, pats) {
+  let clear = false, last = "", S = p.symbols.sigil;
+  for (const pat of pats) {
+    const t = parsePattern(p, pat.match); let n = '', pos = 0, ok = false;
+    while (pos < src.length) {
+      const m = matchPattern(p, src, t, pos);
+      if (m) {
+        ok = true; const { captures, endPos } = m;
+        let r = pat.replace;
+        for (const [k, v] of Object.entries(captures)) {
+          const e = escapeRegex(k); r = r.replace(new RegExp(e + '(?![A-Za-z0-9_])', 'g'), v);
+        }
+        const uid = p.unique_id++; r = r.replace(new RegExp(`${escapeRegex(S)}unique\\b`, 'g'), () => String(uid));
+        r = r.replace(/\$eval\{([^}]*)\}/g, (_, c) => { try {
+          return String(Function("papagaio", "ctx", `"use strict";return(function(){${c}})();`)(p, {}));
+        } catch { return ""; } });
+        r = r.replace(new RegExp(escapeRegex(S + S), 'g'), '');
+        if (new RegExp(`${escapeRegex(S)}clear\\b`, 'g').test(r)) {
+          r = r.replace(new RegExp(`${escapeRegex(S)}clear\\b\\s?`, 'g'), ''); clear = true;
+        }
+        const ms = pos, me = endPos;
+        r = r
+          .replace(new RegExp(`${escapeRegex(S)}prefix\\b`, 'g'), src.slice(0, ms))
+          .replace(new RegExp(`${escapeRegex(S)}suffix\\b`, 'g'), src.slice(me))
+          .replace(new RegExp(`${escapeRegex(S)}match\\b`, 'g'), src.slice(ms, me));
+        n += r; last = r; pos = endPos;
+      } else { n += src[pos]; pos++; }
     }
+    if (ok) { src = clear ? last : n; clear = false; }
   }
-  return result;
+  return src;
+}
+
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\""']/g, '\\$&'); }
+
+function unescapeDelimiter(s) {
+  let r = ''; for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\\' && i + 1 < s.length) {
+      const n = s[i + 1];
+      if (n === '"' || n === "'" || n === '\\') { r += n; i++; }
+      else r += s[i];
+    } else r += s[i];
+  }
+  return r;
 }
 
 export class Papagaio {
   constructor() {
     this.recursion_limit = 512;
     this.unique_id = 0;
-    this.symbols = {
-      pattern: "pattern",
-      context: "context",
-      open: "{",
-      close: "}",
-      sigil: "$"
-    };
+    this.symbols = { pattern: "pattern", context: "context", open: "{", close: "}", sigil: "$" };
     this.content = "";
   }
-
   process(input) {
-    this.content = input;
-    let src = input, last = null, iter = 0;
-    const pending = () => {
-      const rCtx = new RegExp(`\\b${this.symbols.context}\\s*\\${this.symbols.open}`, "g");
-      const rPat = new RegExp(`\\b${this.symbols.pattern}\\s*\\${this.symbols.open}`, "g");
-      return rCtx.test(src) || rPat.test(src);
+    this.content = input; let src = input, last = null, it = 0;
+    const pend = () => {
+      const r1 = new RegExp(`\\b${this.symbols.context}\\s*\\${this.symbols.open}`, "g");
+      const r2 = new RegExp(`\\b${this.symbols.pattern}\\s*\\${this.symbols.open}`, "g");
+      return r1.test(src) || r2.test(src);
     };
-    while (src !== last && iter < this.recursion_limit) {
-      iter++;
-      last = src;
-      src = processContext(this, src);
-      const [patterns, s2] = collectPatterns(this, src);
-      src = applyPatterns(this, s2, patterns);
-      if (!pending()) break;
+    while (src !== last && it < this.recursion_limit) {
+      it++; last = src; src = processContext(this, src);
+      const [p, s2] = collectPatterns(this, src); src = applyPatterns(this, s2, p);
+      if (!pend()) break;
     }
     return this.content = src, src;
   }
