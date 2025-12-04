@@ -330,25 +330,6 @@ function extractBlock(p, src, openPos, openDelim = p.symbols.open, closeDelim = 
   return ['', i];
 }
 
-function processContext(p, src) {
-  const r = new RegExp(`\\b${p.symbols.context}\\s*\\${p.symbols.open}`, "g");
-  let m, a = [];
-  while ((m = r.exec(src)) !== null) a.push({ idx: m.index, pos: m.index + m[0].length - 1 });
-  for (let j = a.length - 1; j >= 0; j--) {
-    const x = a[j], [c, e] = extractBlock(p, src, x.pos);
-    if (!c.trim()) {
-      src = src.slice(0, x.idx) + src.slice(e);
-      continue;
-    }
-    const r2 = p.process(c);
-    let L = src.substring(0, x.idx), R = src.substring(e);
-    let pre = L.endsWith("\n") ? "\n" : "";
-    if (pre) L = L.slice(0, -1);
-    src = L + pre + r2 + R;
-  }
-  return src;
-}
-
 function collectPatterns(p, src) {
   const A = [], r = new RegExp(`\\b${p.symbols.pattern}\\s*\\${p.symbols.open}`, "g");
   let out = src;
@@ -371,6 +352,34 @@ function collectPatterns(p, src) {
   return [A, out];
 }
 
+function extractNestedPatterns(p, replaceText) {
+  const nested = [];
+  const r = new RegExp(`\\${p.symbols.sigil}${escapeRegex(p.symbols.pattern)}\\s*\\${p.symbols.open}`, "g");
+  let out = replaceText;
+  
+  while (1) {
+    r.lastIndex = 0;
+    const m = r.exec(out);
+    if (!m) break;
+    
+    const s = m.index, o = m.index + m[0].length - 1;
+    const [mp, em] = extractBlock(p, out, o);
+    let k = em;
+    
+    while (k < out.length && /\s/.test(out[k])) k++;
+    
+    if (k < out.length && out[k] === p.symbols.open) {
+      const [rp, er] = extractBlock(p, out, k);
+      nested.push({ match: mp.trim(), replace: rp.trim() });
+      out = out.slice(0, s) + out.slice(er);
+      continue;
+    }
+    out = out.slice(0, s) + out.slice(em);
+  }
+  
+  return [nested, out];
+}
+
 function applyPatterns(p, src, pats) {
   let clear = false, last = "", S = p.symbols.sigil;
   for (const pat of pats) {
@@ -382,10 +391,21 @@ function applyPatterns(p, src, pats) {
         ok = true;
         const { captures, endPos } = m;
         let r = pat.replace;
+        
+        // Extrai e processa padrões aninhados ($pattern)
+        const [nestedPats, cleanReplace] = extractNestedPatterns(p, r);
+        r = cleanReplace;
+        
         for (const [k, v] of Object.entries(captures)) {
           const e = escapeRegex(k);
           r = r.replace(new RegExp(e + '(?![A-Za-z0-9_])', 'g'), v);
         }
+        
+        // Aplica padrões aninhados ao resultado
+        if (nestedPats.length > 0) {
+          r = applyPatterns(p, r, nestedPats);
+        }
+        
         const uid = p.unique_id++;
         r = r.replace(new RegExp(`${escapeRegex(S)}unique\\b`, 'g'), () => String(uid));
         r = r.replace(/\$eval\{([^}]*)\}/g, (_, c) => {
@@ -439,24 +459,22 @@ function unescapeDelimiter(s) {
 }
 
 export class Papagaio {
-  constructor() {
+  constructor(sigil = "$", open = "{", close = "}", pattern = "pattern") {
     this.recursion_limit = 512;
     this.unique_id = 0;
-    this.symbols = { pattern: "pattern", context: "context", open: "{", close: "}", sigil: "$" };
+    this.symbols = { sigil: sigil, open: open, close: close, pattern: pattern};
     this.content = "";
   }
   process(input) {
     this.content = input;
     let src = input, last = null, it = 0;
     const pend = () => {
-      const r1 = new RegExp(`\\b${this.symbols.context}\\s*\\${this.symbols.open}`, "g");
       const r2 = new RegExp(`\\b${this.symbols.pattern}\\s*\\${this.symbols.open}`, "g");
-      return r1.test(src) || r2.test(src);
+      return r2.test(src);
     };
     while (src !== last && it < this.recursion_limit) {
       it++;
       last = src;
-      src = processContext(this, src);
       const [p, s2] = collectPatterns(this, src);
       src = applyPatterns(this, s2, p);
       if (!pend()) break;
