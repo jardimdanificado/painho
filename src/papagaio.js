@@ -130,25 +130,6 @@ function extractBlock(p, src, i, od = p.symbols.open, cd = p.symbols.close) {
     return ['', i];
 }
 
-function collectPats(p, src) {
-    const arr = [];
-    const rx = new RegExp(`(?:^|\\b)${esc(p.symbols.pattern)}\\s*${esc(p.symbols.open)}`, "g");
-    let out = src;
-    while (1) {
-        rx.lastIndex = 0; const m = rx.exec(out); if (!m) break;
-        const s = m.index, o = m.index + m[0].length - p.symbols.open.length;
-        const [mp, em] = extractBlock(p, out, o); let k = em;
-        while (k < out.length && /\s/.test(out[k])) k++;
-        if (k < out.length && out.substring(k, k + p.symbols.open.length) === p.symbols.open) {
-            const [rp, er] = extractBlock(p, out, k);
-            arr.push({ m: mp.trim(), r: rp.trim() });
-            out = out.slice(0, s) + out.slice(er); continue;
-        }
-        out = out.slice(0, s) + out.slice(em);
-    }
-    return [arr, out];
-}
-
 function extractNested(p, txt) {
     const n = [];
     const rx = new RegExp(`${esc(p.symbols.sigil)}${esc(p.symbols.pattern)}\\s*${esc(p.symbols.open)}`, "g");
@@ -172,16 +153,32 @@ function extractEvals(p, txt) {
     const ev = [], S = p.symbols.sigil, O = p.symbols.open;
     let i = 0, out = txt, off = 0;
     while (i < txt.length) {
-        if (txt.substring(i, i + S.length) === S && txt.substring(i + S.length, i + S.length + p.symbols.eval.length) === p.symbols.eval) {
-            let j = i + S.length + p.symbols.eval.length;
-            while (j < txt.length && /\s/.test(txt[j])) j++;
-            if (j < txt.length && txt.substring(j, j + O.length) === O) {
-                const sp = i, bp = j;
-                const [c, ep] = extractBlock(p, txt, bp);
-                ev.push({ code: c, sp: sp - off, ep: ep - off });
-                const ph = `__E${ev.length - 1}__`;
-                out = out.substring(0, sp - off) + ph + out.substring(ep - off);
-                off += (ep - sp) - ph.length; i = ep; continue;
+        if (txt.substring(i, i + S.length) === S) {
+            // detecta keywords: eval ou forget
+            const rest = txt.substring(i + S.length);
+            if (rest.startsWith(p.symbols.eval)) {
+                let j = i + S.length + p.symbols.eval.length;
+                while (j < txt.length && /\s/.test(txt[j])) j++;
+                if (j < txt.length && txt.substring(j, j + O.length) === O) {
+                    const sp = i, bp = j;
+                    const [c, ep] = extractBlock(p, txt, bp);
+                    ev.push({ type: 'eval', code: c, sp: sp - off, ep: ep - off });
+                    const ph = `__E${ev.length - 1}__`;
+                    out = out.substring(0, sp - off) + ph + out.substring(ep - off);
+                    off += (ep - sp) - ph.length; i = ep; continue;
+                }
+            } else if (rest.startsWith(p.symbols.forget)) {
+                let j = i + S.length + p.symbols.forget.length;
+                while (j < txt.length && /\s/.test(txt[j])) j++;
+                if (j < txt.length && txt.substring(j, j + O.length) === O) {
+                    const sp = i, bp = j;
+                    const [c, ep] = extractBlock(p, txt, bp);
+                    // c contém a lista de nomes a esquecer; armazenamos crua e trataremos depois
+                    ev.push({ type: 'forget', vars: c.trim(), sp: sp - off, ep: ep - off });
+                    const ph = `__E${ev.length - 1}__`;
+                    out = out.substring(0, sp - off) + ph + out.substring(ep - off);
+                    off += (ep - sp) - ph.length; i = ep; continue;
+                }
             }
         }
         i++;
@@ -189,14 +186,29 @@ function extractEvals(p, txt) {
     return [ev, out];
 }
 
-function applyEvals(p, txt, ev) {
+function applyEvals(p, txt, ev, cap) {
     let r = txt;
     for (let i = ev.length - 1; i >= 0; i--) {
         const ph = `__E${i}__`;
-        let res;
-        try { res = String(Function("papagaio", "ctx", `"use strict";return(function(){${ev[i].code}})();`)(p, {})); }
-        catch (e) { res = "error: " + e.message; }
-        r = r.replace(ph, res);
+        if (ev[i].type === 'eval') {
+            let res;
+            try { res = String(Function("papagaio", "ctx", `"use strict";return(function(){${ev[i].code}})();`)(p, {})); }
+            catch (e) { res = "error: " + e.message; }
+            r = r.replace(ph, res);
+        } else if (ev[i].type === 'forget') {
+            // ev[i].vars é uma string com nomes separados por whitespace/comma; normaliza em array
+            const list = ev[i].vars.split(/[\s,]+/).filter(Boolean);
+            for (let name of list) {
+                // permite passagem com ou sem sigil: "foo" ou "$foo"
+                if (!name.startsWith(p.symbols.sigil)) name = p.symbols.sigil + name;
+                if (cap && Object.prototype.hasOwnProperty.call(cap, name)) delete cap[name];
+            }
+            // remove placeholder (não queremos saída)
+            r = r.replace(ph, '');
+        } else {
+            // caso futuro: preserve placeholder
+            r = r.replace(ph, '');
+        }
     }
     return r;
 }
@@ -219,7 +231,7 @@ function applyPats(p, src, pats) {
                 if (nested.length) r = applyPats(p, r, nested);
                 p.match = src.slice(pos, m.endPos);
                 const [ev, ct] = extractEvals(p, r);
-                if (ev.length) r = applyEvals(p, ct, ev);
+                if (ev.length) r = applyEvals(p, ct, ev, m.captures);
                 n += r; last = r; pos = m.endPos;
             } else { n += src[pos]; pos++; }
         }
@@ -239,25 +251,40 @@ function unescapeDelim(s) {
 }
 
 export class Papagaio {
-    constructor(sigil = '$', open = '{', close = '}', pattern = 'pattern', evalKeyword = 'eval', blockKeyword = 'block', regexKeyword = 'regex') {
+    constructor(sigil = '$', open = '{', close = '}', pattern = 'pattern', evalKeyword = 'eval', blockKeyword = 'block', regexKeyword = 'regex', forgetKeyword = 'forget') {
         this.recursion_limit = 512;
-        this.symbols = { pattern, open, close, sigil, eval: evalKeyword, block: blockKeyword, regex: regexKeyword };
+        this.symbols = { pattern, open, close, sigil, eval: evalKeyword, block: blockKeyword, regex: regexKeyword, forget: forgetKeyword };
         this.content = "";
         this.match = "";
     }
     process(input) {
-        this.content = input; 
-        let src = input, last = null, it = 0;
-        const pending = () => new RegExp(`(?:^|\\b)${esc(this.symbols.pattern)}\\s*${esc(this.symbols.open)}`, "g").test(src);
-        while (src !== last && it < this.recursion_limit) {
-            it++; last = src;
-            const [p, s2] = collectPats(this, src); 
-            src = applyPats(this, s2, p);
-            if (!pending()) break;
+        // Coleta os $pattern definidos no input (isso já remove eles do texto)
+        const [patterns, cleanInput] = extractNested(this, input);
+        
+        // Agora processa $eval que sobraram no cleanInput (os que estão fora dos $pattern)
+        const [evals, inputWithPlaceholders] = extractEvals(this, cleanInput);
+        let processedInput = applyEvals(this, inputWithPlaceholders, evals, {});
+        
+        // Se não há padrões, retorna o input processado
+        if (patterns.length === 0) {
+            this.content = processedInput;
+            return processedInput;
         }
+        
+        // Aplica os padrões ao input limpo
+        let src = processedInput, last = null, it = 0;
+        
+        while (src !== last && it < this.recursion_limit) {
+            it++; 
+            last = src;
+            src = applyPats(this, src, patterns);
+            
+            const [nested, _] = extractNested(this, src);
+            if (nested.length === 0) break;
+        }
+        
         this.content = src;
-        if (typeof this.exit == "function")
-        {
+        if (typeof this.exit == "function") {
             this.exit();
         }
         return this.content;
