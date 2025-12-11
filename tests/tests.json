@@ -8,8 +8,8 @@
     },
     {
       "id": 2,
-      "name": "Flexible whitespace with $$",
-      "code": "pattern {$$x and $$y} {$x & $y}\nhello   and   world",
+      "name": "Flexible whitespace with $",
+      "code": "pattern {$x and $y} {$x & $y}\nhello   and   world",
       "expected": "hello & world"
     },
     {
@@ -80,8 +80,8 @@
     },
     {
       "id": 14,
-      "name": "Optional whitespace with $$ optional",
-      "code": "pattern {hello$$world} {HI}\nhello\n\nworld",
+      "name": "Optional whitespace with $ optional",
+      "code": "pattern {hello$world} {HI}\nhello\n\nworld",
       "expected": "HI"
     },
     {
@@ -111,7 +111,7 @@
     {
       "id": 19,
       "name": "Pattern without whitespace matching",
-      "code": "pattern {$$a,$b} {$b,$a} one,two",
+      "code": "pattern {$a,$b} {$b,$a} one,two",
       "expected": "two,one"
     },
     {
