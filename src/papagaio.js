@@ -70,11 +70,7 @@ function matchPattern(p, src, tokens, pos = 0) {
         if (tok.type === 'lit') { if (!src.startsWith(tok.value, pos)) return null; pos += tok.value.length; continue; }
         if (tok.type === 'regex') {
             try {
-                let regex = p._regexCache.get(tok.regex);
-                if (!regex) {
-                    regex = new RegExp(tok.regex);
-                    p._regexCache.set(tok.regex, regex);
-                }
+                const regex = new RegExp(tok.regex);
                 const m = src.slice(pos).match(regex);
                 if (!m || m.index !== 0) return null;
                 cap[p.symbols.sigil + tok.varName] = m[0];
@@ -248,7 +244,6 @@ export class Papagaio {
         this.symbols = { pattern, open, close, sigil, eval: evalKeyword, block: blockKeyword, regex: regexKeyword };
         this.content = "";
         this.match = "";
-        this._regexCache = new Map();
     }
     process(input) {
         this.content = input; 
