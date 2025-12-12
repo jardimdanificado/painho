@@ -491,12 +491,4 @@ p.process('$pattern {x} {y}\nx');
 
 ---
 
-## Key Differences from Other Preprocessors
-
-1. **Hierarchical Scoping**: Patterns automatically inherit from parent contexts
-2. **No Global State**: Each `process()` call is independent (unless you use custom properties)
-3. **Smart Variable Capture**: Variables adapt their behavior based on what comes next
-4. **Multi-Character Everything**: All delimiters support multiple characters
-5. **Eval Integration**: Direct JavaScript execution with full access to the processor instance
-
 ***PAPAGAIO IS CURRENTLY IN HEAVY DEVELOPMENT AND EXPERIMENTATION PHASE***
