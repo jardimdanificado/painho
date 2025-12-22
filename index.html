@@ -99,13 +99,25 @@
             display: flex;
         }
 
+        
+
+
         textarea {
             flex: 1;
             padding: 20px;
             border: none;
-            font-family: 'Courier New', monospace;
-            font-size: 1rem;
-            line-height: 1.6;
+            font-family:
+                ui-monospace,
+                SFMono-Regular,
+                Menlo,
+                Consolas,
+                "Liberation Mono",
+                monospace;
+
+            font-size: 15px;      /* melhor que 1rem no mobile */
+            line-height: 1.55;
+            font-weight: 500;    /* 👈 chave pra não ficar fina */
+            letter-spacing: 0.2px;
 
             resize: none;
             background: #fff;
