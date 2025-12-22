@@ -106,9 +106,15 @@
             font-family: 'Courier New', monospace;
             font-size: 1rem;
             line-height: 1.6;
+
             resize: none;
             background: #fff;
             color: #000;
+
+            white-space: pre;
+            overflow-x: auto;
+            overflow-y: auto;
+            word-break: normal;
         }
 
         textarea:focus {
@@ -415,12 +421,7 @@
     </div>
 
     <script type="module">
-        class Papagaio {
-            process(input) {
-                return input.toUpperCase();
-            }
-        }
-
+        import { Papagaio } from './src/papagaio.js';
         class SketchesManager {
             constructor() {
                 this.sketches = this.loadSketches();
