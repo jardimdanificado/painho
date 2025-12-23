@@ -1,6 +1,6 @@
 // papagaio - https://github.com/jardimdanificado/papagaio
 function parsePattern(p, pat) {
-    const t = [], S = p.symbols.sigil, O = p.symbols.open;
+    const t = [], S = p.symbols.sigil, O = p.symbols.open, C = p.symbols.close;
     let i = 0;
     while (i < pat.length) {
         if (pat.startsWith(S + p.symbols.regex, i)) {
@@ -17,36 +17,30 @@ function parsePattern(p, pat) {
                 }
             }
         }
-        if (pat.startsWith(S + p.symbols.block, i)) {
-            let j = i + S.length + p.symbols.block.length;
-            while (j < pat.length && /\s/.test(pat[j])) j++;
+        if (pat[i] === S) {
+            let j = i + S.length;
+            const isDouble = pat[j] === S;
+            if (isDouble) j++;
+            if (pat[j] === O) {
+                const [od, e1] = extractBlock(p, pat, j);
+                if (pat[e1] === O) {
+                    const [cd, e2] = extractBlock(p, pat, e1);
+                    let v = '', k = e2;
+                    while (k < pat.length && /[A-Za-z0-9_]/.test(pat[k])) v += pat[k++];
+                    if (v) {
+                        t.push({ type: isDouble ? 'blockseq' : 'block', varName: v, open: unescapeDelim(od.trim()) || O, close: unescapeDelim(cd.trim()) || C });
+                        i = k; continue;
+                    }
+                }
+            }
+            j = i + S.length;
             let v = '';
             while (j < pat.length && /[A-Za-z0-9_]/.test(pat[j])) v += pat[j++];
             if (v) {
-                while (j < pat.length && /\s/.test(pat[j])) j++;
-                let od = O, cd = p.symbols.close;
-                if (pat[j] === O) {
-                    const [c, e] = extractBlock(p, pat, j);
-                    od = unescapeDelim(c.trim()) || O;
-                    j = e; while (j < pat.length && /\s/.test(pat[j])) j++;
-                }
-                if (pat[j] === O) {
-                    const [c, e] = extractBlock(p, pat, j);
-                    cd = unescapeDelim(c.trim()) || cd;
-                    j = e;
-                }
-                t.push({ type: 'block', varName: v, open: od, close: cd }); 
-                i = j; continue;
-            }
-        }
-        if (pat[i] === S) {
-            let j = i + S.length, v = '';
-            while (j < pat.length && /[A-Za-z0-9_]/.test(pat[j])) v += pat[j++];
-            if (v) { 
                 const optional = pat[j] === '?';
                 if (optional) j++;
-                t.push({ type: 'var', varName: v, optional }); 
-                i = j; continue; 
+                t.push({ type: 'var', varName: v, optional });
+                i = j; continue;
             }
             t.push({ type: 'lit', value: S }); i += S.length; continue;
         }
@@ -80,17 +74,27 @@ function matchPattern(p, src, tok, pos = 0) {
             while (pos < src.length && /\s/.test(src[pos])) pos++;
             const nx = findNext(tok, ti);
             let v = '';
-            if (nx && nx.type === 'block') {
-                while (pos < src.length && !src.startsWith(nx.open, pos) && src[pos] !== '\n') v += src[pos++];
-                v = v.trimEnd();
-            } else if (nx && nx.type === 'lit') {
-                while (pos < src.length && !src.startsWith(nx.value, pos) && src[pos] !== '\n') v += src[pos++];
+            if (nx && (nx.type === 'block' || nx.type === 'lit')) {
+                const stop = nx.type === 'block' ? nx.open : nx.value;
+                while (pos < src.length && !src.startsWith(stop, pos) && src[pos] !== '\n') v += src[pos++];
                 v = v.trimEnd();
             } else {
                 while (pos < src.length && !/\s/.test(src[pos])) v += src[pos++];
             }
             if (!v && !t.optional) return null;
             cap[p.symbols.sigil + t.varName] = v;
+            continue;
+        }
+        if (t.type === 'blockseq') {
+            let blocks = [];
+            while (pos < src.length && src.startsWith(t.open, pos)) {
+                const [c, e] = extractBlock(p, src, pos, t.open, t.close);
+                blocks.push(c);
+                pos = e;
+                while (pos < src.length && /\s/.test(src[pos])) pos++;
+            }
+            if (!blocks.length) return null;
+            cap[p.symbols.sigil + t.varName] = blocks.join(' ');
             continue;
         }
         if (t.type === 'block') {
@@ -151,18 +155,15 @@ function extractEvals(p, txt) {
     const ev = [], S = p.symbols.sigil, O = p.symbols.open;
     let i = 0, out = txt, off = 0;
     while (i < txt.length) {
-        if (txt.substring(i, i + S.length) === S) {
-            const rest = txt.substring(i + S.length);
-            if (rest.startsWith(p.symbols.eval)) {
-                let j = i + S.length + p.symbols.eval.length;
-                while (j < txt.length && /\s/.test(txt[j])) j++;
-                if (j < txt.length && txt.substring(j, j + O.length) === O) {
-                    const sp = i, bp = j, [c, ep] = extractBlock(p, txt, bp);
-                    ev.push({ code: c, sp: sp - off, ep: ep - off });
-                    const ph = `__E${ev.length - 1}__`;
-                    out = out.substring(0, sp - off) + ph + out.substring(ep - off);
-                    off += (ep - sp) - ph.length; i = ep; continue;
-                }
+        if (txt.substring(i, i + S.length) === S && txt.substring(i + S.length).startsWith(p.symbols.eval)) {
+            let j = i + S.length + p.symbols.eval.length;
+            while (j < txt.length && /\s/.test(txt[j])) j++;
+            if (j < txt.length && txt.substring(j, j + O.length) === O) {
+                const sp = i, bp = j, [c, ep] = extractBlock(p, txt, bp);
+                ev.push({ code: c, sp: sp - off, ep: ep - off });
+                const ph = `__E${ev.length - 1}__`;
+                out = out.substring(0, sp - off) + ph + out.substring(ep - off);
+                off += (ep - sp) - ph.length; i = ep; continue;
             }
         }
         i++;
@@ -174,10 +175,8 @@ function applyEvals(p, txt, ev) {
     let r = txt;
     for (let i = ev.length - 1; i >= 0; i--) {
         const ph = `__E${i}__`;
-        let res;
-        try { res = String(Function("papagaio", "ctx", `"use strict";return(function(){${ev[i].code}})();`)(p, {})); }
-        catch (e) { res = "error: " + e.message; }
-        r = r.replace(ph, res);
+        try { r = r.replace(ph, String(Function("papagaio", "ctx", `"use strict";return(function(){${ev[i].code}})();`)(p, {}))); }
+        catch (e) { r = r.replace(ph, "error: " + e.message); }
     }
     return r;
 }
@@ -219,8 +218,8 @@ function unescapeDelim(s) {
 }
 
 export class Papagaio {
-    constructor(sigil = '$', open = '{', close = '}', pattern = 'pattern', evalKw = 'eval', blockKw = 'block', regexKw = 'regex') {
-        this.symbols = { pattern, open, close, sigil, eval: evalKw, block: blockKw, regex: regexKw };
+    constructor(sigil = '$', open = '{', close = '}', pattern = 'pattern', evalKw = 'eval', blockKw = 'recursive', regexKw = 'regex', blockseqKw = 'sequential') {
+        this.symbols = { pattern, open, close, sigil, eval: evalKw, block: blockKw, regex: regexKw, blockseq: blockseqKw };
         this.content = "";
         this.match = "";
     }

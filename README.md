@@ -22,8 +22,9 @@ papagaio.symbols = {
   close: "}",              // closing delimiter (multi-char supported)
   sigil: "$",              // variable marker
   eval: "eval",            // eval keyword
-  block: "block",          // block keyword
-  regex: "regex"           // regex keyword
+  block: "recursive",      // block keyword (recursive nesting)
+  regex: "regex",          // regex keyword
+  blockseq: "sequential"   // blockseq keyword (sequential blocks)
 };
 ```
 
@@ -64,7 +65,7 @@ hello world
 Output: `[hello] [world]`
 
 ```
-$pattern {$name $block content {(}{)}} {$name: $content}
+$pattern {$name ${(}{)}content} {$name: $content}
 greeting (hello world)
 ```
 Output: `greeting: hello world`
@@ -126,48 +127,104 @@ Output: `Month 03 in 2024`
 
 ## Blocks
 
-Capture content between delimiters with full nesting support.
+Papagaio supports two types of block capture: **nested** and **adjacent**.
 
-### Syntax
+### Nested Blocks - `${open}{close}varName`
+
+Captures content between delimiters with full nesting support. Nested delimiters are handled recursively.
+
+#### Basic Syntax
 ```
-$block varName {open}{close}
+${opening_delimiter}{closing_delimiter}varName
 ```
 
-### Basic Example
+#### Examples
+
+**Basic Recursive Block:**
 ```
-$pattern {$name $block content {(}{)}} {[$content]}
+$pattern {$name ${(}{)}content} {[$content]}
 data (hello world)
 ```
 Output: `[hello world]`
 
-### Custom Delimiters
+**Custom Delimiters:**
 ```
-$pattern {$block data {<<}{>>}} {DATA: $data}
+$pattern {${<<}{>>}data} {DATA: $data}
 <<json stuff>>
 ```
 Output: `DATA: json stuff`
 
-### Multi-Character Delimiters
+**Multi-Character Delimiters:**
 ```
-$pattern {$block code {```}{```}} {<pre>$code</pre>}
+$pattern {${```}{```}code} {<pre>$code</pre>}
 ```markdown
 # Title
 ```
 Output: `<pre># Title</pre>`
 
-### Multiple Blocks
+**Default Delimiters (empty blocks):**
 ```
-$pattern {$block a {(}{)}, $block b {[}{]}} {$a|$b}
-(first), [second]
+$pattern {${}{}data} {[$data]}
+{hello world}
 ```
-Output: `first|second`
+Output: `[hello world]`
+*(Uses default `{` and `}` when delimiters are empty)*
 
-### Nested Blocks
+**Nested Blocks:**
 ```
-$pattern {$block outer {(}{)}} {[$outer]}
-(outer (inner))
+$pattern {${(}{)}outer} {[$outer]}
+(outer (inner (deep)))
 ```
-Output: `[outer (inner)]`
+Output: `[outer (inner (deep))]`
+
+### Adjancent Blocks - `$${open}{close}varName`
+
+Captures multiple adjacent blocks with the same delimiters and concatenates their content (separated by spaces).
+
+#### Basic Syntax
+```
+$${opening_delimiter}{closing_delimiter}varName
+```
+
+#### Examples
+
+**Basic Adjacent Block:**
+```
+$pattern {$${[}{]}items} {Items: $items}
+[first][second][third]
+```
+Output: `Items: first second third`
+
+**Adjacent with Custom Delimiters:**
+```
+$pattern {$${<}{>}tags} {Tags: $tags}
+<html><body><div>
+```
+Output: `Tags: html body div`
+
+**Default Delimiters:**
+```
+$pattern {$${}{}data} {Result: $data}
+{a}{b}{c}
+```
+Output: `Result: a b c`
+
+**Mixed Usage:**
+```
+$pattern {${(}{)}nested, $${[}{]}seq} {Nested: $nested | Seq: $seq}
+(a (b c)), [x][y][z]
+```
+Output: `Nested: a (b c) | Seq: x y z`
+
+### Block Comparison
+
+| Feature | Nested `${}{}var` | Adjacent `$${}{}var` |
+|---------|---------------------|------------------------|
+| Purpose | Capture nested content | Capture adjacent blocks |
+| Input | `[a [b [c]]]` | `[a][b][c]` |
+| Output | `a [b [c]]` | `a b c` |
+| Nesting | Handled recursively | Not nested, sequential |
+| Spacing | Preserves internal structure | Joins with spaces |
 
 ---
 
@@ -274,16 +331,17 @@ Output: `10`
 * Variables automatically skip leading whitespace
 * Trailing whitespace is trimmed when variables appear before literals
 
+### Block Matching
+* `${open}{close}name` = nested block capture
+* `$${open}{close}name` = adjacent block capture (captures adjacent blocks)
+* Supports multi-character delimiters of any length
+* Empty delimiters `${}{}name` or `$${}{}name` use defaults from `symbols.open` and `symbols.close`
+* Sequential blocks are joined with spaces in the captured variable
+
 ### Pattern Matching
 * `$pattern {match} {replace}` = pattern scoped to current context
 * Patterns inherit from parent scopes hierarchically
 * Each `process()` call starts with a clean slate (no persistence)
-
-### Block Matching
-* `$block name {open}{close}` captures delimited regions
-* Supports nested delimiters of any length
-* Multi-character delimiters fully supported (e.g., `{>>>}{<<<}`)
-* Blocks support arbitrary nesting depth
 
 ---
 
@@ -305,7 +363,7 @@ Output: `[hello]`
 
 ### In Blocks
 ```
-$pattern<<<$block data {<<}{>>}>>> <<<$data>>>
+$pattern<<<${<<}{>>}data>>> <<<$data>>>
 <<content>>
 ```
 Output: `content`
@@ -341,6 +399,27 @@ p.process(template);
 // <strong>bold text</strong>
 ```
 
+### Array/List Processor
+```javascript
+const p = new Papagaio();
+const template = `
+$pattern {$${[}{]}items} {
+  $eval{
+    const arr = '$items'.split(' ');
+    return arr.map((x, i) => \`\${i + 1}. \${x}\`).join('\\n');
+  }
+}
+
+[apple][banana][cherry]
+`;
+
+p.process(template);
+// Output:
+// 1. apple
+// 2. banana
+// 3. cherry
+```
+
 ### Template System with State
 ```javascript
 const p = new Papagaio();
@@ -371,7 +450,7 @@ p.process(template);
 ```javascript
 const p = new Papagaio();
 const template = `
-$pattern {if $block cond {(}{)} then $block yes {[}{]} else $block no {<}{>}} {
+$pattern {if ${(}{)}cond then ${[}{]}yes else ${<}{>}no} {
   $eval{
     const condition = ($cond).trim();
     return condition === 'true' ? '$yes' : '$no';
@@ -407,6 +486,24 @@ p.process(template);
 // 18
 ```
 
+### Sequential Block Processing
+```javascript
+const p = new Papagaio();
+const template = `
+$pattern {sum $${[}{]}nums} {
+  $eval{
+    const numbers = '$nums'.split(' ').map(x => parseInt(x));
+    return numbers.reduce((a, b) => a + b, 0);
+  }
+}
+
+sum [10][20][30][40]
+`;
+
+p.process(template);
+// Output: 100
+```
+
 ---
 
 ## Troubleshooting
@@ -421,6 +518,7 @@ p.process(template);
 | Nested blocks fail | Ensure delimiters are properly balanced |
 | Multi-char delimiters broken | Check delimiters don't conflict; use escaping if needed |
 | Regex not matching | Test regex pattern separately; ensure it matches at the exact position |
+| Empty delimiter behavior | `${}{}x` uses defaults; explicitly set if you need different behavior |
 
 ---
 
@@ -430,7 +528,9 @@ p.process(template);
 $pattern {$x $y} {$y, $x}            # pattern with variables
 $pattern {$x? $y} {$y, $x}           # optional variable
 $pattern {$regex n {[0-9]+}} {$n}    # regex capture
-$pattern {$block n {o}{c}} {$n}      # block capture with custom delimiters
+$pattern {${o}{c}n} {$n}             # recursive block (nested)
+$pattern {$${o}{c}n} {$n}            # sequential block (adjacent)
+$pattern {${}{}n} {$n}               # block with default delimiters
 $eval{code}                          # JavaScript evaluation
 ```
 
@@ -440,7 +540,7 @@ $eval{code}                          # JavaScript evaluation
 
 ### Constructor
 ```javascript
-new Papagaio(sigil, open, close, pattern, evalKw, blockKw, regexKw)
+new Papagaio(sigil, open, close, pattern, evalKw, blockKw, regexKw, blockseqKw)
 ```
 
 **Parameters:**
@@ -449,7 +549,6 @@ new Papagaio(sigil, open, close, pattern, evalKw, blockKw, regexKw)
 - `close` (default: `'}'`) - Closing delimiter
 - `pattern` (default: `'pattern'`) - Pattern keyword
 - `evalKw` (default: `'eval'`) - Eval keyword
-- `blockKw` (default: `'block'`) - Block keyword
 - `regexKw` (default: `'regex'`) - Regex keyword
 
 ### Properties
@@ -475,6 +574,7 @@ p.process('$pattern {x} {y}\nx');
 ## Performance Notes
 
 * Multi-character delimiter matching is optimized with substring operations
+* Sequential blocks scan for adjacent matches without recursion overhead
 * Nested patterns inherit parent patterns through recursive application
 * Nested blocks and patterns have no theoretical depth limit
 * Large recursion limits can impact performance on complex inputs

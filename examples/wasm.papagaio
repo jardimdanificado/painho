@@ -13,7 +13,7 @@ $eval{
     return ""
 }
 
-$pattern {export function $name $block params{(}{)}:$rets $block content{}{}} {
+$pattern {export function $name ${(}{)}params:$rets ${}{}content} {
     $pattern {parametrize}
     {
         $eval {
@@ -36,7 +36,7 @@ $pattern {export function $name $block params{(}{)}:$rets $block content{}{}} {
     )
 }
 
-$pattern {function $name $block params{(}{)}:$rets $block content{}{}} {
+$pattern {function $name ${}{}params{(}{)}:$rets ${}{}content} {
     $pattern {parametrize}
     {
         $eval {

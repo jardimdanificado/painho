@@ -15,19 +15,19 @@
     {
       "id": 3,
       "name": "Block with custom delimiters",
-      "code": "$pattern {$block content {(}{)}} {[$content]}\ndata (hello world)",
+      "code": "$pattern {${(}{)}content} {[$content]}\ndata (hello world)",
       "expected": "data [hello world]"
     },
     {
       "id": 4,
       "name": "Block with multi-char delimiters",
-      "code": "$pattern {$block code {<<}{>>}} {CODE[$code]}\n<<console.log()>>",
+      "code": "$pattern {${<<}{>>}code} {CODE[$code]}\n<<console.log()>>",
       "expected": "CODE[console.log()]"
     },
     {
       "id": 5,
       "name": "Block with nested delimiters",
-      "code": "$pattern {$block txt {<}{>}} {[$txt]}\nouter <middle <inner> content>",
+      "code": "$pattern {${<}{>}txt} {[$txt]}\nouter <middle <inner> content>",
       "expected": "outer [middle <inner> content]"
     },
     {
@@ -63,7 +63,7 @@
     {
       "id": 11,
       "name": "Multiple blocks in one pattern",
-      "code": "$pattern {$block a {(}{)} and $block b {[}{]}} {$a|$b}\n(first) and [second]",
+      "code": "$pattern {${(}{)}a  and ${[}{]}b} {$a|$b}\n(first) and [second]",
       "expected": "first|second"
     },
     {
@@ -87,7 +87,7 @@
     {
       "id": 15,
       "name": "Block with angle brackets",
-      "code": "$pattern {$block inner {<}{>}} {WRAPPED[$inner]}\n<content>",
+      "code": "$pattern {${<}{>}inner} {WRAPPED[$inner]}\n<content>",
       "expected": "WRAPPED[content]"
     },
     {
@@ -105,7 +105,7 @@
     {
       "id": 18,
       "name": "Block capturing with square brackets",
-      "code": "$pattern {$block arr {[}{]}} {ARRAY[$arr]}\n[1, 2, 3]",
+      "code": "$pattern {${[}{]}arr} {ARRAY[$arr]}\n[1, 2, 3]",
       "expected": "ARRAY[1, 2, 3]"
     },
     {
@@ -129,31 +129,31 @@
     {
       "id": 22,
       "name": "Block delimiter balancing - parentheses",
-      "code": "$pattern {$block code {(}{)}} {RESULT[$code]}\n(a (b (c) d) e)",
+      "code": "$pattern {${(}{)}code} {RESULT[$code]}\n(a (b (c) d) e)",
       "expected": "RESULT[a (b (c) d) e]"
     },
     {
       "id": 23,
       "name": "Block delimiter balancing - angle brackets",
-      "code": "$pattern {$block inner {<}{>}} {X[$inner]}\n<outer <middle <deep>> more>",
+      "code": "$pattern {${<}{>}inner} {X[$inner]}\n<outer <middle <deep>> more>",
       "expected": "X[outer <middle <deep>> more]"
     },
     {
       "id": 24,
       "name": "Block delimiter balancing - square brackets",
-      "code": "$pattern {$block data {[}{]}} {DATA[$data]}\n[outer [inner [deep]] more]",
+      "code": "$pattern {${[}{]}data} {DATA[$data]}\n[outer [inner [deep]] more]",
       "expected": "DATA[outer [inner [deep]] more]"
     },
     {
       "id": 25,
       "name": "Block delimiter balancing - curly braces",
-      "code": "$pattern {$block obj {}{}} {OBJ[$obj]}\n{key: {nested: {value}}}",
+      "code": "$pattern {${}{}obj} {OBJ[$obj]}\n{key: {nested: {value}}}",
       "expected": "OBJ[key: {nested: {value}}]"
     },
     {
       "id": 26,
       "name": "Multiple nested delimiters in same pattern",
-      "code": "$pattern {$block a {(}{)} $block b {[}{]}} {[$a|$b]}\n(test1) [test2]",
+      "code": "$pattern {${(}{)}a ${[}{]}b} {[$a|$b]}\n(test1) [test2]",
       "expected": "[test1|test2]"
     },
     {
@@ -165,25 +165,25 @@
     {
       "id": 28,
       "name": "Block with quotes as delimiters",
-      "code": "$pattern {$block str {\"}{\"}} {STRING[$str]}\n\"hello world\"",
+      "code": "$pattern {${\"}{\"}str} {STRING[$str]}\n\"hello world\"",
       "expected": "STRING[hello world]"
     },
     {
       "id": 29,
       "name": "Block with pipe delimiters",
-      "code": "$pattern {$block val {|}{|}} {PIPE[$val]}\n|content here|",
+      "code": "$pattern {${|}{|}val} {PIPE[$val]}\n|content here|",
       "expected": "PIPE[content here]"
     },
     {
       "id": 30,
       "name": "Deeply nested block delimiters",
-      "code": "$pattern {$block deep {<}{>}} {[$deep]}\n<a <b <c <d> c> b> a>",
+      "code": "$pattern {${<}{>}deep} {[$deep]}\n<a <b <c <d> c> b> a>",
       "expected": "[a <b <c <d> c> b> a]"
     },
     {
       "id": 31,
       "name": "Two sequential patterns",
-      "code": "$pattern {$block content {(}{)}} {BLOCK [$content]}\n$pattern {BLOCK $x} {RESULT: $x}\n(inner data)",
+      "code": "$pattern {${(}{)}content} {BLOCK [$content]}\n$pattern {BLOCK $x} {RESULT: $x}\n(inner data)",
       "expected": "RESULT: [inner data]"
     },
     {
@@ -195,13 +195,13 @@
     {
       "id": 33,
       "name": "Block delimiter edge case - empty content",
-      "code": "$pattern {$block empty {(}{)}} {EMPTY[$empty]}\n()",
+      "code": "$pattern {${(}{)}empty} {EMPTY[$empty]}\n()",
       "expected": "EMPTY[]"
     },
     {
       "id": 34,
       "name": "Multi-char delimiters with nesting",
-      "code": "$pattern {$block code {<<}{>>}} {CODE[$code]}\n<<outer <<inner>> more>>",
+      "code": "$pattern {${<<}{>>}code} {CODE[$code]}\n<<outer <<inner>> more>>",
       "expected": "CODE[outer <<inner>> more]"
     },
     {
