@@ -6,6 +6,7 @@
 // - Parses Markdown into JS objects (sections, lists, tables, paragraphs)
 // - Does NOT execute fenced code blocks; they are treated as normal text
 // - JS execution happens only via $eval{...}
+// - window.md is available BEFORE $eval{} runs, so templates can reference the parsed object
 //
 // Usage (browser):
 //   const md = papagaio_md_to_object(markdownText);
@@ -768,6 +769,87 @@
     return current;
   }
 
+  // ── NEW: parse raw markdown into object WITHOUT processing templates ─────────
+  // This is a structural-only parse: no papagaio_process_text call.
+  function parse_md_raw(markdown) {
+    const lines = markdown.split(/\r?\n/);
+    const md = { content: [] };
+    let section = 'content';
+    let inCodeFence = false;
+    let codeFenceMarker = '';
+    let codeFenceLines = null;
+    let listBuffer = null;
+    let tableState = null;
+
+    const ensureSection = (name) => {
+      if (!md[name]) md[name] = [];
+      section = name;
+    };
+    const closeList = () => {
+      if (listBuffer) { md[section].push(listBuffer); listBuffer = null; }
+    };
+    const closeTable = () => {
+      if (tableState) { md[section].push(tableState.rows); tableState = null; }
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].replace(/\r$/, "");
+      const trimmed = line.trim();
+
+      if (inCodeFence) {
+        codeFenceLines.push(line);
+        if (trimmed.startsWith(codeFenceMarker)) {
+          inCodeFence = false;
+          codeFenceMarker = '';
+          md[section].push(codeFenceLines.join('\n'));
+          codeFenceLines = null;
+        }
+        continue;
+      }
+
+      if (trimmed.startsWith('```')) {
+        closeList(); closeTable();
+        inCodeFence = true;
+        codeFenceMarker = trimmed.slice(0, 3);
+        codeFenceLines = [line];
+        continue;
+      }
+
+      const h = line.match(/^\s*#\s*(.*)$/);
+      if (h) { closeList(); closeTable(); ensureSection(h[1].trim() || 'content'); continue; }
+
+      const listMatch = line.match(/^\s*-\s*(.*)$/);
+      if (listMatch) { closeTable(); if (!listBuffer) listBuffer = []; listBuffer.push(listMatch[1]); continue; }
+
+      const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : '';
+      const isTableSeparator = /^\s*(\|\s*)?[-:]+(?:\s*\|\s*[-:]+)*\s*(\|\s*)?$/.test(nextLine);
+      if (line.includes('|') && isTableSeparator) {
+        closeList(); closeTable();
+        tableState = { headers: parseTableRow(line), rows: [] };
+        i++;
+        continue;
+      }
+      if (tableState && line.includes('|')) {
+        const cells = parseTableRow(line);
+        const row = {};
+        for (let ci = 0; ci < tableState.headers.length; ci++) {
+          row[tableState.headers[ci] || `col${ci}`] = cells[ci] || '';
+        }
+        tableState.rows.push(row);
+        continue;
+      }
+
+      if (/^\s*$/.test(line)) { closeList(); closeTable(); continue; }
+      closeList(); closeTable();
+      md[section].push(trimmed);
+    }
+
+    closeList(); closeTable();
+    if (inCodeFence && codeFenceLines) md[section].push(codeFenceLines.join('\n'));
+    return md;
+  }
+
+  // ── Process text, but with window.md (and global md) already set ────────────
   function papagaio_process_text(input) {
     const sym = make_default_symbols();
     let src = prepare_input(input, sym);
@@ -811,13 +893,28 @@
     return noPipes.split('|').map((c) => c.trim());
   }
 
+  // ── FIXED: parse raw first → expose window.md → then process templates ──────
   function papagaio_md_to_object(markdown) {
-    const processed = papagaio_process_text(markdown);
-    const lines = processed.split(/\r?\n/);
+    // 1. Parse structure from raw markdown (no template processing yet)
+    const md = parse_md_raw(markdown);
 
-    const md = {
-      content: [],
-    };
+    // 2. Expose the raw object so $eval{} blocks can reference it
+    if (typeof window !== 'undefined') {
+      window.md = md;
+    }
+    if (typeof global !== 'undefined') {
+      global.md = md;
+    }
+
+    // 3. NOW run the papagaio processor on the original markdown text
+    const processed = papagaio_process_text(markdown);
+
+    // 4. Re-parse the processed result into the final object
+    const lines = processed.split(/\r?\n/);
+    // reset md fields (keep reference so window.md stays live)
+    for (const key of Object.keys(md)) delete md[key];
+    md.content = [];
+
     let section = 'content';
     let inCodeFence = false;
     let codeFenceMarker = '';
@@ -829,23 +926,15 @@
       if (!md[name]) md[name] = [];
       section = name;
     };
-
     const closeList = () => {
-      if (listBuffer) {
-        md[section].push(listBuffer);
-        listBuffer = null;
-      }
+      if (listBuffer) { md[section].push(listBuffer); listBuffer = null; }
     };
     const closeTable = () => {
-      if (tableState) {
-        md[section].push(tableState.rows);
-        tableState = null;
-      }
+      if (tableState) { md[section].push(tableState.rows); tableState = null; }
     };
 
     for (let i = 0; i < lines.length; i++) {
-      const raw = lines[i];
-      const line = raw.replace(/\r$/, "");
+      const line = lines[i].replace(/\r$/, "");
       const trimmed = line.trim();
 
       if (inCodeFence) {
@@ -860,8 +949,7 @@
       }
 
       if (trimmed.startsWith('```')) {
-        closeList();
-        closeTable();
+        closeList(); closeTable();
         inCodeFence = true;
         codeFenceMarker = trimmed.slice(0, 3);
         codeFenceLines = [line];
@@ -869,68 +957,43 @@
       }
 
       const h = line.match(/^\s*#\s*(.*)$/);
-      if (h) {
-        closeList();
-        closeTable();
-        ensureSection(h[1].trim() || 'content');
-        continue;
-      }
+      if (h) { closeList(); closeTable(); ensureSection(h[1].trim() || 'content'); continue; }
 
       const listMatch = line.match(/^\s*-\s*(.*)$/);
-      if (listMatch) {
-        closeTable();
-        if (!listBuffer) listBuffer = [];
-        listBuffer.push(listMatch[1]);
-        continue;
-      }
+      if (listMatch) { closeTable(); if (!listBuffer) listBuffer = []; listBuffer.push(listMatch[1]); continue; }
 
-      // Table detection: header + separator
-      const isTableHeader = line.includes('|');
       const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : '';
       const isTableSeparator = /^\s*(\|\s*)?[-:]+(?:\s*\|\s*[-:]+)*\s*(\|\s*)?$/.test(nextLine);
-
-      if (isTableHeader && isTableSeparator) {
-        closeList();
-        closeTable();
-        const headers = parseTableRow(line);
-        tableState = { headers, rows: [] };
-        i++; // skip separator
+      if (line.includes('|') && isTableSeparator) {
+        closeList(); closeTable();
+        tableState = { headers: parseTableRow(line), rows: [] };
+        i++;
         continue;
       }
-
       if (tableState && line.includes('|')) {
         const cells = parseTableRow(line);
         const row = {};
         for (let ci = 0; ci < tableState.headers.length; ci++) {
-          const key = tableState.headers[ci] || `col${ci}`;
-          row[key] = cells[ci] || '';
+          row[tableState.headers[ci] || `col${ci}`] = cells[ci] || '';
         }
         tableState.rows.push(row);
         continue;
       }
 
-      if (/^\s*$/.test(line)) {
-        closeList();
-        closeTable();
-        continue;
-      }
-
-      closeList();
-      closeTable();
+      if (/^\s*$/.test(line)) { closeList(); closeTable(); continue; }
+      closeList(); closeTable();
       md[section].push(trimmed);
     }
 
-    closeList();
-    closeTable();
+    closeList(); closeTable();
+    if (inCodeFence && codeFenceLines) md[section].push(codeFenceLines.join('\n'));
 
-    if (inCodeFence && codeFenceLines) {
-      md[section].push(codeFenceLines.join('\n'));
-      inCodeFence = false;
-      codeFenceLines = null;
-    }
-
+    // 5. Update window.md to final processed object (same reference)
     if (typeof window !== 'undefined') {
       window.md = md;
+    }
+    if (typeof global !== 'undefined') {
+      global.md = md;
     }
 
     return md;
@@ -1020,8 +1083,7 @@
   }
 })(typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : this);
 
-// ESM default export (when imported via `import papagaio from './papagaio.js'`).
-// In non-ESM environments, the object is still available as `globalThis.papagaio.md`.
+// ESM default export
 const _papagaioExport = (typeof globalThis !== 'undefined' && globalThis.papagaio && globalThis.papagaio.md)
   ? globalThis.papagaio.md
   : {};
