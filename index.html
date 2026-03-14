@@ -156,9 +156,8 @@
     </div>
 
     <script type="module">
-        import Papagaio from './papagaio.js';
-        
-        const processor = new Papagaio();
+        // Use the new papagaio.md JS processor (no WASM)
+        import './papagaio.js';
 
         function loadSaved() {
             try {
@@ -193,7 +192,8 @@
         function processCode() {
             try {
                 const input = document.getElementById('input').value;
-                const output = processor.process(input);
+                const md = papagaio_md_to_object(input);
+                const output = papagaio_md_to_markdown(md);
                 document.getElementById('output').value = output;
                 saveInput();
             } catch (err) {

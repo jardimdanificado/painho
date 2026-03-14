@@ -1,7 +1,7 @@
 {
   "name": "papagaio",
-  "version": "0.7.9",
-  "description": "easy yet powerful preprocessor",
+  "version": "0.8.1",
+  "description": "easy yet powerful md preprocessor",
   "main": "papagaio.js",
   "type": "module",
   "scripts": {
@@ -20,7 +20,8 @@
     "codegen",
     "regex",
     "syntax",
-    "easy"
+    "easy",
+    "markdown"
   ],
   "author": "jardimdanificado",
   "bugs": {

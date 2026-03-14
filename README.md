@@ -8,11 +8,43 @@ Minimal yet powerful text preprocessor.
 - **It's powerful!!** aside been inspired by the m4 preprocessor and meant to be a preprocessor, papagaio still a fully-featured programming language because it can evaluate any valid javascript code using $eval;
 
 ## Installation
-```javascript
-import { Papagaio } from './papagaio.js';
-const papagaio = new Papagaio();
-const result = papagaio.process(input);
+
+### Node (CommonJS)
+```js
+const { papagaio_md_to_object, papagaio_md_to_markdown } = require('./papagaio.js');
+
+const md = papagaio_md_to_object('# Hello\n- item');
+console.log(md);
+
+const markdown = papagaio_md_to_markdown(md);
+console.log(markdown);
 ```
+
+### Node (ESM)
+```js
+import papagaio from './papagaio.js';
+const { papagaio_md_to_object, papagaio_md_to_markdown } = papagaio;
+```
+
+### Browser
+```html
+<script src="papagaio.js"></script>
+<script>
+  const md = papagaio_md_to_object('# Title\n- Item');
+  console.log(window.md);
+</script>
+```
+
+### CLI (included)
+Install it globally or run from the repo:
+
+```sh
+node ./bin/cli.mjs --md input.md
+node ./bin/cli.mjs --out output.md --md input.md
+```
+
+### Obsidian plugin (included)
+Copy `papagaio/obsidian-plugin/` into your vault's `.obsidian/plugins/` and enable it.
 
 ## Configuration
 ```javascript
