@@ -3,7 +3,7 @@
   "name": "papagaio.md (JS)",
   "version": "0.8.1",
   "minAppVersion": "1.0.0",
-  "description": "Processes the active markdown file with papagaio and generates .processed.js and .output.js",
+  "description": "papagaio.md plugin",
   "author": "jardimdanificado",
   "authorUrl": "https://github.com/jardimdanificado/papagaio.md",
   "isDesktopOnly": false,
