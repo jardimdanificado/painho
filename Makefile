@@ -38,7 +38,7 @@ LDFLAGS ?=
 TARGET_SO = papagaio$(SO_EXT)
 TARGET_A  = libpapagaio.a
 TARGET_BIN = papagaio$(EXE_EXT)
-SRC       = papagaio.c
+SRC       = src/papagaio.c
 OBJ       = papagaio.o
 
 LUA_BIN    ?= lua
@@ -53,7 +53,7 @@ INCDIR     ?= $(PREFIX)/include
 
 all: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 
-$(OBJ): $(SRC) papagaio.h
+$(OBJ): $(SRC) src/papagaio.h
 	$(CC) -c $(CFLAGS) -fPIC -o $@ $<
 
 $(TARGET_SO): $(OBJ)
@@ -63,8 +63,8 @@ $(TARGET_A): $(OBJ)
 	$(AR) rcs $@ $(OBJ)
 	$(RANLIB) $@
 
-$(TARGET_BIN): main.c $(TARGET_A)
-	$(CC) $(CFLAGS) -o $@ main.c $(TARGET_A) $(LDFLAGS) -lm
+$(TARGET_BIN): src/main.c $(TARGET_A)
+	$(CC) $(CFLAGS) -o $@ src/main.c $(TARGET_A) $(LDFLAGS) -lm
 
 static: $(TARGET_A)
 
@@ -81,7 +81,7 @@ install: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 	install -d $(LIBDIR)
 	install -m 644 $(TARGET_A) $(LIBDIR)/$(TARGET_A)
 	install -d $(INCDIR)
-	install -m 644 papagaio.h $(INCDIR)/papagaio.h
+	install -m 644 src/papagaio.h $(INCDIR)/src/papagaio.h
 	@echo "Installed papagaio to $(PREFIX)/"
 
 clean:
@@ -89,9 +89,9 @@ clean:
 	rm -rf dist/
 	rm -rf obsidian-plugin/dist obsidian-plugin/node_modules
 
-wasm: papagaio.c papagaio.h
+wasm: src/papagaio.c src/papagaio.h
 	mkdir -p dist/wasm
-	emcc -O3 $(CFLAGS) papagaio.c -o dist/wasm/papagaio_wasm.js \
+	emcc -O3 $(CFLAGS) src/papagaio.c -o dist/wasm/papagaio_wasm.js \
 		-s WASM=1 \
 		-s MODULARIZE=1 \
 		-s EXPORT_ES6=1 \
@@ -101,7 +101,7 @@ wasm: papagaio.c papagaio.h
 		-s ALLOW_MEMORY_GROWTH=1 \
 		-s NODEJS_CATCH_EXIT=0 \
 		-s NODEJS_CATCH_REJECTION=0
-	cp papagaio.js dist/wasm/papagaio.js
+	cp src/papagaio.js dist/wasm/papagaio.js
 
 obsidian: wasm
 	cd obsidian-plugin && npm install && npm run build

@@ -584,17 +584,17 @@ p.process('$pattern {x} {y}\nx');
 
 ---
 
-## papagaio.h - C Implementation
+## src/papagaio.h - C Implementation
 
 ### Overview
 
-**papagaio.h** is a minimal, high-performance C implementation that provides the **core pattern matching engine** only.
+**src/papagaio.h** is a minimal, high-performance C implementation that provides the **core pattern matching engine** only.
 
 Unlike **papagaio.js**, which is a full-featured preprocessing language with code execution, the C version focuses exclusively on fast, memory-efficient pattern matching and replacement.
 
 ### Design Philosophy
 
-| Aspect | papagaio.js | papagaio.h |
+| Aspect | papagaio.js | src/papagaio.h |
 |--------|-------------|------------|
 | **Purpose** | Full preprocessing language | *Fast* pattern matching core |
 | **Features** | Complete (eval, regex, nested patterns) | Core only (variables, blocks, literals) |
@@ -603,7 +603,7 @@ Unlike **papagaio.js**, which is a full-featured preprocessing language with cod
 
 ### Feature Comparison
 
-| Feature | papagaio.js | papagaio.h |
+| Feature | papagaio.js | src/papagaio.h |
 |---------|-------------|------------|
 | **Variables** `$x` | yes | yes |
 | **Optional variables** `$x?` | yes | yes |
@@ -623,7 +623,7 @@ Unlike **papagaio.js**, which is a full-featured preprocessing language with cod
 
 #### Basic Usage (Default Symbols)
 ```c
-#include "papagaio.h"
+#include "src/papagaio.h"
 
 char *result = papagaio_process(
     "hello world",
@@ -698,7 +698,7 @@ The C implementation is **intentionally minimal**. These features are **not avai
 
 ### When to Use Which Version
 
-#### Use **papagaio.h** when:
+#### Use **src/papagaio.h** when:
 - You are doing runtime text processing or realtime stuff;
 - You need high performance for large inputs;
 - You are embedding in other languages;
@@ -706,11 +706,11 @@ The C implementation is **intentionally minimal**. These features are **not avai
 
 #### Use **papagaio.js** when:
 - You are doing pre-processing;
-- You dont need papagaio.h;
+- You dont need src/papagaio.h;
 
 ### C Implementation Details
 
-- **Header-only**: Single `papagaio.h` file, no compilation needed
+- **Header-only**: Single `src/papagaio.h` file, no compilation needed
 - **Zero dependencies**: Uses only C standard library
 - **Memory-efficient**: Uses string views to avoid unnecessary copies
 - **Portable**: C99 compatible, works on any platform
@@ -718,7 +718,7 @@ The C implementation is **intentionally minimal**. These features are **not avai
 ### Considerations
 - papagaio.js is almost always the better choice unless you specifically need C performance or embedding.
 - you can use papagaio.js embedded in C code using quickjs or such, will not be really fast but will have all features.
-- papagaio.h is not incomplete.
+- src/papagaio.h is not incomplete.
 
 ---
 

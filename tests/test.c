@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "../papagaio.h"
+#include "../src/papagaio.h"
 
 
 /* ============================================================

@@ -8,7 +8,7 @@
  */
 #ifndef LUA_IMPL
 #define LUA_IMPL
-#include "minilua.h"
+#include "../lib/minilua.h"
 #endif
 
 #include "papagaio.h"
