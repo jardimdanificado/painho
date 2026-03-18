@@ -3,3 +3,7 @@ node_modules
 test-report.json
 papagaio_wasm*
 test
+*.o
+*.so
+*.a
+/papagaio

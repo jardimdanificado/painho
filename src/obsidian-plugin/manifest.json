@@ -1,9 +1,9 @@
 {
   "id": "papagaio",
   "name": "papagaio.md",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "minAppVersion": "1.0.0",
-  "description": "Execute Lua 5.4 in your notes. Includes papagaio text processing and papagaio_ffi memory primitives. Compatible with desktop and Android.",
+  "description": "papagaio text processor plugin for obsidian.",
   "author": "jardimdanificado",
   "isDesktopOnly": false
 }

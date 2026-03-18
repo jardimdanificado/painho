@@ -97,5 +97,10 @@ int main(void)
     printf("Test 17 - %s (esperado: Number: 42 days)\n", o);
     free(o);
 
+    /* Test that $eval{} can call the internal papagaio parser via papagaio.process(). */
+    o = papagaio_process("x", "$x", "$eval{return papagaio.process('$pattern {x} {X}\\nx')}", NULL);
+    printf("Test 18 - %s (esperado: X)\n", o);
+    free(o);
+
     return 0;
 }

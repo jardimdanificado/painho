@@ -23,7 +23,14 @@
 /* libregexp callbacks */
 int lre_check_stack_overflow(void *opaque, size_t alloca_size) { (void)opaque; (void)alloca_size; return 0; }
 int lre_check_timeout(void *opaque) { (void)opaque; return 0; }
-void *lre_realloc(void *opaque, void *ptr, size_t size) { (void)opaque; return realloc(ptr, size); }
+void *lre_realloc(void *opaque, void *ptr, size_t size) {
+    (void)opaque;
+    if (size == 0) {
+        free(ptr);
+        return NULL;
+    }
+    return realloc(ptr, size);
+}
 
 /* =========================================================================
  * Lua version compatibility shims
@@ -283,7 +290,14 @@ static const char *PAP_CORE_LUA =
 "    return table.concat(lines, '\\n')\n"
 "end\n"
 "_G.papagaio_internal = pap\n"
-"_G.papagaio = pap\n";
+"_G.papagaio = pap\n"
+"local ok, mod = pcall(require, 'papagaio')\n"
+"if ok and type(mod) == 'table' then\n"
+"  pap.process_text = mod.process_text\n"
+"  pap.process = mod.process_text\n"
+"  pap.process_ex = mod.process_ex\n"
+"  pap.process_pairs = mod.process_pairs\n"
+"end\n";
 
 struct Papagaio { lua_State *L; int owned; };
 
@@ -291,6 +305,7 @@ struct Papagaio { lua_State *L; int owned; };
 static lua_State *g_lazy_L = NULL;
 void papagaio_cleanup(void);
 
+static void register_papagaio_preload(lua_State *L);
 static lua_State *ensure_L(lua_State *L)
 {
     if (L) return L;
@@ -301,11 +316,24 @@ static lua_State *ensure_L(lua_State *L)
             if (luaL_dostring(g_lazy_L, PAP_CORE_LUA) != LUA_OK) {
                 fprintf(stderr, "papagaio: error loading core logic: %s\n", lua_tostring(g_lazy_L, -1));
             }
+            register_papagaio_preload(g_lazy_L);
             lua_settop(g_lazy_L, 0);
             atexit(papagaio_cleanup);
         }
     }
     return g_lazy_L;
+}
+
+static void register_papagaio_preload(lua_State *L)
+{
+    if (!L) return;
+    lua_getglobal(L, "package");
+    if (!lua_istable(L, -1)) { lua_pop(L, 1); return; }
+    lua_getfield(L, -1, "preload");
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
+    lua_pushcfunction(L, luaopen_papagaio);
+    lua_setfield(L, -2, "papagaio");
+    lua_pop(L, 2);
 }
 
 /* =========================================================================
@@ -1485,6 +1513,7 @@ Papagaio *papagaio_open(void)
         fprintf(stderr, "papagaio: error loading core logic: %s\n", lua_tostring(ctx->L, -1));
     }
 
+    register_papagaio_preload(ctx->L);
     lua_settop(ctx->L, 0);
     return ctx;
 }

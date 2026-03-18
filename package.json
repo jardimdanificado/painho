@@ -1,6 +1,6 @@
 {
   "name": "papagaio",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "easy yet powerful preprocessor",
   "main": "papagaio.js",
   "type": "module",
