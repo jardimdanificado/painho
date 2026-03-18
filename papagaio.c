@@ -103,7 +103,7 @@ typedef struct { char *data; size_t len; size_t cap; } StrBuf;
 typedef enum {
     TOK_LITERAL, TOK_VAR, TOK_BLOCK, TOK_WS,
     TOK_BLOCKSEQ, TOK_OPTIONS, TOK_OPTIONAL_LIT
-} TokenType;
+} PapTokenType;
 
 typedef enum {
     MOD_NONE, MOD_INT, MOD_FLOAT, MOD_NUMBER,
@@ -114,7 +114,7 @@ typedef enum {
 } VarModifier;
 
 typedef struct {
-    TokenType   type;
+    PapTokenType type;
     VarModifier modifier;
     StrView     value;
     StrView     var;

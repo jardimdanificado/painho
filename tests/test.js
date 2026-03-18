@@ -1,8 +1,13 @@
-import Papagaio from '../papagaio.js';
-
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+let Papagaio;
+try {
+  Papagaio = (await import('../papagaio.js')).default;
+} catch {
+  Papagaio = (await import('../dist/wasm/papagaio.js')).default;
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,6 +36,7 @@ const failedTests = [];
 for (const test of tests) {
     // Criar nova instância de Papagaio para cada teste
     const p = new Papagaio();
+    await p.init();
 
     try {
         const result = p.process(test.code).trim();

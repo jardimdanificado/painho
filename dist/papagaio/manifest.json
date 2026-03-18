@@ -1,0 +1,9 @@
+{
+  "id": "papagaio",
+  "name": "papagaio",
+  "version": "0.8.1",
+  "minAppVersion": "1.0.0",
+  "description": "papagaio...",
+  "author": "jardimdanificado",
+  "isDesktopOnly": false
+}
