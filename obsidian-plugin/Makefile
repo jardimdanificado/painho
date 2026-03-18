@@ -31,7 +31,7 @@ dist/papagaio.js: wasm
 	@true
 
 install: all
-	@DEST=$$(echo $(VAULT)/.obsidian/plugins/papagaio-md); \
+	@DEST=$$(echo $(VAULT)/.obsidian/plugins/papagaio); \
 	mkdir -p "$$DEST" && \
 	cp dist/main.js "$$DEST/" && \
 	cp manifest.json "$$DEST/" && \

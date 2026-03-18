@@ -50,11 +50,11 @@ jobs:
 
       - name: Package plugin artifact
         run: |
-          mkdir -p pkg/papagaio-md
-          cp obsidian-plugin/dist/main.js pkg/papagaio-md/
-          cp obsidian-plugin/manifest.json pkg/papagaio-md/
-          cp obsidian-plugin/styles.css pkg/papagaio-md/
-          tar -czf "papagaio-v${{ inputs.version }}-obsidian.tar.gz" -C pkg papagaio-md
+          mkdir -p pkg/papagaio
+          cp obsidian-plugin/dist/main.js pkg/papagaio/
+          cp obsidian-plugin/manifest.json pkg/papagaio/
+          cp obsidian-plugin/styles.css pkg/papagaio/
+          tar -czf "papagaio-v${{ inputs.version }}-obsidian.tar.gz" -C pkg papagaio
 
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
@@ -209,27 +209,27 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist_pkg
-          cp papagaio-md dist_pkg/
+          cp papagaio dist_pkg/
           cp README.md dist_pkg/
-          tar -czf "papagaio-md-v${{ inputs.version }}-${{ matrix.archive }}.tar.gz" -C dist_pkg .
+          tar -czf "papagaio-v${{ inputs.version }}-${{ matrix.archive }}.tar.gz" -C dist_pkg .
 
       - name: Package artifact (Windows MinGW)
         if: startsWith(matrix.target, 'windows-mingw')
         shell: msys2 {0}
         run: |
           mkdir -p dist_pkg
-          cp papagaio-md.exe dist_pkg/
+          cp papagaio.exe dist_pkg/
           cp README.md dist_pkg/
-          powershell -NoProfile -Command "Compress-Archive -Path dist_pkg\\* -DestinationPath papagaio-md-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force"
+          powershell -NoProfile -Command "Compress-Archive -Path dist_pkg\\* -DestinationPath papagaio-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force"
 
       - name: Package artifact (Windows MSVC)
         if: startsWith(matrix.target, 'windows-msvc')
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path dist_pkg
-          Copy-Item build-msvc/Release/papagaio-md.exe dist_pkg/
+          Copy-Item build-msvc/Release/papagaio.exe dist_pkg/
           Copy-Item README.md dist_pkg/
-          Compress-Archive -Path dist_pkg/* -DestinationPath papagaio-md-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force
+          Compress-Archive -Path dist_pkg/* -DestinationPath papagaio-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

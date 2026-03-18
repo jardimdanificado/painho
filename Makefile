@@ -37,7 +37,7 @@ LDFLAGS ?=
 
 TARGET_SO = papagaio$(SO_EXT)
 TARGET_A  = libpapagaio.a
-TARGET_BIN = papagaio-md$(EXE_EXT)
+TARGET_BIN = papagaio$(EXE_EXT)
 SRC       = papagaio.c
 OBJ       = papagaio.o
 
@@ -105,7 +105,7 @@ wasm: papagaio.c papagaio.h
 
 obsidian: wasm
 	cd obsidian-plugin && npm install && npm run build
-	mkdir -p dist/papagaio-md
-	cp obsidian-plugin/dist/main.js dist/papagaio-md/main.js
-	cp obsidian-plugin/manifest.json dist/papagaio-md/manifest.json
-	cp obsidian-plugin/styles.css dist/papagaio-md/styles.css
+	mkdir -p dist/papagaio
+	cp obsidian-plugin/dist/main.js dist/papagaio/main.js
+	cp obsidian-plugin/manifest.json dist/papagaio/manifest.json
+	cp obsidian-plugin/styles.css dist/papagaio/styles.css
