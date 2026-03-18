@@ -17,9 +17,19 @@ UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
   SHARED_FLAGS = -shared -fPIC -undefined dynamic_lookup
   SO_EXT       = .so
+  EXE_EXT       =
+else ifneq (,$(findstring MINGW,$(UNAME_S)))
+  SHARED_FLAGS = -shared -fPIC
+  SO_EXT       = .dll
+  EXE_EXT       = .exe
+else ifneq (,$(findstring MSYS,$(UNAME_S)))
+  SHARED_FLAGS = -shared -fPIC
+  SO_EXT       = .dll
+  EXE_EXT       = .exe
 else
   SHARED_FLAGS = -shared -fPIC
   SO_EXT       = .so
+  EXE_EXT       =
 endif
 
 CFLAGS  ?= -O2 -Wall -Wextra -std=c99
@@ -27,7 +37,7 @@ LDFLAGS ?=
 
 TARGET_SO = papagaio$(SO_EXT)
 TARGET_A  = libpapagaio.a
-TARGET_BIN = papagaio
+TARGET_BIN = papagaio-md$(EXE_EXT)
 SRC       = papagaio.c
 OBJ       = papagaio.o
 

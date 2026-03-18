@@ -209,7 +209,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist_pkg
-          cp papagaio-md/papagaio-md dist_pkg/
+          cp papagaio-md dist_pkg/
           cp README.md dist_pkg/
           tar -czf "papagaio-md-v${{ inputs.version }}-${{ matrix.archive }}.tar.gz" -C dist_pkg .
 
@@ -218,7 +218,7 @@ jobs:
         shell: msys2 {0}
         run: |
           mkdir -p dist_pkg
-          cp papagaio-md/papagaio-md.exe dist_pkg/
+          cp papagaio-md.exe dist_pkg/
           cp README.md dist_pkg/
           powershell -NoProfile -Command "Compress-Archive -Path dist_pkg\\* -DestinationPath papagaio-md-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force"
 
