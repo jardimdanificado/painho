@@ -12,12 +12,18 @@
 #endif
 
 #include "papagaio.h"
+#include "../lib/libregexp/libregexp.h"
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+
+/* libregexp callbacks */
+int lre_check_stack_overflow(void *opaque, size_t alloca_size) { (void)opaque; (void)alloca_size; return 0; }
+int lre_check_timeout(void *opaque) { (void)opaque; return 0; }
+void *lre_realloc(void *opaque, void *ptr, size_t size) { (void)opaque; return realloc(ptr, size); }
 
 /* =========================================================================
  * Lua version compatibility shims
@@ -101,7 +107,7 @@ typedef struct { const char *ptr; size_t len; } StrView;
 typedef struct { char *data; size_t len; size_t cap; } StrBuf;
 
 typedef enum {
-    TOK_LITERAL, TOK_VAR, TOK_BLOCK, TOK_WS,
+    TOK_LITERAL, TOK_VAR, TOK_REGEX, TOK_BLOCK, TOK_WS,
     TOK_BLOCKSEQ, TOK_OPTIONS, TOK_OPTIONAL_LIT
 } PapTokenType;
 
@@ -120,6 +126,7 @@ typedef struct {
     StrView     var;
     StrView     open;
     StrView     close;
+    uint8_t    *re;       /* compiled regex bytecode */
     char       *open_str;
     char       *close_str;
     unsigned    optional : 1;
@@ -132,7 +139,7 @@ typedef struct {
 
 typedef struct {
     const char *sigil, *open, *close;
-    const char *pattern, *eval, *block, *blockseq, *optional;
+    const char *pattern, *regex, *eval, *block, *blockseq, *optional;
 } Symbols;
 
 typedef struct { PapToken *t; int count; int cap; Symbols sym; } Pattern;
@@ -308,6 +315,7 @@ static lua_State *ensure_L(lua_State *L)
 #define PAP_OPEN     "{"
 #define PAP_CLOSE    "}"
 #define PAP_PATTERN  "pattern"
+#define PAP_REGEX    "regex"
 #define PAP_EVAL     "eval"
 #define PAP_BLOCK    "block"
 #define PAP_BLOCKSEQ "blockseq"
@@ -360,8 +368,8 @@ static Symbols make_symbols(const char *sigil, const char *open, const char *clo
 {
     Symbols s;
     s.sigil    = sigil;  s.open  = open;  s.close = close;
-    s.pattern  = PAP_PATTERN;  s.eval    = PAP_EVAL;
-    s.block    = PAP_BLOCK;    s.blockseq = PAP_BLOCKSEQ;
+    s.pattern  = PAP_PATTERN; s.regex   = PAP_REGEX; s.eval    = PAP_EVAL;
+    s.block    = PAP_BLOCK;   s.blockseq = PAP_BLOCKSEQ;
     s.optional = PAP_OPTIONAL;
     return s;
 }
@@ -397,6 +405,7 @@ static void free_pattern(Pattern *p)
         free(p->t[i].open_str);
         free(p->t[i].close_str);
         free(p->t[i].literal_str);
+        free(p->t[i].re);
         if (p->t[i].alts) {
             for (int j = 0; j < p->t[i].alt_count; j++)
                 free(p->t[i].alts[j]);
@@ -764,7 +773,7 @@ static char *replace_all(const char *src, const char *needle, const char *repl)
 
 static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym);
 static int  match_pattern(const char *src, int src_len,
-                           const Pattern *p, int start, Match *m);
+                           Pattern *p, int start, Match *m);
 static char *apply_replacement_ex(const char *rep, const Match *m,
                                    const Symbols *sym, lua_State *L);
 
@@ -959,6 +968,35 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                 t->value = (StrView){ sym->sigil, (size_t)sl };
                 p->count++; continue;
             }
+
+            /* $regex VAR {pattern}
+             * The keyword is part of the syntax and is not the capture name.
+             */
+            StrView key = { pat + v, vlen };
+            if (sv_eq(key, (StrView){ sym->regex, (size_t)strlen(sym->regex) })) {
+                /* Read capture variable name */
+                while (i < n && isspace((unsigned char)pat[i])) i++;
+                int v2 = i;
+                while (i < n && (isalnum((unsigned char)pat[i]) || pat[i] == '_')) i++;
+                t->var = (StrView){ pat + v2, (size_t)(i - v2) };
+
+                /* Read regex pattern block */
+                while (i < n && isspace((unsigned char)pat[i])) i++;
+                if (i < n && str_pfx(pat + i, sym->open)) {
+                    StrView blk;
+                    StrView so = { sym->open,  (size_t)ol };
+                    StrView sc = { sym->close, (size_t)cl };
+                    int next = extract_block(pat, i, so, sc, &blk);
+                    t->value = trim_sv(blk);
+                    i = next;
+                } else {
+                    t->value = (StrView){ pat + i, 0 };
+                }
+
+                if (i < n && pat[i] == '?') { t->optional = 1; i++; }
+                t->type = TOK_REGEX; p->count++; continue;
+            }
+
             t->var = (StrView){ pat + v, vlen };
 
             /* modifier */
@@ -1095,7 +1133,7 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
     !(t->modifier == MOD_PERCENT     && !(isdigit((unsigned char)(c)) || (c)=='.' || (c)=='%' || ((pos)==(s) && (c)=='-'))))
 
 static int match_pattern(const char *src, int src_len,
-                          const Pattern *p, int start, Match *m)
+                          Pattern *p, int start, Match *m)
 {
     m->cap_size = 16; m->count = 0;
     m->cap      = (Capture *)malloc(sizeof(Capture) * m->cap_size);
@@ -1107,8 +1145,8 @@ static int match_pattern(const char *src, int src_len,
     int pos = start;
 
     for (int i = 0; i < p->count; i++) {
-        const PapToken *t  = &p->t[i];
-        const PapToken *nx = (t->next_sig >= 0) ? &p->t[t->next_sig] : NULL;
+        PapToken *t  = &p->t[i];
+        PapToken *nx = (t->next_sig >= 0) ? &p->t[t->next_sig] : NULL;
 
         if (t->type == TOK_WS) {
             if (!isspace((unsigned char)src[pos])) {
@@ -1230,6 +1268,58 @@ static int match_pattern(const char *src, int src_len,
             }
             ensure_cap(m);
             m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(pos-s) }, NULL };
+            continue;
+        }
+
+        if (t->type == TOK_REGEX) {
+            if (!t->re && t->value.len > 0) {
+                int l = 0;
+                char err[128];
+                char *pat = (char *)malloc(t->value.len + 1);
+                if (pat) {
+                    memcpy(pat, t->value.ptr, t->value.len);
+                    pat[t->value.len] = '\0';
+                    t->re = lre_compile(&l, err, sizeof(err), pat, t->value.len, 0, NULL);
+                    (void)err;
+                    free(pat);
+                }
+            }
+            if (!t->re) {
+                if (!t->optional) goto fail;
+                ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL };
+                continue;
+            }
+
+            int cap_count = lre_get_capture_count(t->re);
+            int cap_slots = cap_count * 2;
+            uint8_t **capture = (uint8_t **)malloc(sizeof(uint8_t *) * cap_slots);
+            if (!capture) goto fail;
+            for (int ci = 0; ci < cap_slots; ci++) capture[ci] = NULL;
+
+            int rc = lre_exec(capture, t->re, (const uint8_t *)src, pos, src_len, 0, NULL);
+            if (rc != 1) {
+                free(capture);
+                if (!t->optional) goto fail;
+                ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL };
+                continue;
+            }
+
+            size_t match_start = capture[0] ? (size_t)(capture[0] - (const uint8_t *)src) : pos;
+            size_t match_end   = capture[1] ? (size_t)(capture[1] - (const uint8_t *)src) : pos;
+            if (match_end < match_start) match_end = match_start;
+
+            /* keep last regex capture info for potential introspection */
+            if (m->regex.capture) { free((void *)m->regex.capture); m->regex.capture = NULL; }
+            m->regex.capture = (const uint8_t **)capture;
+            m->regex.capture_count = cap_count;
+            m->regex.match_start = match_start;
+            m->regex.match_end = match_end;
+            m->regex.src = src;
+
+            ensure_cap(m);
+            m->cap[m->count++] = (Capture){ t->var, { src + match_start, (size_t)(match_end - match_start) }, NULL };
+            pos = (int)match_end;
+
             continue;
         }
 

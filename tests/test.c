@@ -93,5 +93,9 @@ int main(void)
     printf("Esperado:  \"x=a y=c z=\"\n");
     free(o);
 
+    o = papagaio_process("42 days", "$regex num {[0-9]+}", "Number: $num", NULL);
+    printf("Test 17 - %s (esperado: Number: 42 days)\n", o);
+    free(o);
+
     return 0;
 }

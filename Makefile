@@ -38,8 +38,8 @@ LDFLAGS ?=
 TARGET_SO = papagaio$(SO_EXT)
 TARGET_A  = libpapagaio.a
 TARGET_BIN = papagaio$(EXE_EXT)
-SRC       = src/papagaio.c
-OBJ       = papagaio.o
+SRC       = src/papagaio.c lib/libregexp/libregexp.c lib/libregexp/cutils.c lib/libregexp/libunicode.c
+OBJ       = $(SRC:.c=.o)
 
 LUA_BIN    ?= lua
 PREFIX     ?= $(HOME)/.local
@@ -53,7 +53,7 @@ INCDIR     ?= $(PREFIX)/include
 
 all: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 
-$(OBJ): $(SRC) src/papagaio.h
+%.o: %.c
 	$(CC) -c $(CFLAGS) -fPIC -o $@ $<
 
 $(TARGET_SO): $(OBJ)
@@ -91,7 +91,7 @@ clean:
 
 wasm: src/papagaio.c src/papagaio.h
 	mkdir -p dist/wasm
-	emcc -O3 $(CFLAGS) src/papagaio.c -o dist/wasm/papagaio_wasm.js \
+	emcc -O3 $(CFLAGS) src/papagaio.c lib/libregexp/libregexp.c lib/libregexp/cutils.c lib/libregexp/libunicode.c -o dist/wasm/papagaio_wasm.js \
 		-s WASM=1 \
 		-s MODULARIZE=1 \
 		-s EXPORT_ES6=1 \

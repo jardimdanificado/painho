@@ -277,7 +277,7 @@ jobs:
         with:
           tag_name: v${{ inputs.version }}
           name: v${{ inputs.version }}
-          body: "Release v${{ inputs.version }} of Papagaio Ecosystem"
+          body: "papagaio v${{ inputs.version }}"
           prerelease: ${{ inputs.prerelease }}
           files: |
             artifacts/**/*

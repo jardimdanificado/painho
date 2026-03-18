@@ -6,7 +6,12 @@ set(CMAKE_C_STANDARD 99)
 include_directories(.)
 
 # Main library (static)
-add_library(libpapagaio STATIC src/papagaio.c)
+add_library(libpapagaio STATIC
+  src/papagaio.c
+  lib/libregexp/libregexp.c
+  lib/libregexp/cutils.c
+  lib/libregexp/libunicode.c
+)
 if (NOT MSVC)
   target_link_libraries(libpapagaio m)
 endif()

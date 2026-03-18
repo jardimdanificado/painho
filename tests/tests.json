@@ -209,6 +209,12 @@
       "name": "Cascading pattern transformations",
       "code": "$pattern {START $x END} {STEP1[$x]}\n$pattern {STEP1 $y} {STEP2[$y]}\n$pattern {STEP2 $z} {FINAL[$z]}\nSTART test END",
       "expected": "FINAL[[[test]]]"
+    },
+    {
+      "id": 36,
+      "name": "Regex match capture",
+      "code": "$pattern {$regex num {[0-9]+}} {Number: $num}\n42 days",
+      "expected": "Number: 42 days"
     }
   ]
 }
