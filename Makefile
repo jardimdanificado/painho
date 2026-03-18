@@ -8,28 +8,9 @@
 #   make install    copy .so to LUA_LIBDIR (user-local by default)
 #   make clean      remove build artifacts
 #
-# Variables:
-#   LUA          Lua flavour for pkg-config (default: lua5.4)
-#   LUA_CFLAGS   override compiler flags for Lua headers
-#   LUA_LIBS     override linker flags for Lua library
-#   PREFIX       install prefix (default: ~/.local)
-#   LUA_LIBDIR   where to install the .so (default: PREFIX/lib/lua/5.4)
-
-LUA        ?= lua5.4
 CC         ?= cc
 AR         ?= ar
 RANLIB     ?= ranlib
-PKG_CONFIG ?= pkg-config
-
-# ── Lua flags (auto-detect) ─────────────────────────────────────────────
-LUA_CFLAGS ?= $(shell $(PKG_CONFIG) --cflags $(LUA) 2>/dev/null \
-              || $(PKG_CONFIG) --cflags lua-5.4 2>/dev/null \
-              || $(PKG_CONFIG) --cflags lua54 2>/dev/null \
-              || echo "")
-LUA_LIBS   ?= $(shell $(PKG_CONFIG) --libs $(LUA) 2>/dev/null \
-              || $(PKG_CONFIG) --libs lua-5.4 2>/dev/null \
-              || $(PKG_CONFIG) --libs lua54 2>/dev/null \
-              || echo "-llua -lm")
 
 # ── Platform ────────────────────────────────────────────────────────────
 UNAME_S := $(shell uname -s)
@@ -50,7 +31,7 @@ TARGET_BIN = papagaio
 SRC       = papagaio.c
 OBJ       = papagaio.o
 
-LUA_BIN := $(shell command -v $(LUA) 2>/dev/null || command -v lua 2>/dev/null)
+LUA_BIN    ?= lua
 PREFIX     ?= $(HOME)/.local
 BINDIR     ?= $(PREFIX)/bin
 LUA_LIBDIR ?= $(PREFIX)/lib/lua/5.4
@@ -63,17 +44,17 @@ INCDIR     ?= $(PREFIX)/include
 all: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 
 $(OBJ): $(SRC) papagaio.h
-	$(CC) -c $(CFLAGS) $(LUA_CFLAGS) -fPIC -o $@ $<
+	$(CC) -c $(CFLAGS) -fPIC -o $@ $<
 
 $(TARGET_SO): $(OBJ)
-	$(CC) $(SHARED_FLAGS) -o $@ $(OBJ) $(LDFLAGS) $(LUA_LIBS)
+	$(CC) $(SHARED_FLAGS) -o $@ $(OBJ) $(LDFLAGS) -lm
 
 $(TARGET_A): $(OBJ)
 	$(AR) rcs $@ $(OBJ)
 	$(RANLIB) $@
 
 $(TARGET_BIN): main.c $(TARGET_A)
-	$(CC) $(CFLAGS) $(LUA_CFLAGS) -o $@ main.c $(TARGET_A) $(LDFLAGS) $(LUA_LIBS)
+	$(CC) $(CFLAGS) -o $@ main.c $(TARGET_A) $(LDFLAGS) -lm
 
 static: $(TARGET_A)
 
