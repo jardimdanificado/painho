@@ -84,10 +84,10 @@ jobs:
             os: ubuntu-24.04-arm
             target: linux-arm64
             archive: linux-arm64
-          - name: Linux ARMv7 32-bit
-            os: ubuntu-latest
-            target: linux-armv7
-            archive: linux-armv7
+          # - name: Linux ARMv7 32-bit
+          #   os: ubuntu-latest
+          #   target: linux-armv7
+          #   archive: linux-armv7
           - name: macOS Intel x64
             os: macos-15-intel
             target: macos-intel

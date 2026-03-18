@@ -282,7 +282,8 @@ static const char *PAP_CORE_LUA =
 "    end\n"
 "    return table.concat(lines, '\\n')\n"
 "end\n"
-"_G.papagaio_internal = pap\n";
+"_G.papagaio_internal = pap\n"
+"_G.papagaio = pap\n";
 
 struct Papagaio { lua_State *L; int owned; };
 
@@ -1483,9 +1484,11 @@ Papagaio *papagaio_open(void)
     if (luaL_dostring(ctx->L, PAP_CORE_LUA) != LUA_OK) {
         fprintf(stderr, "papagaio: error loading core logic: %s\n", lua_tostring(ctx->L, -1));
     }
+
     lua_settop(ctx->L, 0);
     return ctx;
 }
+
 
 void papagaio_close(Papagaio *ctx)
 {
@@ -1616,95 +1619,35 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
     /* B. If we have evals, enter AST mode */
     EvalBlock *evals = NULL; int ec = 0;
     char *ph = extract_evals(cur, &sym, &evals, &ec);
-    
+
     if (ec > 0) {
         L = ensure_L(L);
-        if (L) {
-            /* 1. Parse 'ph' (placeholders) into global.md */
-            char *tmp_restored = pap_restore(ph, &sym);
-            lua_getglobal(L, "papagaio_internal");
-            if (lua_istable(L, -1)) {
-                lua_getfield(L, -1, "parse");
-                lua_pushstring(L, tmp_restored);
-                free(tmp_restored);
-                if (lua_pcall(L, 1, 1, 0) == LUA_OK) {
-                    lua_getglobal(L, "global");
-                    if (!lua_istable(L, -1)) {
-                        lua_pop(L, 1); lua_newtable(L); lua_setglobal(L, "global"); lua_getglobal(L, "global");
-                    }
-                    lua_insert(L, -2); lua_setfield(L, -2, "md"); lua_pop(L, 1);
-                } else {
-                    fprintf(stderr, "papagaio: parse failed: %s\n", lua_tostring(L, -1));
-                    lua_pop(L, 1);
-                }
-            } else {
-                fprintf(stderr, "papagaio: papagaio_internal is not a table\n");
-            }
-            lua_pop(L, 1); // internal
 
-            /* 2. Run evals once to get results and side-effects on global.md */
-            char **results = (char **)malloc(sizeof(char *) * ec);
-            for (int i = 0; i < ec; i++) {
-                results[i] = pap_eval(L, evals[i].code, evals[i].len, "", 0);
-            }
+        /* Restore placeholders as text */
+        char *tmp_restored = pap_restore(ph, &sym);
 
-            /* 3. Regenerate from global.md (will contain placeholders) */
-            char *regen_text = NULL;
-            lua_getglobal(L, "global");            // [global]
-            if (lua_istable(L, -1)) {
-                lua_getfield(L, -1, "md");         // [global, md]
-                if (!lua_isnil(L, -1)) {
-                    lua_getglobal(L, "papagaio_internal"); // [global, md, internal]
-                    if (lua_istable(L, -1)) {
-                        lua_getfield(L, -1, "generate");   // [global, md, internal, generate]
-                        if (lua_isfunction(L, -1)) {
-                            lua_pushvalue(L, -3);          // [global, md, internal, generate, md]
-                            if (lua_pcall(L, 1, 1, 0) == LUA_OK) { // [global, md, internal, result]
-                                const char *final_content = lua_tostring(L, -1);
-                                if (final_content) {
-                                    size_t fclen = strlen(final_content);
-                                    regen_text = (char *)malloc(fclen + 1);
-                                    if (regen_text) { strcpy(regen_text, final_content); }
-                                }
-                                lua_pop(L, 1);             // [global, md, internal]
-                            } else {
-                                fprintf(stderr, "papagaio: generate failed: %s\n", lua_tostring(L, -1));
-                                lua_pop(L, 1);
-                            }
-                        } else { lua_pop(L, 1); }
-                    }
-                    lua_pop(L, 1); // internal
-                }
-                lua_pop(L, 1); // md
-            }
-            lua_pop(L, 1); // global
-
-            /* 4. Use placeholders logic to substitute RESULTS */
-            char *final;
-            if (regen_text) {
-                final = pap_prepare(regen_text, &sym);
-                free(regen_text);
-            } else {
-                size_t phlen = strlen(ph);
-                final = (char *)malloc(phlen + 1);
-                if (final) strcpy(final, ph);
-            }
-
-            for (int i = ec - 1; i >= 0; i--) {
-                char eph[32]; snprintf(eph, sizeof(eph), "__E%d__", i);
-                char *res = results[i];
-                if (!res) {
-                    const char *emsg = "error";
-                    res = (char *)malloc(strlen(emsg) + 1);
-                    if (res) strcpy(res, emsg);
-                }
-                char *next = replace_all(final, eph, res);
-                free(res);
-                if (next) { free(final); final = next; }
-            }
-            free(results);
-            free(cur); free(ph); free_evals(evals, ec); cur = final;
+        /* 2. Run evals once */
+        char **results = (char **)malloc(sizeof(char *) * ec);
+        for (int i = 0; i < ec; i++) {
+            results[i] = pap_eval(L, evals[i].code, evals[i].len, "", 0);
         }
+
+        /* 3. Substitute placeholders */
+        char *final = tmp_restored;
+        for (int i = ec - 1; i >= 0; i--) {
+            char eph[32]; snprintf(eph, sizeof(eph), "__E%d__", i);
+            char *res = results[i];
+            if (!res) {
+                const char *emsg = "error";
+                res = (char *)malloc(strlen(emsg) + 1);
+                if (res) strcpy(res, emsg);
+            }
+            char *next = replace_all(final, eph, res);
+            free(res);
+            if (next) { free(final); final = next; }
+        }
+        free(results);
+        free(cur); free(ph); free_evals(evals, ec); cur = final;
     } else {
         free(ph); free_evals(evals, ec);
     }

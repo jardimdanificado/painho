@@ -27,6 +27,7 @@ int main(int argc, char **argv) {
     Papagaio *ctx = papagaio_open();
     papagaio_set_args(ctx, argc, argv);
 
+
     size_t len = 0;
     char *input = read_file(argv[1], &len);
     if (!input) {
