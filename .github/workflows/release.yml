@@ -1,0 +1,286 @@
+name: Release Manual
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (ex: 1.2.0)"
+        required: true
+        type: string
+      create_tag:
+        description: "Create tag vX.Y.Z if it does not exist"
+        required: true
+        default: true
+        type: boolean
+      prerelease:
+        description: "Mark release as pre-release"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Build Obsidian Plugin
+  # ---------------------------------------------------------------------------
+  obsidian:
+    name: Build Obsidian plugin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+
+      - name: Install dependencies and build plugin
+        run: |
+          sed -i 's/"version": ".*"/"version": "${{ inputs.version }}"/' obsidian-plugin/manifest.json
+          sed -i 's/"version": ".*"/"version": "${{ inputs.version }}"/' obsidian-plugin/package.json
+          make obsidian
+
+      - name: Package plugin artifact
+        run: |
+          mkdir -p pkg/papagaio-md
+          cp obsidian-plugin/dist/main.js pkg/papagaio-md/
+          cp obsidian-plugin/manifest.json pkg/papagaio-md/
+          cp obsidian-plugin/styles.css pkg/papagaio-md/
+          tar -czf "papagaio-v${{ inputs.version }}-obsidian.tar.gz" -C pkg papagaio-md
+
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: papagaio-obsidian
+          path: papagaio-v${{ inputs.version }}-obsidian.tar.gz
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Build CLI Binaries (Matrix)
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            os: ubuntu-latest
+            target: linux
+            archive: linux-x64
+          - name: Linux x86 32-bit
+            os: ubuntu-latest
+            target: linux-x86
+            archive: linux-x86
+          - name: Linux ARM64
+            os: ubuntu-24.04-arm
+            target: linux-arm64
+            archive: linux-arm64
+          - name: Linux ARMv7 32-bit
+            os: ubuntu-latest
+            target: linux-armv7
+            archive: linux-armv7
+          - name: macOS Intel x64
+            os: macos-15-intel
+            target: macos-intel
+            archive: macos-x64
+          - name: macOS ARM64
+            os: macos-14
+            target: macos-arm64
+            archive: macos-arm64
+          - name: Windows x64 (MinGW)
+            os: windows-latest
+            target: windows-mingw
+            archive: windows-x64-mingw
+          - name: Windows x86 32-bit (MinGW)
+            os: windows-latest
+            target: windows-mingw32
+            archive: windows-x86-mingw
+          - name: Windows x64 (MSVC)
+            os: windows-latest
+            target: windows-msvc
+            archive: windows-x64-msvc
+          - name: Windows x86 32-bit (MSVC)
+            os: windows-latest
+            target: windows-msvc32
+            archive: windows-x86-msvc
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Ubuntu Native)
+        if: matrix.os == 'ubuntu-latest' && (matrix.target == 'linux')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libffi-dev pkg-config
+
+      - name: Install dependencies (Linux x86 32-bit)
+        if: matrix.target == 'linux-x86'
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib libffi-dev:i386 pkg-config
+
+      - name: Install dependencies (Linux ARMv7)
+        if: matrix.target == 'linux-armv7'
+        run: |
+          sudo dpkg --add-architecture armhf
+          # Restrict existing repos to amd64/i386 (only for lines that don't already have architecture specified)
+          sudo sed -i 's/^deb http/deb [arch=amd64,i386] http/' /etc/apt/sources.list /etc/apt/sources.list.d/*.list || true
+          # Add ports.ubuntu.com for armhf
+          echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -sc) main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/armhf.list
+          echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -sc)-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/armhf.list
+          echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -sc)-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/armhf.list
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-linux-gnueabihf libffi-dev:armhf pkg-config
+
+      - name: Install dependencies (macOS)
+        if: startsWith(matrix.target, 'macos')
+        run: |
+          brew update
+          brew install libffi pkg-config
+
+      - name: Setup MSYS2 (Windows MinGW)
+        if: startsWith(matrix.target, 'windows-mingw')
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.target == 'windows-mingw' && 'MINGW64' || 'MINGW32' }}
+          update: true
+          install: >-
+            git
+            make
+            ${{ matrix.target == 'windows-mingw' && 'mingw-w64-x86_64-gcc' || 'mingw-w64-i686-gcc' }}
+            ${{ matrix.target == 'windows-mingw' && 'mingw-w64-x86_64-libffi' || 'mingw-w64-i686-libffi' }}
+            ${{ matrix.target == 'windows-mingw' && 'mingw-w64-x86_64-pkgconf' || 'mingw-w64-i686-pkgconf' }}
+
+      - name: Fetch Lua
+        run: |
+          make fetch_lua_if_needed
+
+      - name: Build binary (Linux/macOS)
+        if: startsWith(matrix.target, 'linux') || startsWith(matrix.target, 'macos')
+        shell: bash
+        run: |
+          if [ "${RUNNER_OS}" = "macOS" ]; then
+            export PKG_CONFIG_PATH="$(brew --prefix libffi)/lib/pkgconfig:$PKG_CONFIG_PATH"
+          fi
+          if [ "${{ matrix.target }}" = "linux-x86" ]; then
+            export CC="gcc -m32"
+            export PKG_CONFIG_PATH="/usr/lib/i386-linux-gnu/pkgconfig"
+          elif [ "${{ matrix.target }}" = "linux-armv7" ]; then
+            export CC=arm-linux-gnueabihf-gcc
+            export PKG_CONFIG_PATH="/usr/lib/arm-linux-gnueabihf/pkgconfig"
+          elif [ "${{ matrix.target }}" = "linux-arm64" ]; then
+            # Native on ubuntu-24.04-arm
+            export CC=gcc
+          fi
+          # Rebuild Lua for each target architecture
+          make clean
+          make all -j2
+
+      - name: Build binary (Windows MinGW)
+        if: startsWith(matrix.target, 'windows-mingw')
+        shell: msys2 {0}
+        run: |
+          make clean
+          make all -j2
+
+      - name: Build binary (Windows MSVC)
+        if: startsWith(matrix.target, 'windows-msvc')
+        shell: powershell
+        run: |
+          $v_arch = "${{ matrix.target == 'windows-msvc' && 'x64' || 'x86' }}"
+          $triplet = "${v_arch}-windows"
+          $cmake_arch = if ($v_arch -eq "x64") { "x64" } else { "Win32" }
+          $vcpkg = "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe"
+          & $vcpkg install libffi:$triplet
+          cmake -S . -B build-msvc -A $cmake_arch `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=$triplet
+          cmake --build build-msvc --config Release -j2
+
+      - name: Package artifact (Linux/macOS)
+        if: startsWith(matrix.target, 'linux') || startsWith(matrix.target, 'macos')
+        shell: bash
+        run: |
+          mkdir -p dist_pkg
+          cp papagaio-md/papagaio-md dist_pkg/
+          cp README.md dist_pkg/
+          tar -czf "papagaio-md-v${{ inputs.version }}-${{ matrix.archive }}.tar.gz" -C dist_pkg .
+
+      - name: Package artifact (Windows MinGW)
+        if: startsWith(matrix.target, 'windows-mingw')
+        shell: msys2 {0}
+        run: |
+          mkdir -p dist_pkg
+          cp papagaio-md/papagaio-md.exe dist_pkg/
+          cp README.md dist_pkg/
+          powershell -NoProfile -Command "Compress-Archive -Path dist_pkg\\* -DestinationPath papagaio-md-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force"
+
+      - name: Package artifact (Windows MSVC)
+        if: startsWith(matrix.target, 'windows-msvc')
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path dist_pkg
+          Copy-Item build-msvc/Release/papagaio-md.exe dist_pkg/
+          Copy-Item README.md dist_pkg/
+          Compress-Archive -Path dist_pkg/* -DestinationPath papagaio-md-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: papagaio-${{ matrix.target }}
+          path: |
+            *.tar.gz
+            *.zip
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Release
+  # ---------------------------------------------------------------------------
+  release:
+    name: Publish release
+    runs-on: ubuntu-latest
+    needs: [build, obsidian]
+    if: ${{ !cancelled() && needs.obsidian.result == 'success' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create tag if requested
+        if: inputs.create_tag
+        run: |
+          tag="v${{ inputs.version }}"
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" -m "Release $tag"
+            git push origin "$tag"
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: v${{ inputs.version }}
+          body: "Release v${{ inputs.version }} of Papagaio Ecosystem"
+          prerelease: ${{ inputs.prerelease }}
+          files: |
+            artifacts/**/*

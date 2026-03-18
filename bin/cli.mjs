@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import fs from "fs";
-import Papagaio from "../papagaio.js";
+import Papagaio from "../dist/papagaio.js";
 
 async function main() {
     const args = process.argv.slice(2);
@@ -56,6 +56,7 @@ Examples:
     }
 
     const p = new Papagaio();
+    await p.init();
     const out = p.process(concatenatedSrc);
     console.log(out);
 }

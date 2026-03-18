@@ -156,9 +156,19 @@
     </div>
 
     <script type="module">
-        import Papagaio from './papagaio.js';
+        import Papagaio from './dist/papagaio.js';
         
         const processor = new Papagaio();
+        
+        async function init() {
+            try {
+                await processor.init();
+                loadSaved();
+                processCode();
+            } catch (err) {
+                console.error("Failed to init Papagaio:", err);
+            }
+        }
 
         function loadSaved() {
             try {
@@ -193,6 +203,7 @@
         function processCode() {
             try {
                 const input = document.getElementById('input').value;
+                if (!processor._initialized) return;
                 const output = processor.process(input);
                 document.getElementById('output').value = output;
                 saveInput();
@@ -201,7 +212,7 @@
             }
         }
 
-        window.addEventListener('load', loadSaved);
+        init();
         setInterval(saveInput, 2000);
         window.switchTab = switchTab;
     </script>
