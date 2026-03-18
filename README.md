@@ -1,32 +1,70 @@
 # Papagaio
 Minimal yet powerful text preprocessor.
 
-- **It's portable!** papagaio requires only ES6 and nothing else.
-- **It's small!** papagaio is around ~250 lines and ~10kb.
-- **It's easy!** papagaio doesnt have any complicated stuff, 1 class and 1 method for doing everything!
-- **It's flexible!** do papagaio sigil and delimiters conflict with whatever you want to process? then simply change it! papagaio allow us to modify ANY of its keywords and symbols.
-- **It's powerful!!** aside been inspired by the m4 preprocessor and meant to be a preprocessor, papagaio still a fully-featured programming language because it can evaluate any valid javascript code using $eval;
+- **Portable** – core engine in C, compiled to native `.so` / `.dll` or WASM.
+- **Fast** – lean architecture with minimal overhead.
+- **Flexible** – custom delimiters, smart variables, regex matching, `$eval{}` and more.
+- **Multi-target** – runs in Node/browser (WASM) and can be embedded as a native Lua/C module.
+- **New** – includes a tiny Lua `memory` helper (`require "memory"`) for raw buffer access.
 
-## Installation
-```javascript
-import { Papagaio } from './papagaio.js';
-const papagaio = new Papagaio();
-const result = papagaio.process(input);
+## Quickstart (Node / Browser)
+
+```js
+import Papagaio from "./dist/wasm/papagaio.js"; // or from "papagaio" after publishing
+
+const p = new Papagaio();
+await p.init();
+
+const out = p.process(`$pattern {$x} {[$x]}
+hello`);
+console.log(out); // [hello]
+```
+
+## CLI
+
+Install globally:
+
+```bash
+npm install -g papagaio
+```
+
+Run:
+
+```bash
+papagaio file.txt
+```
+
+## C / Lua usage
+
+Build the native library:
+
+```bash
+make
+```
+
+Then in Lua:
+
+```lua
+local pap = require("papagaio")
+local out = pap.process_text("hello", 5)
+print(out)
+```
+
+And the new helper module:
+
+```lua
+local mem = require("memory")
 ```
 
 ## Configuration
-```javascript
-papagaio.symbols = {
-  pattern: "pattern",      // pattern keyword
-  open: "{",               // opening delimiter (multi-char supported)
-  close: "}",              // closing delimiter (multi-char supported)
-  sigil: "$",              // variable marker
-  eval: "eval",            // eval keyword
-  block: "recursive",      // block keyword (recursive nesting)
-  regex: "regex",          // regex keyword
-  blockseq: "sequential"   // blockseq keyword (sequential blocks)
-};
-```
+
+The core engine uses a fixed set of symbols by default:
+
+- `sigil`: `$`
+- `open`: `{`
+- `close`: `}`
+
+If you need custom delimiters or symbols, use the C API directly via `papagaio_process_ex()` (see the C section below), or patch the source to suit your needs.
 
 ---
 
@@ -582,42 +620,10 @@ p.process('$pattern {x} {y}\nx');
 
 ---
 
----
+## C / WASM Core (Native)
 
-## src/papagaio.h - C Implementation
-
-### Overview
-
-**src/papagaio.h** is a minimal, high-performance C implementation that provides the **core pattern matching engine** only.
-
-Unlike **papagaio.js**, which is a full-featured preprocessing language with code execution, the C version focuses exclusively on fast, memory-efficient pattern matching and replacement.
-
-### Design Philosophy
-
-| Aspect | papagaio.js | src/papagaio.h |
-|--------|-------------|------------|
-| **Purpose** | Full preprocessing language | *Fast* pattern matching core |
-| **Features** | Complete (eval, regex, nested patterns) | Core only (variables, blocks, literals) |
-| **Dependencies** | JavaScript runtime | None (C99+) |
-| **Use Case** | Prototyping, complex logic | Production, embedding, FFI |
-
-### Feature Comparison
-
-| Feature | papagaio.js | src/papagaio.h |
-|---------|-------------|------------|
-| **Variables** `$x` | yes | yes |
-| **Optional variables** `$x?` | yes | yes |
-| **Blocks** `${o}{c}var` | yes | yes |
-| **Optional blocks** `${o}{c}var?` | yes | yes |
-| **Custom delimiters** | yes Multi-char | yes Multi-char |
-| **Whitespace handling** | yes | yes |
-| **Nested patterns** `$pattern{}{}` | yes Recursive | no |
-| **Sequential blocks** `$${}{}var` | yes | no |
-| **Regex matching** `$regex{}` | yes | no |
-| **Code evaluation** `$eval{}` | yes | no |
-| **Pattern scopes** | yes Hierarchical | no Single pass |
-| **Configurable symbols** | yes Constructor | yes Function param |
-| **Context access** | yes `this.match` | no |
+The engine is implemented in C (`src/papagaio.c`) and is used by the Node/browser WASM wrapper and the Lua module.
+It supports the full language (patterns, blocks, regex, `$eval{}`, sequential blocks, etc.).
 
 ### Installation & Usage
 
@@ -685,41 +691,38 @@ Process input with custom symbols (supports multi-character delimiters).
 
 **Returns:** Dynamically allocated string (caller must `free()`)
 
-### Limitations
+### Native C / WASM Core
 
-The C implementation is **intentionally minimal**. These features are **not available**:
+The engine lives in C (`src/papagaio.c`) and is shipped as:
 
-- **No recursive patterns** - Single pass only, no nested `$pattern{}{}` definitions  
-- **No sequential blocks** - `$${}{}var` not supported 
-- **No regex** - `$regex{}` not supported
-- **No eval** - `$eval{}` not supported
-- **No pattern scopes** - Patterns don't inherit or nest 
-- **No context access** - No equivalent to `papagaio.match` or `papagaio.content`  
+- **Native shared library** (`papagaio.so` / `papagaio.dll`)
+- **WASM module** (`dist/wasm/papagaio_wasm.js`) used by the JS wrapper
+- **Lua module** (`require("papagaio")`) with full `$eval{}` support
 
-### When to Use Which Version
+It implements the full feature set (smart variables, nested patterns & blocks, sequential blocks, regex, `$eval{}`, etc.) and is the same core used by the Node/browser wrapper.
 
-#### Use **src/papagaio.h** when:
-- You are doing runtime text processing or realtime stuff;
-- You need high performance for large inputs;
-- You are embedding in other languages;
-- You are building a compiler/parser/language/vm/whatever;
+### Building
 
-#### Use **papagaio.js** when:
-- You are doing pre-processing;
-- You dont need src/papagaio.h;
+```bash
+make          # native + wasm + CLI
+make wasm     # wasm-only output (dist/wasm)
+```
 
-### C Implementation Details
+### Lua `memory` helper (new)
 
-- **Header-only**: Single `src/papagaio.h` file, no compilation needed
-- **Zero dependencies**: Uses only C standard library
-- **Memory-efficient**: Uses string views to avoid unnecessary copies
-- **Portable**: C99 compatible, works on any platform
+A small raw-byte helper is exposed via `require("memory")`. Pointers are represented as integers.
 
-### Considerations
-- papagaio.js is almost always the better choice unless you specifically need C performance or embedding.
-- you can use papagaio.js embedded in C code using quickjs or such, will not be really fast but will have all features.
-- src/papagaio.h is not incomplete.
+```lua
+local mem = require("memory")
+local p = mem.alloc(16)
+mem.set(p, 0x41, 4)     -- fill with 'A'
+print(string.char(mem.readu8(p), mem.readu8(p+1)))
+mem.free(p)
+```
 
 ---
+
+
+
 
 ***PAPAGAIO IS CURRENTLY IN HEAVY DEVELOPMENT AND EXPERIMENTATION PHASE***
