@@ -306,6 +306,7 @@ static lua_State *g_lazy_L = NULL;
 void papagaio_cleanup(void);
 
 static void register_papagaio_preload(lua_State *L);
+LUALIB_API int luaopen_memory(lua_State *L);
 static lua_State *ensure_L(lua_State *L)
 {
     if (L) return L;
@@ -333,6 +334,8 @@ static void register_papagaio_preload(lua_State *L)
     if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
     lua_pushcfunction(L, luaopen_papagaio);
     lua_setfield(L, -2, "papagaio");
+    lua_pushcfunction(L, luaopen_memory);
+    lua_setfield(L, -2, "memory");
     lua_pop(L, 2);
 }
 
@@ -1844,6 +1847,326 @@ LUALIB_API int luaopen_papagaio(lua_State *L)
     } else {
         lua_pop(L, 1);
     }
+
+    /* Make memory module available via require("memory") */
+    lua_getglobal(L, "package");
+    if (lua_istable(L, -1)) {
+        lua_getfield(L, -1, "preload");
+        if (lua_istable(L, -1)) {
+            lua_pushcfunction(L, luaopen_memory);
+            lua_setfield(L, -2, "memory");
+        }
+        lua_pop(L, 1);
+    }
+    lua_pop(L, 1);
+
     luaL_newlib(L, papagaio_funcs);
+    return 1;
+}
+
+/* --------------------------- memory module --------------------------- */
+
+static uintptr_t mem_check_ptr(lua_State *L, int idx)
+{
+    if (lua_islightuserdata(L, idx)) return (uintptr_t)lua_touserdata(L, idx);
+#if LUA_VERSION_NUM >= 502
+    if (lua_isinteger(L, idx)) return (uintptr_t)lua_tointeger(L, idx);
+    if (lua_isnumber(L, idx)) return (uintptr_t)lua_tonumber(L, idx);
+#else
+    if (lua_isnumber(L, idx)) return (uintptr_t)lua_tonumber(L, idx);
+#endif
+    luaL_argerror(L, idx, "expected pointer (lightuserdata or number)");
+    return 0;
+}
+
+static int l_memory_alloc(lua_State *L)
+{
+    lua_Integer size = luaL_checkinteger(L, 1);
+    if (size <= 0) return luaL_error(L, "alloc: invalid size");
+    void *p = malloc((size_t)size);
+    if (!p) return luaL_error(L, "alloc: out of memory");
+    lua_pushinteger(L, (lua_Integer)(uintptr_t)p);
+    return 1;
+}
+
+static int l_memory_free(lua_State *L)
+{
+    if (!lua_isnil(L, 1)) {
+        void *p = (void *)(uintptr_t)mem_check_ptr(L, 1);
+        free(p);
+    }
+    return 0;
+}
+
+static int l_memory_realloc(lua_State *L)
+{
+    void *p = (void *)(uintptr_t)mem_check_ptr(L, 1);
+    lua_Integer size = luaL_checkinteger(L, 2);
+    if (size <= 0) {
+        free(p);
+        lua_pushnil(L);
+        return 1;
+    }
+    void *n = realloc(p, (size_t)size);
+    if (!n) return luaL_error(L, "realloc: out of memory");
+    lua_pushinteger(L, (lua_Integer)(uintptr_t)n);
+    return 1;
+}
+
+static int l_memory_zero(lua_State *L)
+{
+    void *p = (void *)(uintptr_t)mem_check_ptr(L, 1);
+    lua_Integer size = luaL_checkinteger(L, 2);
+    if (size < 0) return luaL_error(L, "zero: invalid size");
+    memset(p, 0, (size_t)size);
+    return 0;
+}
+
+static int l_memory_copy(lua_State *L)
+{
+    void *dst = (void *)(uintptr_t)mem_check_ptr(L, 1);
+    void *src = (void *)(uintptr_t)mem_check_ptr(L, 2);
+    lua_Integer size = luaL_checkinteger(L, 3);
+    if (size < 0) return luaL_error(L, "copy: invalid size");
+    memcpy(dst, src, (size_t)size);
+    lua_pushinteger(L, (lua_Integer)(uintptr_t)dst);
+    return 1;
+}
+
+static int l_memory_set(lua_State *L)
+{
+    void *p = (void *)(uintptr_t)mem_check_ptr(L, 1);
+    int byte = (int)luaL_checkinteger(L, 2);
+    lua_Integer size = luaL_checkinteger(L, 3);
+    if (byte < 0 || byte > 0xFF) return luaL_error(L, "set: byte value out of range");
+    if (size < 0) return luaL_error(L, "set: invalid size");
+    memset(p, (unsigned char)byte, (size_t)size);
+    return 0;
+}
+
+static int l_memory_compare(lua_State *L)
+{
+    void *a = (void *)(uintptr_t)mem_check_ptr(L, 1);
+    void *b = (void *)(uintptr_t)mem_check_ptr(L, 2);
+    lua_Integer size = luaL_checkinteger(L, 3);
+    if (size < 0) return luaL_error(L, "compare: invalid size");
+    int r = memcmp(a, b, (size_t)size);
+    lua_pushinteger(L, r);
+    return 1;
+}
+
+static int l_memory_string(lua_State *L)
+{
+    void *p = (void *)(uintptr_t)mem_check_ptr(L, 1);
+    if (!p) { lua_pushnil(L); return 1; }
+    lua_pushstring(L, (const char *)p);
+    return 1;
+}
+
+static int l_memory_readi8(lua_State *L)
+{
+    int8_t v;
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy(&v, (void *)p, sizeof(v));
+    lua_pushinteger(L, (lua_Integer)v);
+    return 1;
+}
+
+static int l_memory_writei8(lua_State *L)
+{
+    int8_t v = (int8_t)luaL_checkinteger(L, 2);
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy((void *)p, &v, sizeof(v));
+    return 0;
+}
+
+static int l_memory_readu8(lua_State *L)
+{
+    uint8_t v;
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy(&v, (void *)p, sizeof(v));
+    lua_pushinteger(L, (lua_Integer)v);
+    return 1;
+}
+
+static int l_memory_writeu8(lua_State *L)
+{
+    uint8_t v = (uint8_t)luaL_checkinteger(L, 2);
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy((void *)p, &v, sizeof(v));
+    return 0;
+}
+
+static int l_memory_readi16(lua_State *L)
+{
+    int16_t v;
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy(&v, (void *)p, sizeof(v));
+    lua_pushinteger(L, (lua_Integer)v);
+    return 1;
+}
+
+static int l_memory_writei16(lua_State *L)
+{
+    int16_t v = (int16_t)luaL_checkinteger(L, 2);
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy((void *)p, &v, sizeof(v));
+    return 0;
+}
+
+static int l_memory_readu16(lua_State *L)
+{
+    uint16_t v;
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy(&v, (void *)p, sizeof(v));
+    lua_pushinteger(L, (lua_Integer)v);
+    return 1;
+}
+
+static int l_memory_writeu16(lua_State *L)
+{
+    uint16_t v = (uint16_t)luaL_checkinteger(L, 2);
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy((void *)p, &v, sizeof(v));
+    return 0;
+}
+
+static int l_memory_readi32(lua_State *L)
+{
+    int32_t v;
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy(&v, (void *)p, sizeof(v));
+    lua_pushinteger(L, (lua_Integer)v);
+    return 1;
+}
+
+static int l_memory_writei32(lua_State *L)
+{
+    int32_t v = (int32_t)luaL_checkinteger(L, 2);
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy((void *)p, &v, sizeof(v));
+    return 0;
+}
+
+static int l_memory_readu32(lua_State *L)
+{
+    uint32_t v;
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy(&v, (void *)p, sizeof(v));
+    lua_pushinteger(L, (lua_Integer)v);
+    return 1;
+}
+
+static int l_memory_writeu32(lua_State *L)
+{
+    uint32_t v = (uint32_t)luaL_checkinteger(L, 2);
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy((void *)p, &v, sizeof(v));
+    return 0;
+}
+
+static int l_memory_readi64(lua_State *L)
+{
+    int64_t v;
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy(&v, (void *)p, sizeof(v));
+    lua_pushinteger(L, (lua_Integer)v);
+    return 1;
+}
+
+static int l_memory_writei64(lua_State *L)
+{
+    int64_t v = (int64_t)luaL_checkinteger(L, 2);
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy((void *)p, &v, sizeof(v));
+    return 0;
+}
+
+static int l_memory_readu64(lua_State *L)
+{
+    uint64_t v;
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy(&v, (void *)p, sizeof(v));
+    lua_pushinteger(L, (lua_Integer)v);
+    return 1;
+}
+
+static int l_memory_writeu64(lua_State *L)
+{
+    uint64_t v = (uint64_t)luaL_checkinteger(L, 2);
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy((void *)p, &v, sizeof(v));
+    return 0;
+}
+
+static int l_memory_readf32(lua_State *L)
+{
+    float v;
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy(&v, (void *)p, sizeof(v));
+    lua_pushnumber(L, (lua_Number)v);
+    return 1;
+}
+
+static int l_memory_writef32(lua_State *L)
+{
+    float v = (float)luaL_checknumber(L, 2);
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy((void *)p, &v, sizeof(v));
+    return 0;
+}
+
+static int l_memory_readf64(lua_State *L)
+{
+    double v;
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy(&v, (void *)p, sizeof(v));
+    lua_pushnumber(L, (lua_Number)v);
+    return 1;
+}
+
+static int l_memory_writef64(lua_State *L)
+{
+    double v = (double)luaL_checknumber(L, 2);
+    uintptr_t p = mem_check_ptr(L, 1);
+    memcpy((void *)p, &v, sizeof(v));
+    return 0;
+}
+
+static const luaL_Reg memory_funcs[] = {
+    { "alloc",      l_memory_alloc },
+    { "free",       l_memory_free },
+    { "realloc",    l_memory_realloc },
+    { "zero",       l_memory_zero },
+    { "copy",       l_memory_copy },
+    { "set",        l_memory_set },
+    { "compare",    l_memory_compare },
+    { "string",     l_memory_string },
+    { "readi8",     l_memory_readi8 },
+    { "writei8",    l_memory_writei8 },
+    { "readu8",     l_memory_readu8 },
+    { "writeu8",    l_memory_writeu8 },
+    { "readi16",    l_memory_readi16 },
+    { "writei16",   l_memory_writei16 },
+    { "readu16",    l_memory_readu16 },
+    { "writeu16",   l_memory_writeu16 },
+    { "readi32",    l_memory_readi32 },
+    { "writei32",   l_memory_writei32 },
+    { "readu32",    l_memory_readu32 },
+    { "writeu32",   l_memory_writeu32 },
+    { "readi64",    l_memory_readi64 },
+    { "writei64",   l_memory_writei64 },
+    { "readu64",    l_memory_readu64 },
+    { "writeu64",   l_memory_writeu64 },
+    { "readf32",    l_memory_readf32 },
+    { "writef32",   l_memory_writef32 },
+    { "readf64",    l_memory_readf64 },
+    { "writef64",   l_memory_writef64 },
+    { NULL, NULL }
+};
+
+LUALIB_API int luaopen_memory(lua_State *L)
+{
+    luaL_newlib(L, memory_funcs);
     return 1;
 }

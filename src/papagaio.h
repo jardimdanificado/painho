@@ -72,6 +72,7 @@ char *papagaio_process_text(Papagaio   *ctx,
 
 /* Note: we use struct lua_State* here to keep the header C-only/Lua-free */
 LUALIB_API int luaopen_papagaio(struct lua_State *L);
+LUALIB_API int luaopen_memory(struct lua_State *L);
 
 #ifdef __cplusplus
 }
