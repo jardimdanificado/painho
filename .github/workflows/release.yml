@@ -161,9 +161,6 @@ jobs:
             ${{ matrix.target == 'windows-mingw' && 'mingw-w64-x86_64-libffi' || 'mingw-w64-i686-libffi' }}
             ${{ matrix.target == 'windows-mingw' && 'mingw-w64-x86_64-pkgconf' || 'mingw-w64-i686-pkgconf' }}
 
-      - name: Fetch Lua
-        run: |
-          make fetch_lua_if_needed
 
       - name: Build binary (Linux/macOS)
         if: startsWith(matrix.target, 'linux') || startsWith(matrix.target, 'macos')
