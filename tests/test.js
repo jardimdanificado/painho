@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 
 let Papagaio;
 try {
-  Papagaio = (await import('../papagaio.js')).default;
+  Papagaio = (await import('../src/papagaio.js')).default;
 } catch {
   Papagaio = (await import('../dist/wasm/papagaio.js')).default;
 }

@@ -7,11 +7,17 @@ include_directories(.)
 
 # Main library (static)
 add_library(libpapagaio STATIC src/papagaio.c)
-target_link_libraries(libpapagaio m)
+if (NOT MSVC)
+  target_link_libraries(libpapagaio m)
+endif()
 
 # Main executable
 add_executable(papagaio src/main.c)
-target_link_libraries(papagaio libpapagaio m)
+if (NOT MSVC)
+  target_link_libraries(papagaio libpapagaio m)
+else()
+  target_link_libraries(papagaio libpapagaio)
+endif()
 
 # Installation
 install(TARGETS papagaio DESTINATION bin)

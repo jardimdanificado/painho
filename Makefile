@@ -87,7 +87,7 @@ install: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 clean:
 	rm -f $(TARGET_SO) $(TARGET_A) $(TARGET_BIN) $(OBJ)
 	rm -rf dist/
-	rm -rf obsidian-plugin/dist obsidian-plugin/node_modules
+	rm -rf src/obsidian-plugin/dist src/obsidian-plugin/node_modules
 
 wasm: src/papagaio.c src/papagaio.h
 	mkdir -p dist/wasm
@@ -104,8 +104,8 @@ wasm: src/papagaio.c src/papagaio.h
 	cp src/papagaio.js dist/wasm/papagaio.js
 
 obsidian: wasm
-	cd obsidian-plugin && npm install && npm run build
+	cd src/obsidian-plugin && npm install && npm run build
 	mkdir -p dist/papagaio
-	cp obsidian-plugin/dist/main.js dist/papagaio/main.js
-	cp obsidian-plugin/manifest.json dist/papagaio/manifest.json
-	cp obsidian-plugin/styles.css dist/papagaio/styles.css
+	cp src/obsidian-plugin/dist/main.js dist/papagaio/main.js
+	cp src/obsidian-plugin/manifest.json dist/papagaio/manifest.json
+	cp src/obsidian-plugin/styles.css dist/papagaio/styles.css

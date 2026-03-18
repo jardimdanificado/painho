@@ -44,16 +44,16 @@ jobs:
 
       - name: Install dependencies and build plugin
         run: |
-          sed -i 's/"version": ".*"/"version": "${{ inputs.version }}"/' obsidian-plugin/manifest.json
-          sed -i 's/"version": ".*"/"version": "${{ inputs.version }}"/' obsidian-plugin/package.json
+          sed -i 's/"version": ".*"/"version": "${{ inputs.version }}"/' src/obsidian-plugin/manifest.json
+          sed -i 's/"version": ".*"/"version": "${{ inputs.version }}"/' src/obsidian-plugin/package.json
           make obsidian
 
       - name: Package plugin artifact
         run: |
           mkdir -p pkg/papagaio
-          cp obsidian-plugin/dist/main.js pkg/papagaio/
-          cp obsidian-plugin/manifest.json pkg/papagaio/
-          cp obsidian-plugin/styles.css pkg/papagaio/
+          cp src/obsidian-plugin/dist/main.js pkg/papagaio/
+          cp src/obsidian-plugin/manifest.json pkg/papagaio/
+          cp src/obsidian-plugin/styles.css pkg/papagaio/
           tar -czf "papagaio-v${{ inputs.version }}-obsidian.tar.gz" -C pkg papagaio
 
       - name: Upload plugin artifact

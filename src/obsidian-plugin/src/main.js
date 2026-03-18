@@ -5,7 +5,7 @@ import {
 } from "obsidian";
 
 // @ts-ignore
-import createPapagaioModule from "../../dist/wasm/papagaio_wasm.js";
+import createPapagaioModule from "../../../dist/wasm/papagaio_wasm.js";
 
 class LuaEngine {
   constructor() {
