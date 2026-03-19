@@ -215,6 +215,12 @@
       "name": "Regex match capture",
       "code": "$pattern {$regex num {[0-9]+}} {Number: $num}\n42 days",
       "expected": "Number: 42 days"
+    },
+    {
+      "id": 37,
+      "name": "Eval print output is captured and prefixed",
+      "code": "$pattern {$x} {$eval{print('hello'); return 'X'}}\nx",
+      "expected": "hello\nX"
     }
   ]
 }

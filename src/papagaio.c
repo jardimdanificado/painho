@@ -307,6 +307,59 @@ void papagaio_cleanup(void);
 
 static void register_papagaio_preload(lua_State *L);
 LUALIB_API int luaopen_memory(lua_State *L);
+
+static void papagaio_stdout_clear(lua_State *L)
+{
+    lua_pushstring(L, "");
+    lua_setglobal(L, "papagaio_stdout");
+}
+
+static void papagaio_stdout_append(lua_State *L, const char *msg, size_t len)
+{
+    lua_getglobal(L, "papagaio_stdout");
+    size_t old_len = 0;
+    const char *old = lua_tolstring(L, -1, &old_len);
+    if (!old) old = "";
+
+    luaL_Buffer b;
+    luaL_buffinit(L, &b);
+    luaL_addlstring(&b, old, old_len);
+    luaL_addlstring(&b, msg, len);
+    luaL_pushresult(&b);
+    lua_setglobal(L, "papagaio_stdout");
+
+    lua_pop(L, 1); /* pop old value */
+}
+
+static int papagaio_print(lua_State *L)
+{
+    int n = lua_gettop(L);
+    luaL_Buffer b;
+    luaL_buffinit(L, &b);
+
+    for (int i = 1; i <= n; i++) {
+        if (i > 1) luaL_addchar(&b, '\t');
+        size_t sl;
+        luaL_tolstring(L, i, &sl);
+        const char *s = lua_tostring(L, -1);
+        if (s && sl) luaL_addlstring(&b, s, sl);
+        lua_pop(L, 1);
+    }
+    luaL_addchar(&b, '\n');
+    luaL_pushresult(&b);
+
+    size_t out_len;
+    const char *out = lua_tolstring(L, -1, &out_len);
+    if (out && out_len > 0) {
+        fwrite(out, 1, out_len, stdout);
+        fflush(stdout);
+        papagaio_stdout_append(L, out, out_len);
+    }
+    lua_pop(L, 1); /* pop the output string */
+
+    return 0;
+}
+
 static lua_State *ensure_L(lua_State *L)
 {
     if (L) return L;
@@ -318,6 +371,9 @@ static lua_State *ensure_L(lua_State *L)
                 fprintf(stderr, "papagaio: error loading core logic: %s\n", lua_tostring(g_lazy_L, -1));
             }
             register_papagaio_preload(g_lazy_L);
+            papagaio_stdout_clear(g_lazy_L);
+            lua_pushcfunction(g_lazy_L, papagaio_print);
+            lua_setglobal(g_lazy_L, "print");
             lua_settop(g_lazy_L, 0);
             atexit(papagaio_cleanup);
         }
@@ -591,6 +647,13 @@ static char *pap_eval(lua_State *L,
 
     if (luaL_loadbuffer(L, code, code_len, "papagaio") != LUA_OK) {
         /* stack: [old_match, errmsg] */
+        const char *errmsg = lua_tostring(L, -1);
+        fprintf(stderr, "papagaio eval load failed: %s\n", errmsg ? errmsg : "(nil)");
+        if (errmsg && errmsg[0] != '\0') {
+            papagaio_stdout_append(L, "[papagaio eval load failed] ", 25);
+            papagaio_stdout_append(L, errmsg, strlen(errmsg));
+            papagaio_stdout_append(L, "\n", 1);
+        }
         lua_pop(L, 1);
         lua_setglobal(L, "match");                      /* restore → [] */
         return NULL;
@@ -598,6 +661,13 @@ static char *pap_eval(lua_State *L,
 
     if (lua_pcall(L, 0, 1, 0) != LUA_OK) {
         /* stack: [old_match, errmsg] */
+        const char *errmsg = lua_tostring(L, -1);
+        fprintf(stderr, "papagaio eval runtime failed: %s\n", errmsg ? errmsg : "(nil)");
+        if (errmsg && errmsg[0] != '\0') {
+            papagaio_stdout_append(L, "[papagaio eval runtime failed] ", 30);
+            papagaio_stdout_append(L, errmsg, strlen(errmsg));
+            papagaio_stdout_append(L, "\n", 1);
+        }
         lua_pop(L, 1);
         lua_setglobal(L, "match");
         return NULL;
@@ -1517,6 +1587,9 @@ Papagaio *papagaio_open(void)
     }
 
     register_papagaio_preload(ctx->L);
+    papagaio_stdout_clear(ctx->L);
+    lua_pushcfunction(ctx->L, papagaio_print);
+    lua_setglobal(ctx->L, "print");
     lua_settop(ctx->L, 0);
     return ctx;
 }
@@ -1612,6 +1685,8 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
 {
     if (!input) return NULL;
     lua_State *L = ctx ? ctx->L : NULL;
+    L = ensure_L(L);
+    if (L) papagaio_stdout_clear(L);
     Symbols sym  = make_symbols(PAP_SIGIL, PAP_OPEN, PAP_CLOSE);
     char *buf = (char *)malloc(len + 1);
     if (!buf) return NULL;
@@ -1686,10 +1761,28 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
 
     char *restored = pap_restore(cur, &sym);
     free(cur);
+
     if (L && restored) {
         lua_pushlstring(L, restored, strlen(restored));
         lua_setglobal(L, "papagaio_content");
+
+        lua_getglobal(L, "papagaio_stdout");
+        size_t stdout_len = 0;
+        const char *stdout_data = lua_tolstring(L, -1, &stdout_len);
+        if (stdout_data && stdout_len > 0) {
+            size_t restored_len = strlen(restored);
+            char *combined = (char *)malloc(stdout_len + restored_len + 1);
+            if (combined) {
+                memcpy(combined, stdout_data, stdout_len);
+                memcpy(combined + stdout_len, restored, restored_len + 1);
+                free(restored);
+                restored = combined;
+            }
+        }
+        lua_pop(L, 1);
+        papagaio_stdout_clear(L);
     }
+
     return restored;
 }
 
