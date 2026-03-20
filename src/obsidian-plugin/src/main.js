@@ -1,11 +1,56 @@
 import {
   Plugin,
   Notice,
-  MarkdownView
+  MarkdownView,
+  ItemView
 } from "obsidian";
 
 // @ts-ignore
 import createPapagaioModule from "../../../dist/wasm/papagaio_wasm.js";
+
+const PAPAGAIO_OUTPUT_VIEW = "papagaio-output-view";
+
+class PapagaioOutputView extends ItemView {
+  constructor(leaf) {
+    super(leaf);
+    this.textarea = null;
+  }
+
+  getViewType() {
+    return PAPAGAIO_OUTPUT_VIEW;
+  }
+
+  getDisplayText() {
+    return "Papagaio Output";
+  }
+
+  async onOpen() {
+    this.contentEl.empty();
+    this.textarea = this.contentEl.createEl("textarea", {
+      attr: {
+        placeholder: "Papagaio output appears here (editable)",
+      },
+    });
+    this.textarea.style.width = "100%";
+    this.textarea.style.height = "100%";
+    this.textarea.style.boxSizing = "border-box";
+    this.textarea.style.resize = "none";
+    this.textarea.style.padding = "0.8rem";
+    this.textarea.style.fontFamily = "var(--font-family)";
+    this.textarea.style.fontSize = "var(--font-size)";
+    this.textarea.style.border = "1px solid var(--interactive-border)";
+  }
+
+  onClose() {
+    this.textarea = null;
+  }
+
+  setText(value) {
+    if (!this.textarea) return;
+    this.textarea.value = value;
+    this.textarea.focus();
+  }
+}
 
 class LuaEngine {
   constructor() {
@@ -57,6 +102,8 @@ export default class PapagaioPlugin extends Plugin {
   async onload() {
     this.engine = new LuaEngine();
 
+    this.registerView(PAPAGAIO_OUTPUT_VIEW, (leaf) => new PapagaioOutputView(leaf));
+
     // Toolbar button (ribbon icon)
     this.addRibbonIcon("play", "Papagaio: Process File", async () => {
       await this.processCurrentFile();
@@ -65,7 +112,7 @@ export default class PapagaioPlugin extends Plugin {
     // Command
     this.addCommand({
       id: "papagaio-process-file",
-      name: "Process current file with Papagaio (.processed.md)",
+      name: "Process current file with Papagaio (open output in right pane)",
       callback: () => this.processCurrentFile(),
     });
 
@@ -90,17 +137,20 @@ export default class PapagaioPlugin extends Plugin {
 
     try {
       const output = await this.engine.processText(content);
-      
-      const newPath = file.path.replace(/\.md$/, ".processed.md");
-      const existing = this.app.vault.getAbstractFileByPath(newPath);
-      
-      if (existing) {
-        await this.app.vault.modify(existing, output);
-      } else {
-        await this.app.vault.create(newPath, output);
+
+      const leaf = this.app.workspace.getRightLeaf(false);
+      await leaf.setViewState({
+        type: PAPAGAIO_OUTPUT_VIEW,
+        active: true,
+      });
+      this.app.workspace.revealLeaf(leaf);
+
+      const view = leaf.view;
+      if (view && typeof view.setText === "function") {
+        view.setText(output);
       }
-      
-      new Notice(`🦜 Done! Created ${newPath}`);
+
+      new Notice("🦜 Done! Output opened in right pane");
     } catch (err) {
       new Notice(`❌ Error: ${err.message}`);
       console.error(err);

@@ -417,7 +417,10 @@ Output: `6`
 
 ## Advanced Examples
 
-### Markdown-like Processor
+### Markdown-like Processor (legacy)
+`pap.parse` / `pap.generate` foram removidos do núcleo principal e são considerados suporte legado. O foco atual do engine é `pap.process` / `pap.process_text`.
+
+Para conversão Markdown -> HTML você pode ainda escrever suas próprias regras de pattern:
 ```javascript
 const p = new Papagaio();
 const template = `
@@ -597,6 +600,59 @@ new Papagaio(sigil, open, close, pattern, evalKw, blockKw, regexKw, blockseqKw)
 
 ### Methods
 - `papagaio.process(input)` - Process input text and return transformed output
+
+### C / Lua Native API (detailed)
+#### C API
+```c
+Papagaio *papagaio_open(void);
+void papagaio_close(Papagaio *ctx);
+void papagaio_cleanup(void);
+struct lua_State *papagaio_L(Papagaio *ctx);
+void papagaio_set_args(Papagaio *ctx, int argc, char **argv);
+char *papagaio_process(const char *input, ...);
+char *papagaio_process_ex(const char *input, const char *sigil, const char *open, const char *close, ...);
+char *papagaio_process_pairs(Papagaio *ctx, const char **patterns, const char **repls, int pair_count);
+char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len);
+```
+
+- `papagaio_open` — cria contexto com novo Lua state.
+- `papagaio_close` — libera contexto.
+- `papagaio_cleanup` — limpa VM global paara chamadas sem contexto.
+- `papagaio_L` — retorna lua_State interno (ou NULL).
+- `papagaio_set_args` — define `arg` global no Lua de um contexto.
+- `papagaio_process` — usa pares (pat, repl) terminados em NULL.
+- `papagaio_process_ex` — permite símbolos custom.
+- `papagaio_process_pairs` — processa lista de regras.
+- `papagaio_process_text` — processa texto inteiro com contexto e eval.
+
+#### Lua `papagaio` module
+- `papagaio.process(input, pat, repl, ...)`
+- `papagaio.process_ex(input, sigil, open, close, pat, repl, ...)`
+- `papagaio.process_pairs(input, table)`
+- `papagaio.process_text(input)`
+
+#### Lua `memory` helper module
+```lua
+local mem = require('memory')
+```
+- `mem.alloc(size)` → pointer
+- `mem.free(ptr)`
+- `mem.realloc(ptr, size)`
+- `mem.zero(ptr, size)`
+- `mem.copy(dst, src, size)`
+- `mem.set(ptr, value, size)`
+- `mem.compare(a, b, size)`
+- `mem.string(ptr)` → string
+- `mem.readi8(ptr), mem.writei8(ptr, v)`
+- `mem.readu8(ptr), mem.writeu8(ptr, v)`
+- `mem.readi16(ptr), mem.writei16(ptr, v)`
+- `mem.readu16(ptr), mem.writeu16(ptr, v)`
+- `mem.readi32(ptr), mem.writei32(ptr, v)`
+- `mem.readu32(ptr), mem.writeu32(ptr, v)`
+- `mem.readi64(ptr), mem.writei64(ptr, v)`
+- `mem.readu64(ptr), mem.writeu64(ptr, v)`
+- `mem.readf32(ptr), mem.writef32(ptr, v)`
+- `mem.readf64(ptr), mem.writef64(ptr, v)`
 
 ### Exit Hook
 ```javascript
