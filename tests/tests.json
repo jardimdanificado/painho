@@ -213,7 +213,7 @@
     {
       "id": 36,
       "name": "Regex match capture",
-      "code": "$pattern {$regex num {[0-9]+}} {Number: $num}\n42 days",
+      "code": "$pattern {$regex$num {[0-9]+}} {Number: $num}\n42 days",
       "expected": "Number: 42 days"
     },
     {

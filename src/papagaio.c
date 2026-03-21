@@ -146,7 +146,7 @@ typedef struct {
 
 typedef struct {
     const char *sigil, *open, *close;
-    const char *pattern, *regex, *eval, *block, *blockseq, *optional;
+    const char *pattern, *regex, *eval, *block, *blockseq, *optional, *changequote;
 } Symbols;
 
 typedef struct { PapToken *t; int count; int cap; Symbols sym; } Pattern;
@@ -298,6 +298,7 @@ static void register_papagaio_preload(lua_State *L)
 #define PAP_BLOCK    "block"
 #define PAP_BLOCKSEQ "blockseq"
 #define PAP_OPTIONAL "optional"
+#define PAP_CHANGEQUOTE "changequote"
 #define PAP_ESC      '\x01'
 
 /* =========================================================================
@@ -349,6 +350,7 @@ static Symbols make_symbols(const char *sigil, const char *open, const char *clo
     s.pattern  = PAP_PATTERN; s.regex   = PAP_REGEX; s.eval    = PAP_EVAL;
     s.block    = PAP_BLOCK;   s.blockseq = PAP_BLOCKSEQ;
     s.optional = PAP_OPTIONAL;
+    s.changequote = PAP_CHANGEQUOTE;
     return s;
 }
 
@@ -430,6 +432,88 @@ static void free_evals(EvalBlock *e, int n)
 /* =========================================================================
  * Unescape delimiter
  * ====================================================================== */
+
+static int extract_block(const char *src, int pos,
+                          StrView o, StrView c, StrView *out);
+
+static int extract_changequote_args(const char *src, int pos, const Symbols *sym,
+                                   char **nsig, char **nopen, char **nclose)
+{
+    int n = (int)strlen(src);
+    int i = pos;
+    int ol = (int)strlen(sym->open);
+    int cl = (int)strlen(sym->close);
+    StrView so = { sym->open, (size_t)ol };
+    StrView sc = { sym->close, (size_t)cl };
+
+    *nsig = *nopen = *nclose = NULL;
+
+    /* Skip spaces between changequote and first { */
+    while (i < n && isspace((unsigned char)src[i])) i++;
+    if (i < n && str_pfx(src + i, sym->open)) {
+        StrView v;
+        i = extract_block(src, i, so, sc, &v);
+        v = trim_sv(v);
+        *nsig = (char *)malloc(v.len + 1);
+        memcpy(*nsig, v.ptr, v.len); (*nsig)[v.len] = '\0';
+    }
+
+    while (i < n && isspace((unsigned char)src[i])) i++;
+    if (i < n && str_pfx(src + i, sym->open)) {
+        StrView v;
+        i = extract_block(src, i, so, sc, &v);
+        v = trim_sv(v);
+        *nopen = (char *)malloc(v.len + 1);
+        memcpy(*nopen, v.ptr, v.len); (*nopen)[v.len] = '\0';
+    }
+
+    while (i < n && isspace((unsigned char)src[i])) i++;
+    if (i < n && str_pfx(src + i, sym->open)) {
+        StrView v;
+        i = extract_block(src, i, so, sc, &v);
+        v = trim_sv(v);
+        *nclose = (char *)malloc(v.len + 1);
+        memcpy(*nclose, v.ptr, v.len); (*nclose)[v.len] = '\0';
+    }
+
+    return i;
+}
+
+static char *handle_changequotes(const char *input, Symbols *sym)
+{
+    if (!input) return NULL;
+    int n = (int)strlen(input);
+    int sl = (int)strlen(sym->sigil);
+    int cql = (int)strlen(sym->changequote);
+    
+    StrBuf out; sb_init(&out);
+    
+    for (int i = 0; i < n; ) {
+        if (str_pfx(input + i, sym->sigil) && 
+            i + sl + cql <= n && 
+            memcmp(input + i + sl, sym->changequote, cql) == 0) 
+        {
+            char *ns = NULL, *no = NULL, *nc = NULL;
+            int next = extract_changequote_args(input, i + sl + cql, sym, &ns, &no, &nc);
+            
+            if (ns) sym->sigil = ns;
+            if (no) sym->open = no;
+            if (nc) sym->close = nc;
+            
+            /* Recurse with new symbols for the REST of the string */
+            char *rest = handle_changequotes(input + next, sym);
+            if (rest) {
+                sb_append_n(&out, rest, strlen(rest));
+                free(rest);
+            }
+            return out.data;
+        } else {
+            sb_append_char(&out, input[i]);
+            i++;
+        }
+    }
+    return out.data;
+}
 
 static char *unescape_delim(StrView v, size_t *out_len)
 {
@@ -961,13 +1045,14 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                 p->count++; continue;
             }
 
-            /* $regex VAR {pattern}
+            /* $regex$VAR {pattern}
              * The keyword is part of the syntax and is not the capture name.
              */
             StrView key = { pat + v, vlen };
-            if (sv_eq(key, (StrView){ sym->regex, (size_t)strlen(sym->regex) })) {
+            if (sv_eq(key, (StrView){ sym->regex, (size_t)strlen(sym->regex) }) &&
+                (i + sl <= n && memcmp(pat + i, sym->sigil, sl) == 0)) {
+                i += sl; /* skip the second sigil */
                 /* Read capture variable name */
-                while (i < n && isspace((unsigned char)pat[i])) i++;
                 int v2 = i;
                 while (i < n && (isalnum((unsigned char)pat[i]) || pat[i] == '_')) i++;
                 t->var = (StrView){ pat + v2, (size_t)(i - v2) };
@@ -1577,19 +1662,38 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
     lua_State *L = ctx ? ctx->L : NULL;
     L = ensure_L(L);
     if (L) papagaio_stdout_clear(L);
+
     Symbols sym  = make_symbols(PAP_SIGIL, PAP_OPEN, PAP_CLOSE);
+    const char *orig_sigil = sym.sigil;
+    const char *orig_open  = sym.open;
+    const char *orig_close = sym.close;
+
     char *buf = (char *)malloc(len + 1);
     if (!buf) return NULL;
     memcpy(buf, input, len); buf[len] = '\0';
 
-    char *prepared = pap_prepare(buf, &sym); free(buf);
-    if (!prepared) return NULL;
+    char *with_quotes = handle_changequotes(buf, &sym); free(buf);
+    if (!with_quotes) return NULL;
+
+    char *prepared = pap_prepare(with_quotes, &sym); free(with_quotes);
+    if (!prepared) {
+        if (sym.sigil != orig_sigil) free((void*)sym.sigil);
+        if (sym.open  != orig_open)  free((void*)sym.open);
+        if (sym.close != orig_close) free((void*)sym.close);
+        return NULL;
+    }
 
     /* A. Resolve Patterns First */
     PatternPair *pairs = NULL; int pc = 0;
     char *text_no_patterns = extract_nested(prepared, &sym, &pairs, &pc);
     free(prepared);
-    if (!text_no_patterns) { free_pairs(pairs, pc); return NULL; }
+    if (!text_no_patterns) { 
+        free_pairs(pairs, pc); 
+        if (sym.sigil != orig_sigil) free((void*)sym.sigil);
+        if (sym.open  != orig_open)  free((void*)sym.open);
+        if (sym.close != orig_close) free((void*)sym.close);
+        return NULL; 
+    }
 
     char *cur = text_no_patterns;
     if (pc > 0) {
@@ -1651,6 +1755,10 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
 
     char *restored = pap_restore(cur, &sym);
     free(cur);
+
+    if (sym.sigil != orig_sigil) free((void*)sym.sigil);
+    if (sym.open  != orig_open)  free((void*)sym.open);
+    if (sym.close != orig_close) free((void*)sym.close);
 
     if (L && restored) {
         lua_pushlstring(L, restored, strlen(restored));

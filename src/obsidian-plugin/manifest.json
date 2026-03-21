@@ -1,7 +1,7 @@
 {
   "id": "papagaio",
   "name": "papagaio.md",
-  "version": "0.11.1",
+  "version": "0.12.1",
   "minAppVersion": "1.0.0",
   "description": "papagaio text processor plugin for obsidian.",
   "author": "jardimdanificado",

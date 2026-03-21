@@ -1,784 +1,279 @@
-# Papagaio
-Minimal yet powerful text preprocessor.
+Papagaio
+========
 
-- **Portable** – core engine in C, compiled to native `.so` / `.dll` or WASM.
-- **Fast** – lean architecture with minimal overhead.
-- **Flexible** – custom delimiters, smart variables, regex matching, `$eval{}` and more.
-- **Multi-target** – runs in Node/browser (WASM) and can be embedded as a native Lua/C module.
-- **New** – includes a tiny Lua `memory` helper (`require "memory"`) for raw buffer access.
+Papagaio is a C-first, embeddable text processing and pattern-matching preprocessor that exposes a small, well-documented C API, a native Lua module, a command-line executable, and a JavaScript/WASM wrapper for browser/node usage. It embeds a Lua VM (supports Lua 5.1–5.4 and LuaJIT) to run dynamic $eval{} blocks and provides flexible pattern/replacement APIs intended for rapid, scriptable source preprocessing and text generation.
 
-## Quickstart (Node / Browser)
+Key Features
+------------
 
+- C library (libpapagaio): static library intended for embedding in C projects. Includes Unicode-aware regexp support via an internal libregexp component.
+- Embedded Lua VM: Papagaio embeds a Lua VM so replacements or evaluation blocks can run arbitrary Lua code securely in-process.
+- Native Lua module: Builds a papagaio.so so Lua projects can require("papagaio") and use the library directly from Lua.
+- Command-line tool: A small CLI executable (built from src/main.c) that reads a file, processes it and writes the output to stdout.
+- JavaScript/WASM wrapper: papagaio.js exposes a JS-friendly Papagaio class that uses an Emscripten-produced WASM module (papagaio_wasm.js) for browser/node usage.
+- Flexible APIs: Several C APIs for various use cases — convenience varargs API, explicit context API, pair-based processing, and raw buffer processing.
+- Safe ownership / memory model: Processing functions return malloc'd C strings. Callers are responsible for freeing the returned memory.
+
+What Papagaio Does
+------------------
+
+Papagaio is a preprocessor engine: it scans input text and performs pattern-based substitutions and scripted evaluations. It is suitable to implement macros, pattern-driven code generation, template-like transformations, and any text-processing pipeline where embedding a tiny scripting VM (Lua) is desirable.
+
+Public Interfaces
+-----------------
+
+C API (header: src/papagaio.h)
+- Papagaio *papagaio_open(void);
+  Create a new context. This also creates/attaches a fresh Lua state for $eval{} execution.
+
+- void papagaio_close(Papagaio *ctx);
+  Destroy a context and free all associated resources.
+
+- void papagaio_cleanup(void);
+  Cleanup lazy/global VM state (the library registers this to run at exit too).
+
+- struct lua_State *papagaio_L(Papagaio *ctx);
+  Borrow the inner lua_State* if the embedding application needs direct access to the Lua VM.
+
+- void papagaio_set_args(Papagaio *ctx, int argc, char **argv);
+  Pass program arguments into the internal Lua state (useful when running scripts relying on arg/argv).
+
+- char *papagaio_process(const char *input, ...);
+  Convenience varargs API accepting NULL-terminated pairs of pattern/replacement strings.
+
+- char *papagaio_process_ex(const char *input,
+                            const char *sigil,
+                            const char *open,
+                            const char *close, ...);
+  Extended varargs API that lets the caller customize the sigil and opening/closing delimiters (for example, customizing $eval{} markers).
+
+- char *papagaio_process_pairs(Papagaio *ctx,
+                               const char *input,
+                               const char **patterns,
+                               const char **repls,
+                               int pair_count);
+  Explicit pairs API to pass arrays of patterns and replacements along with an explicit context.
+
+- char *papagaio_process_text(Papagaio *ctx,
+                              const char *input,
+                              size_t len);
+  Low-level API that processes a raw text buffer of known length and returns a newly allocated C string with the processed output.
+
+Notes about return values: All processing functions return malloc()'d C strings. The caller MUST free() the returned pointer when finished.
+
+Lua module entry points
+- LUALIB_API int luaopen_papagaio(struct lua_State *L);
+  Called by Lua when require("papagaio") is used. Exposes Papagaio functionality to Lua scripts.
+
+- LUALIB_API int luaopen_memory(struct lua_State *L);
+  Auxiliary module (exposed as memory) shipped alongside papagaio for convenience in Lua environments.
+
+Command-line usage
+------------------
+
+After building and installing the project, the "papagaio" executable can be installed to a system bin directory. A simple usage example (the C example in src/main.c):
+
+  papagaio <input-file>
+
+The CLI reads the file, processes it with an explicit Papagaio context and writes the result to stdout. The C main prints localized error messages when files cannot be read or processing fails.
+
+JavaScript / WASM usage
+----------------------
+
+The repository includes a papagaio.js wrapper that loads a WASM module and exposes a small Papagaio class. Example:
+
+  import Papagaio from './papagaio.js';
+
+  const p = new Papagaio();
+  await p.init();
+  const out = p.process('text with $eval{ return 1 + 2 }');
+  console.log(out);
+
+Important notes:
+- Call await papagaio.init() before using process() because the wrapper must initialize the WASM module first.
+- The JS wrapper calls the C API papagaio_process_text under the hood and frees the returned pointer after converting it to a JS string.
+
+Building from source
+--------------------
+
+Requirements:
+- A C compiler (gcc/clang) and CMake (>= 3.10).
+- A Lua dev environment if you plan to build the native Lua module (optional; the library embeds its own VM bindings when building).
+
+Typical steps:
+
+  mkdir build && cd build
+  cmake ..
+  make
+  sudo make install
+
+This will build the static library libpapagaio and the papagaio executable and install the header (papagaio.h) in the system include path if using the provided CMake install rules.
+
+Node / npm
+
+The package.json shows a minimal Node integration (papagaio.js as the JS wrapper and a bin/cli.mjs for the npm binary). Run the included tests with:
+
+  npm test
+
+(That runs node tests/test.js as defined in package.json.)
+
+Examples
+--------
+
+C minimal example (from src/main.c):
+
+  Papagaio *ctx = papagaio_open();
+  papagaio_set_args(ctx, argc, argv);
+  char *out = papagaio_process_text(ctx, input_buf, input_len);
+  if (out) { puts(out); free(out); }
+  papagaio_close(ctx);
+
+JS example (see papagaio.js):
+
+  const pap = new Papagaio();
+  await pap.init();
+  const result = pap.process('hello');
+
+Design notes and behavior
+-------------------------
+
+- Papagaio intentionally favors a small, C-first API surface so it can be embedded easily in native projects.
+- The embedded Lua VM is chosen to provide expressive, runtime-evaluated replacements. The library is compatible with Lua 5.1–5.4 and LuaJIT when linked appropriately.
+- Regex and Unicode handling are implemented through an internal libregexp subcomponent (see CMakeLists and lib/libregexp/).
+- By default, if you pass NULL as the Papagaio context to the convenience APIs, a lazy internal VM/context is used: this is convenient for quick one-shot usage but less suitable for multithreaded workloads.
+
+Contributing
+------------
+
+- Report bugs at: https://github.com/jardimdanificado/papagaio/issues
+- The repository URL is declared in package.json for the upstream project.
+- To contribute: fork, create a topic branch, and make small, focused changes. Open a pull request describing the motivation and the testing performed.
+
+License
+-------
+
+No license file is present in this checkout. Check the upstream repository for license information before using Papagaio in projects that require specific licensing terms.
+
+Authors and contact
+-------------------
+
+Author: jardimdanificado (see package.json). For bug reports, use the GitHub issues link above.
+
+Acknowledgements & internals
+----------------------------
+
+- The CMake build links the math library when not on MSVC and installs header, library and executable using standard CMake install rules.
+- The library bundles a small regular expression and unicode helper code under lib/libregexp/ to provide cross-platform pattern matching.
+
+Usage, Syntax, and Semantics
+============================
+
+Quick Start
+-----------
+
+**CLI:**
+```sh
+papagaio input.txt > output.txt
+```
+
+**C API:**
+```c
+Papagaio *ctx = papagaio_open();
+char *out = papagaio_process(ctx, "pattern", "replacement", NULL);
+printf("%s", out);
+free(out);
+papagaio_close(ctx);
+```
+
+**JavaScript (WASM):**
 ```js
-import Papagaio from "./dist/wasm/papagaio.js"; // or from "papagaio" after publishing
-
+import Papagaio from './papagaio.js';
 const p = new Papagaio();
 await p.init();
-
-const out = p.process(`$pattern {$x} {[$x]}
-hello`);
-console.log(out); // [hello]
-```
-
-## CLI
-
-Install globally:
-
-```bash
-npm install -g papagaio
-```
-
-Run:
-
-```bash
-papagaio file.txt
-```
-
-## C / Lua usage
-
-Build the native library:
-
-```bash
-make
-```
-
-Then in Lua:
-
-```lua
-local pap = require("papagaio")
-local out = pap.process_text("hello", 5)
-print(out)
-```
-
-And the new helper module:
-
-```lua
-local mem = require("memory")
-```
-
-## Configuration
-
-The core engine uses a fixed set of symbols by default:
-
-- `sigil`: `$`
-- `open`: `{`
-- `close`: `}`
-
-If you need custom delimiters or symbols, use the C API directly via `papagaio_process_ex()` (see the C section below), or patch the source to suit your needs.
-
----
-
-## Core Concepts
-
-### 1. Simple Variables
-```
-$pattern {$x} {$x}
-hello
-```
-Output: `hello`
-
-### 2. Multiple Variables
-```
-$pattern {$x $y $z} {$z, $y, $x}
-apple banana cherry
-```
-Output: `cherry, banana, apple`
-
----
-
-## Variables
-
-Papagaio provides flexible variable capture with automatic context-aware behavior.
-
-### `$x` - Smart Variable
-Automatically adapts based on context:
-- **Before a block**: Captures everything until the block's opening delimiter
-- **Before a literal**: Captures everything until that literal appears
-- **Otherwise**: Captures a single word (non-whitespace token)
-
-```
-$pattern {$x} {[$x]}
-hello world
-```
-Output: `[hello] [world]`
-
-```
-$pattern {$name ${(}{)}content} {$name: $content}
-greeting (hello world)
-```
-Output: `greeting: hello world`
-
-```
-$pattern {$prefix:$suffix} {$suffix-$prefix}
-key:value
-```
-Output: `value-key`
-
-### `$x?` - Optional Variable
-Same behavior as `$x`, but won't fail if empty or not found.
-
-```
-$pattern {$x? world} {<$x>}
-world
-```
-Output: `<>`
-
-```
-$pattern {$greeting? $name} {Hello $name$greeting}
-Hi John
-```
-Output: `Hello JohnHi`
-
----
-
-## Regex Matching
-
-Capture content using JavaScript regular expressions.
-
-### Syntax
-```
-$regex varName {pattern}
-```
-
-### Basic Example
-```
-$pattern {$regex num {[0-9]+}} {Number: $num}
-The answer is 42
-```
-Output: `Number: 42`
-
-### Complex Patterns
-```
-$pattern {$regex email {\w+@\w+\.\w+}} {Email found: $email}
-Contact: user@example.com
-```
-Output: `Email found: user@example.com`
-
-### Multiple Regex Variables
-```
-$pattern {$regex year {[0-9]{4}}-$regex month {[0-9]{2}}} {Month $month in $year}
-2024-03
-```
-Output: `Month 03 in 2024`
-
----
-
-## Blocks
-
-Papagaio supports two types of block capture: **nested** and **adjacent**.
-
-### Nested Blocks - `${open}{close}varName`
-
-Captures content between delimiters with full nesting support. Nested delimiters are handled recursively.
-
-#### Basic Syntax
-```
-${opening_delimiter}{closing_delimiter}varName
-```
-
-#### Examples
-
-**Basic Recursive Block:**
-```
-$pattern {$name ${(}{)}content} {[$content]}
-data (hello world)
-```
-Output: `[hello world]`
-
-**Custom Delimiters:**
-```
-$pattern {${<<}{>>}data} {DATA: $data}
-<<json stuff>>
-```
-Output: `DATA: json stuff`
-
-**Multi-Character Delimiters:**
-```
-$pattern {${```}{```}code} {<pre>$code</pre>}
-```markdown
-# Title
-```
-Output: `<pre># Title</pre>`
-
-**Default Delimiters (empty blocks):**
-```
-$pattern {${}{}data} {[$data]}
-{hello world}
-```
-Output: `[hello world]`
-*(Uses default `{` and `}` when delimiters are empty)*
-
-**Nested Blocks:**
-```
-$pattern {${(}{)}outer} {[$outer]}
-(outer (inner (deep)))
-```
-Output: `[outer (inner (deep))]`
-
-### Adjancent Blocks - `$${open}{close}varName`
-
-Captures multiple adjacent blocks with the same delimiters and concatenates their content (separated by spaces).
-
-#### Basic Syntax
-```
-$${opening_delimiter}{closing_delimiter}varName
-```
-
-#### Examples
-
-**Basic Adjacent Block:**
-```
-$pattern {$${[}{]}items} {Items: $items}
-[first][second][third]
-```
-Output: `Items: first second third`
-
-**Adjacent with Custom Delimiters:**
-```
-$pattern {$${<}{>}tags} {Tags: $tags}
-<html><body><div>
-```
-Output: `Tags: html body div`
-
-**Default Delimiters:**
-```
-$pattern {$${}{}data} {Result: $data}
-{a}{b}{c}
-```
-Output: `Result: a b c`
-
-**Mixed Usage:**
-```
-$pattern {${(}{)}nested, $${[}{]}seq} {Nested: $nested | Seq: $seq}
-(a (b c)), [x][y][z]
-```
-Output: `Nested: a (b c) | Seq: x y z`
-
-### Block Comparison
-
-| Feature | Nested `${}{}var` | Adjacent `$${}{}var` |
-|---------|---------------------|------------------------|
-| Purpose | Capture nested content | Capture adjacent blocks |
-| Input | `[a [b [c]]]` | `[a][b][c]` |
-| Output | `a [b [c]]` | `a b c` |
-| Nesting | Handled recursively | Not nested, sequential |
-| Spacing | Preserves internal structure | Joins with spaces |
-
----
-
-## Pattern Scopes
-
-Patterns defined within a replacement body create nested scopes with hierarchical inheritance.
-
-### Basic Pattern
-```
-$pattern {hello} {world}
-hello
-```
-Output: `world`
-
-**Key Properties:**
-* Patterns are scoped to their context
-* Child patterns inherit parent patterns
-* Patterns do not persist between `process()` calls
-* Perfect for hierarchical transformations
-
-### Nested Patterns with Inheritance
-```
-$pattern {outer $x} {
-  $pattern {inner $y} {[$y from $x]}
-  inner $x
-}
-outer hello
-```
-Output: `[hello from hello]`
-
-The inner pattern has access to `$x` from the outer pattern's capture.
-
-### Deep Nesting
-```
-$pattern {level1 $a} {
-  $pattern {level2 $b} {
-    $pattern {level3 $c} {$a > $b > $c}
-    level3 $b
-  }
-  level2 $a
-}
-level1 ROOT
-```
-Output: `ROOT > ROOT > ROOT`
-
-Each nested level inherits all patterns from parent scopes.
-
-### Sibling Scopes Don't Share
-```
-$pattern {branch1} {
-  $pattern {x} {A}
-  x
-}
-$pattern {branch2} {
-  x
-}
-branch1
-branch2
-```
-Output:
-```
-A
-x
-```
-
-Patterns in `branch1` are not available in `branch2` (they are siblings, not parent-child).
-
----
-
-## Special Keywords
-
-### $eval
-Executes JavaScript code with access to the Papagaio instance.
-
-```
-$pattern {$x} {$eval{return parseInt($x)*2;}}
-5
-```
-Output: `10`
-
-**Accessing Papagaio Instance:**
-```
-$pattern {info} {$eval{
-  return `Content length: ${papagaio.content.length}`;
-}}
-info
-```
-
-**Multi-character delimiters:**
-```
-$pattern {$x} {$eval<<parseInt($x)*2>>}
-5
-```
-Output: `10`
-
----
-
-## Important Rules
-
-### Variable Matching
-* `$x` = smart capture (context-aware: word, until literal, or until block)
-* `$x?` = optional version of `$x` (won't fail if empty)
-* `$regex name {pattern}` = regex-based capture
-* Variables automatically skip leading whitespace
-* Trailing whitespace is trimmed when variables appear before literals
-
-### Block Matching
-* `${open}{close}name` = nested block capture
-* `$${open}{close}name` = adjacent block capture (captures adjacent blocks)
-* Supports multi-character delimiters of any length
-* Empty delimiters `${}{}name` or `$${}{}name` use defaults from `symbols.open` and `symbols.close`
-* Sequential blocks are joined with spaces in the captured variable
-
-### Pattern Matching
-* `$pattern {match} {replace}` = pattern scoped to current context
-* Patterns inherit from parent scopes hierarchically
-* Each `process()` call starts with a clean slate (no persistence)
-
----
-
-## Multi-Character Delimiter Support
-
-Papagaio fully supports multi-character delimiters throughout all features.
-
-### Configuration
-```javascript
-const p = new Papagaio('$', '<<<', '>>>');
-```
-
-### In Patterns
-```
-$pattern<<<$x>>> <<<[$x]>>>
-hello
-```
-Output: `[hello]`
-
-### In Blocks
-```
-$pattern<<<${<<}{>>}data>>> <<<$data>>>
-<<content>>
-```
-Output: `content`
-
-### In Eval
-```
-$pattern<<<$x>>> <<<$eval<<<return $x + 1>>>>>>
-5
-```
-Output: `6`
-
----
-
-## Advanced Examples
-
-### Markdown-like Processor (legacy)
-`pap.parse` / `pap.generate` foram removidos do núcleo principal e são considerados suporte legado. O foco atual do engine é `pap.process` / `pap.process_text`.
-
-Para conversão Markdown -> HTML você pode ainda escrever suas próprias regras de pattern:
-```javascript
-const p = new Papagaio();
-const template = `
-$pattern {# $title} {<h1>$title</h1>}
-$pattern {## $title} {<h2>$title</h2>}
-$pattern {**$text**} {<strong>$text</strong>}
-
-# Hello World
-## Subtitle
-**bold text**
-`;
-
-p.process(template);
-// Output:
-// <h1>Hello World</h1>
-// <h2>Subtitle</h2>
-// <strong>bold text</strong>
-```
-
-### Array/List Processor
-```javascript
-const p = new Papagaio();
-const template = `
-$pattern {$${[}{]}items} {
-  $eval{
-    const arr = '$items'.split(' ');
-    return arr.map((x, i) => \`\${i + 1}. \${x}\`).join('\\n');
-  }
-}
-
-[apple][banana][cherry]
-`;
-
-p.process(template);
-// Output:
-// 1. apple
-// 2. banana
-// 3. cherry
-```
-
-### Template System with State
-```javascript
-const p = new Papagaio();
-p.vars = {}; // Custom property for storing variables
-
-const template = `
-$pattern {var $name = $value} {$eval{
-  papagaio.vars['$name'] = '$value';
-  return '';
-}}
-$pattern {get $name} {$eval{
-  return papagaio.vars['$name'] || 'undefined';
-}}
-
-var title = My Page
-var author = John Doe
-Title: get title
-Author: get author
-`;
-
-p.process(template);
-// Output:
-// Title: My Page
-// Author: John Doe
-```
-
-### Conditional Processing
-```javascript
-const p = new Papagaio();
-const template = `
-$pattern {if ${(}{)}cond then ${[}{]}yes else ${<}{>}no} {
-  $eval{
-    const condition = ($cond).trim();
-    return condition === 'true' ? '$yes' : '$no';
-  }
-}
-
-if (true) then [yes branch] else <no branch>
-if (false) then [yes branch] else <no branch>
-`;
-
-p.process(template);
-// Output:
-// yes branch
-// no branch
-```
-
-### Function-like Patterns
-```javascript
-const p = new Papagaio();
-const template = `
-$pattern {double $x} {$eval{return parseInt('$x') * 2}}
-$pattern {add $x $y} {$eval{return parseInt('$x') + parseInt('$y')}}
-
-double 5
-add 3 7
-add (double 4) 10
-`;
-
-p.process(template);
-// Output:
-// 10
-// 10
-// 18
-```
-
-### Sequential Block Processing
-```javascript
-const p = new Papagaio();
-const template = `
-$pattern {sum $${[}{]}nums} {
-  $eval{
-    const numbers = '$nums'.split(' ').map(x => parseInt(x));
-    return numbers.reduce((a, b) => a + b, 0);
-  }
-}
-
-sum [10][20][30][40]
-`;
-
-p.process(template);
-// Output: 100
-```
-
----
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| Variable not captured | Check context: use `$x?` for optional, or verify literals/blocks exist |
-| Block mismatch | Verify opening and closing delimiters match the declaration |
-| Infinite recursion | Pattern creates circular transformation; redesign pattern logic |
-| Pattern not matching | Verify whitespace between tokens, check if variable should be optional |
-| Pattern not available | Check scope hierarchy; patterns only inherit from parents, not siblings |
-| Nested blocks fail | Ensure delimiters are properly balanced |
-| Multi-char delimiters broken | Check delimiters don't conflict; use escaping if needed |
-| Regex not matching | Test regex pattern separately; ensure it matches at the exact position |
-| Empty delimiter behavior | `${}{}x` uses defaults; explicitly set if you need different behavior |
-
----
-
-## Syntax Reference
-
-```
-$pattern {$x $y} {$y, $x}            # pattern with variables
-$pattern {$x? $y} {$y, $x}           # optional variable
-$pattern {$regex n {[0-9]+}} {$n}    # regex capture
-$pattern {${o}{c}n} {$n}             # recursive block (nested)
-$pattern {$${o}{c}n} {$n}            # sequential block (adjacent)
-$pattern {${}{}n} {$n}               # block with default delimiters
-$eval{code}                          # JavaScript evaluation
-```
-
----
-
-## API Reference
-
-### Constructor
-```javascript
-new Papagaio(sigil, open, close, pattern, evalKw, blockKw, regexKw, blockseqKw)
-```
-
-**Parameters:**
-- `sigil` (default: `'$'`) - Variable prefix
-- `open` (default: `'{'`) - Opening delimiter
-- `close` (default: `'}'`) - Closing delimiter
-- `pattern` (default: `'pattern'`) - Pattern keyword
-- `evalKw` (default: `'eval'`) - Eval keyword
-- `regexKw` (default: `'regex'`) - Regex keyword
-
-### Properties
-- `papagaio.content` - Last processed output
-- `papagaio.match` - Last matched substring (available in replacements)
-- `papagaio.symbols` - Configuration object
-- `papagaio.exit` - Optional hook function called after processing
-
-### Methods
-- `papagaio.process(input)` - Process input text and return transformed output
-
-### C / Lua Native API (detailed)
-#### C API
+console.log(p.process('your text here'));
+```
+
+Pattern Syntax
+--------------
+- Patterns are whitespace-separated tokens. Each token can be:
+  - A literal (matches exactly)
+  - A variable: `$name` (captures one token)
+  - Optional: `$name?` (capture is optional)
+  - With type: `$age$int`, `$word$upper` (see modifiers below)
+  - Regex: `$regex$id {\d+}` (captures using regex)
+  - Block: `$block{[}{]}item` (captures inside delimiters)
+  - Aliases: `$kind$aliases{cat,dog}` (matches one of the listed words)
+
+Change Delimiters
+-----------------
+- `$changequote{sigil}{open}{close}`: Changes the sigil and delimiters for the rest of the text.
+  Example: `$changequote{@}{<}{>} @eval<return 1+1>` outputs `2`.
+
+Replacement Syntax
+------------------
+- Use `$name` to insert a capture.
+- Use `$eval{ ... }` to run Lua code and insert the result. The variable `match` is set to the matched text.
+
+Examples
+--------
+**Simple:**
+```txt
+Pattern:      $name $age$int
+Replacement:  Name: $name, Age: $age
+Input:        Alice 42
+Output:       Name: Alice, Age: 42
+```
+
+**Regex + Eval:**
+```txt
+Pattern:      $regex$n {\d+}
+Replacement:  Number: $n, doubled: $eval{ return tonumber(match) * 2 }
+Input:        123
+Output:       Number: 123, doubled: 246
+```
+
+**Block Sequence:**
+```txt
+Pattern:      $blockseq{[}{]}items
+Replacement:  Items: $items
+Input:        [a][b][c]
+Output:       Items: a b c
+```
+
+**Aliases and Optional:**
+```txt
+Pattern:      $kind$aliases{cat,dog} $name?
+Replacement:  Kind: $kind, Name: $name
+Input:        dog Rover
+Output:       Kind: dog, Name: Rover
+Input:        cat
+Output:       Kind: cat, Name: 
+```
+
+Modifiers
+---------
+- `$var$int`, `$var$float`, `$var$number`: restricts to numbers
+- `$var$upper`, `$var$lower`, `$var$capitalized`: restricts case
+- `$var$word`, `$var$identifier`, `$var$hex`, `$var$path`, `$var$binary`, `$var$percent`
+- `$var$aliases{a,b,c}`: matches one of the listed
+- `$var$optional{literal}`: matches literal if present, else empty
+- `$var$starts{literal}`, `$var$ends{literal}`: must start/end with literal
+
+Escaping
+--------
+- Use `\$` to insert a literal `$`.
+
+Custom Delimiters
+-----------------
+- Use the extended API to change sigil and delimiters:
 ```c
-Papagaio *papagaio_open(void);
-void papagaio_close(Papagaio *ctx);
-void papagaio_cleanup(void);
-struct lua_State *papagaio_L(Papagaio *ctx);
-void papagaio_set_args(Papagaio *ctx, int argc, char **argv);
-char *papagaio_process(const char *input, ...);
-char *papagaio_process_ex(const char *input, const char *sigil, const char *open, const char *close, ...);
-char *papagaio_process_pairs(Papagaio *ctx, const char **patterns, const char **repls, int pair_count);
-char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len);
+papagaio_process_ex(ctx, "@", "<", ">", "@name", "Hello <@name>", NULL);
 ```
 
-- `papagaio_open` — cria contexto com novo Lua state.
-- `papagaio_close` — libera contexto.
-- `papagaio_cleanup` — limpa VM global paara chamadas sem contexto.
-- `papagaio_L` — retorna lua_State interno (ou NULL).
-- `papagaio_set_args` — define `arg` global no Lua de um contexto.
-- `papagaio_process` — usa pares (pat, repl) terminados em NULL.
-- `papagaio_process_ex` — permite símbolos custom.
-- `papagaio_process_pairs` — processa lista de regras.
-- `papagaio_process_text` — processa texto inteiro com contexto e eval.
+How It Works
+------------
+- Patterns are applied in order. Each match replaces the matched text with the replacement, then continues scanning.
+- `$eval{}` blocks are evaluated after replacements are inserted.
+- All output strings are malloc'd; free them after use (C API).
 
-#### Lua `papagaio` module
-- `papagaio.process(input, pat, repl, ...)`
-- `papagaio.process_ex(input, sigil, open, close, pat, repl, ...)`
-- `papagaio.process_pairs(input, table)`
-- `papagaio.process_text(input)`
-
-#### Lua `memory` helper module
-```lua
-local mem = require('memory')
-```
-- `mem.alloc(size)` → pointer
-- `mem.free(ptr)`
-- `mem.realloc(ptr, size)`
-- `mem.zero(ptr, size)`
-- `mem.copy(dst, src, size)`
-- `mem.set(ptr, value, size)`
-- `mem.compare(a, b, size)`
-- `mem.string(ptr)` → string
-- `mem.readi8(ptr), mem.writei8(ptr, v)`
-- `mem.readu8(ptr), mem.writeu8(ptr, v)`
-- `mem.readi16(ptr), mem.writei16(ptr, v)`
-- `mem.readu16(ptr), mem.writeu16(ptr, v)`
-- `mem.readi32(ptr), mem.writei32(ptr, v)`
-- `mem.readu32(ptr), mem.writeu32(ptr, v)`
-- `mem.readi64(ptr), mem.writei64(ptr, v)`
-- `mem.readu64(ptr), mem.writeu64(ptr, v)`
-- `mem.readf32(ptr), mem.writef32(ptr, v)`
-- `mem.readf64(ptr), mem.writef64(ptr, v)`
-
-### Exit Hook
-```javascript
-const p = new Papagaio();
-p.exit = function() {
-  console.log('Processing complete:', this.content);
-};
-p.process('$pattern {x} {y}\nx');
-```
-
----
-
-## Performance Notes
-
-* Multi-character delimiter matching is optimized with substring operations
-* Sequential blocks scan for adjacent matches without recursion overhead
-* Nested patterns inherit parent patterns through recursive application
-* Nested blocks and patterns have no theoretical depth limit
-* Large recursion limits can impact performance on complex inputs
-* Each `process()` call is independent with no persistent state between calls
-
----
-
-## C / WASM Core (Native)
-
-The engine is implemented in C (`src/papagaio.c`) and is used by the Node/browser WASM wrapper and the Lua module.
-It supports the full language (patterns, blocks, regex, `$eval{}`, sequential blocks, etc.).
-
-### Installation & Usage
-
-#### Basic Usage (Default Symbols)
-```c
-#include "src/papagaio.h"
-
-char *result = papagaio_process(
-    "hello world",
-    "$a $b",
-    "[$a] [$b]"
-);
-printf("%s\n", result);  // [hello] [world]
-free(result);
-```
-
-#### Custom Symbols
-```c
-char *result = papagaio_process_ex(
-    "hello world",
-    "@a @b",
-    "[@a] [@b]",
-    "@",    // sigil
-    "[",    // open delimiter
-    "]"     // close delimiter
-);
-printf("%s\n", result);  // [hello] [world]
-free(result);
-```
-
-#### Multi-Character Delimiters
-```c
-char *result = papagaio_process_ex(
-    "data <<content>>",
-    "%p %{<<}{>>}b",
-    "%p: %b",
-    "%", "<<", ">>"
-);
-printf("%s\n", result);  // data: content
-free(result);
-```
-
-### API Reference
-
-#### Functions
-```c
-char *papagaio_process(
-    const char *input,
-    const char *pattern,
-    const char *replacement
-);
-```
-Process input with default symbols (`$`, `{`, `}`).
-```c
-char *papagaio_process_ex(
-    const char *input,
-    const char *pattern,
-    const char *replacement,
-    const char *sigil,
-    const char *open,
-    const char *close
-);
-```
-Process input with custom symbols (supports multi-character delimiters).
-
-**Returns:** Dynamically allocated string (caller must `free()`)
-
-### Native C / WASM Core
-
-The engine lives in C (`src/papagaio.c`) and is shipped as:
-
-- **Native shared library** (`papagaio.so` / `papagaio.dll`)
-- **WASM module** (`dist/wasm/papagaio_wasm.js`) used by the JS wrapper
-- **Lua module** (`require("papagaio")`) with full `$eval{}` support
-
-It implements the full feature set (smart variables, nested patterns & blocks, sequential blocks, regex, `$eval{}`, etc.) and is the same core used by the Node/browser wrapper.
-
-### Building
-
-```bash
-make          # native + wasm + CLI
-make wasm     # wasm-only output (dist/wasm)
-```
-
-### Lua `memory` helper (new)
-
-A small raw-byte helper is exposed via `require("memory")`. Pointers are represented as integers.
-
-```lua
-local mem = require("memory")
-local p = mem.alloc(16)
-mem.set(p, 0x41, 4)     -- fill with 'A'
-print(string.char(mem.readu8(p), mem.readu8(p+1)))
-mem.free(p)
-```
-
----
-
-
-
-
-***PAPAGAIO IS CURRENTLY IN HEAVY DEVELOPMENT AND EXPERIMENTATION PHASE***
+For more, see the code or open an issue with your use case.
