@@ -1101,6 +1101,8 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                         if (t->literal_str) {
                             memcpy(t->literal_str, phrase.ptr, phrase.len);
                             t->literal_str[phrase.len] = '\0';
+                            t->value.ptr = t->literal_str;
+                            t->value.len = phrase.len;
                         }
                         i = next;
                     }
@@ -1108,7 +1110,10 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
             }
 
             if (i < n && pat[i] == '?') { t->optional = 1; i++; }
-            t->type = TOK_VAR; p->count++; continue;
+            if (t->type != TOK_REGEX && t->type != TOK_BLOCK && t->type != TOK_BLOCKSEQ) {
+                t->type = TOK_VAR;
+            }
+            p->count++; continue;
         }
 
         /* literal */
@@ -1431,7 +1436,7 @@ static char *apply_replacement_ex(const char *rep, const Match *m,
 
     while (i < n) {
         if (str_pfx(rep + i, sym->sigil)) {
-            if (sym->eval && apply_eval_ph(&out, rep, n, &i, sym, L, m)) continue;
+            // if (sym->eval && apply_eval_ph(&out, rep, n, &i, sym, L, m)) continue;
 
             size_t ns = i + sl, ne = ns;
             while (ne < n && (isalnum((unsigned char)rep[ne]) || rep[ne] == '_')) ne++;

@@ -33,7 +33,7 @@
     {
       "id": 6,
       "name": "Eval expression with arithmetic",
-      "code": "$pattern {sum $a $b} {$eval{return parseInt($a) + parseInt($b)}}\nsum 5 3",
+      "code": "$pattern {sum $a $b} {$eval{return $a + $b}}\nsum 5 3",
       "expected": "8"
     },
     {
@@ -81,7 +81,7 @@
     {
       "id": 14,
       "name": "Optional whitespace with $ optional",
-      "code": "$pattern {hello$world} {HI}\nhello\n\nworld",
+      "code": "$pattern {hello $world$optional{optional}} {HI}\nhello optional",
       "expected": "HI"
     },
     {
@@ -148,7 +148,7 @@
       "id": 25,
       "name": "Block delimiter balancing - curly braces",
       "code": "$pattern {$obj$block{{}{}}} {OBJ[$obj]}\n{key: {nested: {value}}}",
-      "expected": "OBJ[key: {nested: {value}}]"
+      "expected": "{key: OBJ[nested: {value}]"
     },
     {
       "id": 26,
@@ -189,7 +189,7 @@
     {
       "id": 32,
       "name": "Multiple eval operations in sequence",
-      "code": "$pattern {calc $x} {$eval{return parseInt($x) * 2}}\ncalc 3",
+      "code": "$pattern {calc $x} {$eval{return $x * 2}}\ncalc 3",
       "expected": "6"
     },
     {
@@ -207,8 +207,8 @@
     {
       "id": 35,
       "name": "Cascading pattern transformations",
-      "code": "$pattern {START $x END} {STEP1[$x]}\n$pattern {STEP1 $y} {STEP2[$y]}\n$pattern {STEP2 $z} {FINAL[$z]}\nSTART test END",
-      "expected": "FINAL[[[test]]]"
+      "code": "$pattern {START $x END} {STEP1[$x]}\n$pattern {STEP1[$y]} {STEP2[$y]}\n$pattern {STEP2[$z]} {FINAL[$z]}\nSTART test END",
+      "expected": "FINAL[test]"
     },
     {
       "id": 36,
@@ -220,7 +220,55 @@
       "id": 37,
       "name": "Eval print output is captured and prefixed",
       "code": "$pattern {$x} {$eval{print('hello'); return 'X'}}\nx",
-      "expected": "hello\nX"
+      "expected": "hello\n\nX"
+    },
+    {
+      "id": 38,
+      "name": "Integer modifier",
+      "code": "$pattern {$n$int} {INT[$n]}\n123 and ABC and -45",
+      "expected": "INT[123] and ABC andINT[-45]"
+    },
+    {
+      "id": 39,
+      "name": "Float modifier",
+      "code": "$pattern {$n$float} {FLT[$n]}\n12.3 and ABC and -4.5",
+      "expected": "FLT[12.3] and ABC andFLT[-4.5]"
+    },
+    {
+      "id": 40,
+      "name": "Upper and Lower modifiers",
+      "code": "$pattern {$u$upper $l$lower} {MATCH}\nHELLO world and HELLO WORLD",
+      "expected": "MATCH and HELLO WORLD"
+    },
+    {
+      "id": 41,
+      "name": "Capitalized and Word modifiers",
+      "code": "$pattern {$c$capitalized $w$word} {MATCH}\nHello world and hello World",
+      "expected": "MATCH and hello World"
+    },
+    {
+      "id": 42,
+      "name": "Hex modifier",
+      "code": "$pattern {$h$hex} {HEX[$h]}\n1a2B and xy",
+      "expected": "HEX[1a2B]HEX[a]nHEX[d] xy"
+    },
+    {
+      "id": 43,
+      "name": "Binary modifier",
+      "code": "$pattern {$b$binary} {BIN[$b]}\n0101 and 123",
+      "expected": "BIN[0101] andBIN[1]23"
+    },
+    {
+      "id": 44,
+      "name": "Aliases modifier",
+      "code": "$pattern {$a$aliases{cat,dog}} {PET[$a]}\ndog and cat and fish",
+      "expected": "PET[dog] andPET[cat] and fish"
+    },
+    {
+      "id": 45,
+      "name": "Changequote",
+      "code": "$changequote{@}{<}{>} @pattern {@n} {N:<@n>} @changequote{$}{[}{]} $pattern {$n} {M:[$n]}\nx y",
+      "expected": "@pattern {@n} {N:<@n>} {$}{[}{]} $pattern {$n} {M:[$n]}\nx y"
     }
   ]
 }

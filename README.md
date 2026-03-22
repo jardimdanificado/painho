@@ -1,182 +1,24 @@
 Papagaio
 ========
 
-Papagaio is a C-first, embeddable text processing and pattern-matching preprocessor that exposes a small, well-documented C API, a native Lua module, a command-line executable, and a JavaScript/WASM wrapper for browser/node usage. It embeds a Lua VM (supports Lua 5.1–5.4 and LuaJIT) to run dynamic $eval{} blocks and provides flexible pattern/replacement APIs intended for rapid, scriptable source preprocessing and text generation.
+Papagaio is a C-first, embeddable text processing and pattern-matching preprocessor. It exposes a small, well-documented C API, a native Lua module, a command-line executable, and a JavaScript/WASM wrapper for browser and Node.js usage. 
 
-Key Features
-------------
-
-- C library (libpapagaio): static library intended for embedding in C projects. Includes Unicode-aware regexp support via an internal libregexp component.
-- Embedded Lua VM: Papagaio embeds a Lua VM so replacements or evaluation blocks can run arbitrary Lua code securely in-process.
-- Native Lua module: Builds a papagaio.so so Lua projects can require("papagaio") and use the library directly from Lua.
-- Command-line tool: A small CLI executable (built from src/main.c) that reads a file, processes it and writes the output to stdout.
-- JavaScript/WASM wrapper: papagaio.js exposes a JS-friendly Papagaio class that uses an Emscripten-produced WASM module (papagaio_wasm.js) for browser/node usage.
-- Flexible APIs: Several C APIs for various use cases — convenience varargs API, explicit context API, pair-based processing, and raw buffer processing.
-- Safe ownership / memory model: Processing functions return malloc'd C strings. Callers are responsible for freeing the returned memory.
+By embedding a Lua VM (compatible with Lua 5.1-5.4 and LuaJIT), Papagaio allows you to run dynamic evaluation blocks in-process. It provides highly flexible pattern and replacement APIs designed for rapid, scriptable source preprocessing and code generation.
 
 What Papagaio Does
 ------------------
 
-Papagaio is a preprocessor engine: it scans input text and performs pattern-based substitutions and scripted evaluations. It is suitable to implement macros, pattern-driven code generation, template-like transformations, and any text-processing pipeline where embedding a tiny scripting VM (Lua) is desirable.
-
-Public Interfaces
------------------
-
-C API (header: src/papagaio.h)
-- Papagaio *papagaio_open(void);
-  Create a new context. This also creates/attaches a fresh Lua state for $eval{} execution.
-
-- void papagaio_close(Papagaio *ctx);
-  Destroy a context and free all associated resources.
-
-- void papagaio_cleanup(void);
-  Cleanup lazy/global VM state (the library registers this to run at exit too).
-
-- struct lua_State *papagaio_L(Papagaio *ctx);
-  Borrow the inner lua_State* if the embedding application needs direct access to the Lua VM.
-
-- void papagaio_set_args(Papagaio *ctx, int argc, char **argv);
-  Pass program arguments into the internal Lua state (useful when running scripts relying on arg/argv).
-
-- char *papagaio_process(const char *input, ...);
-  Convenience varargs API accepting NULL-terminated pairs of pattern/replacement strings.
-
-- char *papagaio_process_ex(const char *input,
-                            const char *sigil,
-                            const char *open,
-                            const char *close, ...);
-  Extended varargs API that lets the caller customize the sigil and opening/closing delimiters (for example, customizing $eval{} markers).
-
-- char *papagaio_process_pairs(Papagaio *ctx,
-                               const char *input,
-                               const char **patterns,
-                               const char **repls,
-                               int pair_count);
-  Explicit pairs API to pass arrays of patterns and replacements along with an explicit context.
-
-- char *papagaio_process_text(Papagaio *ctx,
-                              const char *input,
-                              size_t len);
-  Low-level API that processes a raw text buffer of known length and returns a newly allocated C string with the processed output.
-
-Notes about return values: All processing functions return malloc()'d C strings. The caller MUST free() the returned pointer when finished.
-
-Lua module entry points
-- LUALIB_API int luaopen_papagaio(struct lua_State *L);
-  Called by Lua when require("papagaio") is used. Exposes Papagaio functionality to Lua scripts.
-
-- LUALIB_API int luaopen_memory(struct lua_State *L);
-  Auxiliary module (exposed as memory) shipped alongside papagaio for convenience in Lua environments.
-
-Command-line usage
-------------------
-
-After building and installing the project, the "papagaio" executable can be installed to a system bin directory. A simple usage example (the C example in src/main.c):
-
-  papagaio <input-file>
-
-The CLI reads the file, processes it with an explicit Papagaio context and writes the result to stdout. The C main prints localized error messages when files cannot be read or processing fails.
-
-JavaScript / WASM usage
-----------------------
-
-The repository includes a papagaio.js wrapper that loads a WASM module and exposes a small Papagaio class. Example:
-
-  import Papagaio from './papagaio.js';
-
-  const p = new Papagaio();
-  await p.init();
-  const out = p.process('text with $eval{ return 1 + 2 }');
-  console.log(out);
-
-Important notes:
-- Call await papagaio.init() before using process() because the wrapper must initialize the WASM module first.
-- The JS wrapper calls the C API papagaio_process_text under the hood and frees the returned pointer after converting it to a JS string.
-
-Building from source
---------------------
-
-Requirements:
-- A C compiler (gcc/clang) and CMake (>= 3.10).
-- A Lua dev environment if you plan to build the native Lua module (optional; the library embeds its own VM bindings when building).
-
-Typical steps:
-
-  mkdir build && cd build
-  cmake ..
-  make
-  sudo make install
-
-This will build the static library libpapagaio and the papagaio executable and install the header (papagaio.h) in the system include path if using the provided CMake install rules.
-
-Node / npm
-
-The package.json shows a minimal Node integration (papagaio.js as the JS wrapper and a bin/cli.mjs for the npm binary). Run the included tests with:
-
-  npm test
-
-(That runs node tests/test.js as defined in package.json.)
-
-Examples
---------
-
-C minimal example (from src/main.c):
-
-  Papagaio *ctx = papagaio_open();
-  papagaio_set_args(ctx, argc, argv);
-  char *out = papagaio_process_text(ctx, input_buf, input_len);
-  if (out) { puts(out); free(out); }
-  papagaio_close(ctx);
-
-JS example (see papagaio.js):
-
-  const pap = new Papagaio();
-  await pap.init();
-  const result = pap.process('hello');
-
-Design notes and behavior
--------------------------
-
-- Papagaio intentionally favors a small, C-first API surface so it can be embedded easily in native projects.
-- The embedded Lua VM is chosen to provide expressive, runtime-evaluated replacements. The library is compatible with Lua 5.1–5.4 and LuaJIT when linked appropriately.
-- Regex and Unicode handling are implemented through an internal libregexp subcomponent (see CMakeLists and lib/libregexp/).
-- By default, if you pass NULL as the Papagaio context to the convenience APIs, a lazy internal VM/context is used: this is convenient for quick one-shot usage but less suitable for multithreaded workloads.
-
-Contributing
-------------
-
-- Report bugs at: https://github.com/jardimdanificado/papagaio/issues
-- The repository URL is declared in package.json for the upstream project.
-- To contribute: fork, create a topic branch, and make small, focused changes. Open a pull request describing the motivation and the testing performed.
-
-License
--------
-
-No license file is present in this checkout. Check the upstream repository for license information before using Papagaio in projects that require specific licensing terms.
-
-Authors and contact
--------------------
-
-Author: jardimdanificado (see package.json). For bug reports, use the GitHub issues link above.
-
-Acknowledgements & internals
-----------------------------
-
-- The CMake build links the math library when not on MSVC and installs header, library and executable using standard CMake install rules.
-- The library bundles a small regular expression and unicode helper code under lib/libregexp/ to provide cross-platform pattern matching.
-
-Usage, Syntax, and Semantics
-============================
+At its core, Papagaio is a preprocessor engine. It scans input text and performs pattern-based substitutions alongside scripted evaluations. You can use it to build macros, pattern-driven code generators, template engines, or any text-processing pipeline where embedding a tiny, efficient scripting VM is advantageous.
 
 Quick Start
 -----------
 
-**CLI:**
+Command Line Interface (CLI):
 ```sh
 papagaio input.txt > output.txt
 ```
 
-**C API:**
+C API:
 ```c
 Papagaio *ctx = papagaio_open();
 char *out = papagaio_process(ctx, "pattern", "replacement", NULL);
@@ -185,9 +27,10 @@ free(out);
 papagaio_close(ctx);
 ```
 
-**JavaScript (WASM):**
-```js
+JavaScript / WASM (Node.js or Browser):
+```javascript
 import Papagaio from './papagaio.js';
+
 const p = new Papagaio();
 await p.init();
 console.log(p.process('your text here'));
@@ -195,85 +38,122 @@ console.log(p.process('your text here'));
 
 Pattern Syntax
 --------------
-- Patterns are whitespace-separated tokens. Each token can be:
-  - A literal (matches exactly)
-  - A variable: `$name` (captures one token)
-  - Optional: `$name?` (capture is optional)
-  - With type: `$age$int`, `$word$upper` (see modifiers below)
-  - Regex: `$id$regex {\d+}` (captures using regex)
-  - Block: `$item$block{[}{]}` (captures inside delimiters)
-  - Aliases: `$kind$aliases{cat,dog}` (matches one of the listed words)
 
-Change Delimiters
------------------
-- `$changequote{sigil}{open}{close}`: Changes the sigil and delimiters for the rest of the text.
-  Example: `$changequote{@}{<}{>} @eval<return 1+1>` outputs `2`.
+Patterns are composed of whitespace-separated tokens. The syntax places the variable name first, followed by an optional modifier.
+
+- Literal: Matches exactly the provided text.
+- Variable: `$name` (captures one token sequence).
+- Optional capture: `$name?` (capture is optional).
+
+Modifiers allow you to specify the exact type of match you want:
+- Numbers: `$var$int`, `$var$float`, `$var$number`
+- Casing: `$var$upper`, `$var$lower`, `$var$capitalized`
+- Special formats: `$var$word`, `$var$identifier`, `$var$hex`, `$var$path`, `$var$binary`, `$var$percent`
+- Regex: `$id$regex{[0-9]+}` (captures matching a custom regular expression)
+- Block: `$item$block{[}{]}` (captures everything inside the specified delimiters)
+- Aliases: `$kind$aliases{cat,dog}` (matches one of the listed exact words)
+- Fixed matches: `$var$optional{literal}`, `$var$starts{literal}`, `$var$ends{literal}`
 
 Replacement Syntax
 ------------------
-- Use `$name` to insert a capture.
-- Use `$eval{ ... }` to run Lua code and insert the result. The variable `match` is set to the matched text.
+
+- Variables: Use `$name` to insert a captured token.
+- Evaluation Blocks: Use `$eval{ ... }` to run Lua code on the fly and insert its returned result. 
+
+Inside an `$eval{}` block, you have access to the full match string via the `match` variable, and any captured variables in your pattern are automatically expanded inside the string prior to Lua execution, making it trivial to process matched inputs sequentially.
 
 Examples
 --------
-**Simple:**
-```txt
+
+1. Basic Data Extraction
+```text
 Pattern:      $name $age$int
 Replacement:  Name: $name, Age: $age
 Input:        Alice 42
 Output:       Name: Alice, Age: 42
 ```
 
-**Regex + Eval:**
-```txt
-Pattern:      $n$regex {\d+}
-Replacement:  Number: $n, doubled: $eval{ return tonumber(match) * 2 }
-Input:        123
-Output:       Number: 123, doubled: 246
+2. Mathematical Evaluation
+```text
+Pattern:      calc $x
+Replacement:  $eval{return $x * 2}
+Input:        calc 3
+Output:       6
 ```
 
-**Block Sequence:**
-```txt
+3. Block Sequence Matching
+```text
 Pattern:      $items$blockseq{[}{]}
 Replacement:  Items: $items
 Input:        [a][b][c]
 Output:       Items: a b c
 ```
 
-**Aliases and Optional:**
-```txt
+4. Aliases and Optional Captures
+```text
 Pattern:      $kind$aliases{cat,dog} $name?
 Replacement:  Kind: $kind, Name: $name
 Input:        dog Rover
 Output:       Kind: dog, Name: Rover
+
 Input:        cat
 Output:       Kind: cat, Name: 
 ```
 
-Modifiers
----------
-- `$var$int`, `$var$float`, `$var$number`: restricts to numbers
-- `$var$upper`, `$var$lower`, `$var$capitalized`: restricts case
-- `$var$word`, `$var$identifier`, `$var$hex`, `$var$path`, `$var$binary`, `$var$percent`
-- `$var$aliases{a,b,c}`: matches one of the listed
-- `$var$optional{literal}`: matches literal if present, else empty
-- `$var$starts{literal}`, `$var$ends{literal}`: must start/end with literal
+Customization
+-------------
 
-Escaping
---------
-- Use `\$` to insert a literal `$`.
+You can change the control sigil and delimiters dynamically during processing:
 
-Custom Delimiters
------------------
-- Use the extended API to change sigil and delimiters:
+```text
+$changequote{@}{<}{>} @eval<return 1+1>
+```
+
+This outputs `2`. You can also configure identical behaviors from the C extended processing API:
 ```c
 papagaio_process_ex(ctx, "@", "<", ">", "@name", "Hello <@name>", NULL);
 ```
 
-How It Works
-------------
-- Patterns are applied in order. Each match replaces the matched text with the replacement, then continues scanning.
-- `$eval{}` blocks are evaluated after replacements are inserted.
-- All output strings are malloc'd; free them after use (C API).
+Public Interfaces
+-----------------
 
-For more, see the code or open an issue with your use case.
+C API Highlights (Header: src/papagaio.h):
+- papagaio_open: Creates a new context and initializes a fresh Lua state.
+- papagaio_close: Destroys a context and frees all resources.
+- papagaio_set_args: Passes program arguments into the internal Lua state.
+- papagaio_process: Convenience varargs API for generic processing.
+- papagaio_process_pairs: Explicit explicit-context API handling raw arrays of patterns and replacements.
+
+Note: Memory safety is heavily prioritized. C string results allocated during processing must be explicitly freed using `free()` by the caller avoiding leaks within embedded contexts.
+
+Building from Source
+--------------------
+
+A C compiler (GCC or Clang) and CMake (>= 3.10) are required. A Lua development environment is optional; the library natively embeds its own VM bindings when building.
+
+```sh
+mkdir build && cd build
+cmake ..
+make
+sudo make install
+```
+
+This generates `libpapagaio.a`, `papagaio.so`, and the `papagaio` CLI binary. 
+
+For the WASM build:
+```sh
+make wasm
+```
+
+Design & Architecture Notes
+---------------------------
+
+- Small Surface Area: Papagaio favors a strictly minimal public API making it straightforward to link and distribute.
+- Seamless Regex: Native Unicode-aware regular expression support is provided internally via a libregexp subcomponent.
+- Lua Integration: The inclusion of an internal VM avoids massive abstraction overheads allowing lightweight but incredibly powerful on-the-fly transformations.
+- Stateless Defaults: Calling convenience API methods without passing an explicitly initialized context uses a lazy, internal global VM instance. This behavior is ideal for one-shot operations, though standard explicitly-managed contexts are heavily recommended for complex, multi-threaded application pipelines.
+
+License
+-------
+
+Please refer to the upstream repository for specific licensing information before adopting Papagaio for restricted commercial distributions.
