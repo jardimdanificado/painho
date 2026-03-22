@@ -53,6 +53,11 @@ Modifiers allow you to specify the exact type of match you want:
 - Block: `$item$block{[}{]}` (captures everything inside the specified delimiters)
 - Aliases: `$kind$aliases{cat,dog}` (matches one of the listed exact words)
 - Fixed matches: `$var$optional{literal}`, `$var$starts{literal}`, `$var$ends{literal}`
+- Advanced Substrings:
+  - `$var$prefix{literal}`: Matches if the literal is at the beginning (and more characters follow).
+  - `$var$suffix{literal}`: Matches if the literal is at the end (and characters precede it).
+  - `$var$infix{literal}`: Matches if the literal is in the middle (not at start or end).
+  - `$var$includes{literal}`: Matches if the literal is anywhere within the capture.
 
 Replacement Syntax
 ------------------

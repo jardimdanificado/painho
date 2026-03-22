@@ -123,7 +123,9 @@ typedef enum {
     MOD_UPPER, MOD_LOWER, MOD_CAPITALIZED,
     MOD_WORD, MOD_IDENTIFIER, MOD_HEX, MOD_PATH,
     MOD_BINARY, MOD_PERCENT, MOD_ALIASES,
-    MOD_OPTIONAL, MOD_STARTS, MOD_ENDS
+    MOD_OPTIONAL, MOD_STARTS, MOD_ENDS,
+    MOD_PREFIX, MOD_SUFFIX, MOD_INFIX,
+    MOD_INCLUDES
 } VarModifier;
 
 typedef struct {
@@ -1083,10 +1085,18 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                 }
                 else if (sv_eq(mod, (StrView){"optional", 8}) ||
                          sv_eq(mod, (StrView){"starts",   6}) ||
-                         sv_eq(mod, (StrView){"ends",     4})) {
+                         sv_eq(mod, (StrView){"ends",     4}) ||
+                         sv_eq(mod, (StrView){"prefix",   6}) ||
+                         sv_eq(mod, (StrView){"suffix",   6}) ||
+                         sv_eq(mod, (StrView){"infix",    5}) ||
+                         sv_eq(mod, (StrView){"includes", 8})) {
                     if      (sv_eq(mod, (StrView){"optional", 8})) t->modifier = MOD_OPTIONAL;
                     else if (sv_eq(mod, (StrView){"starts",   6})) t->modifier = MOD_STARTS;
-                    else                                            t->modifier = MOD_ENDS;
+                    else if (sv_eq(mod, (StrView){"ends",     4})) t->modifier = MOD_ENDS;
+                    else if (sv_eq(mod, (StrView){"prefix",   6})) t->modifier = MOD_PREFIX;
+                    else if (sv_eq(mod, (StrView){"suffix",   6})) t->modifier = MOD_SUFFIX;
+                    else if (sv_eq(mod, (StrView){"infix",    5})) t->modifier = MOD_INFIX;
+                    else                                            t->modifier = MOD_INCLUDES;
                     while (i < n && isspace((unsigned char)pat[i])) i++;
                     if (i < n && str_pfx(pat + i, sym->open)) {
                         StrView blk;
@@ -1229,7 +1239,7 @@ static int match_pattern(const char *src, int src_len,
                 m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(pos-s) }, NULL };
                 continue;
             }
-            if (t->modifier == MOD_STARTS) {
+            if (t->modifier == MOD_STARTS || t->modifier == MOD_PREFIX) {
                 if ((size_t)(src_len-pos) < t->value.len ||
                     memcmp(src+pos, t->value.ptr, t->value.len) != 0) {
                     if (!t->optional) goto fail;
@@ -1256,21 +1266,57 @@ static int match_pattern(const char *src, int src_len,
                         if (fa) break;
                     }
                     pos++;
-                    if (t->modifier == MOD_ENDS && t->value.len > 0 &&
+                    if ((t->modifier == MOD_ENDS || t->modifier == MOD_SUFFIX) && t->value.len > 0 &&
                         (size_t)(pos-s) >= t->value.len &&
                         memcmp(src+pos-t->value.len, t->value.ptr, t->value.len) == 0) break;
                 }
-                if (t->modifier == MOD_ENDS && t->value.len > 0 &&
-                    ((size_t)(pos-s) < t->value.len ||
-                     memcmp(src+pos-t->value.len, t->value.ptr, t->value.len) != 0)) {
-                    if (!t->optional) goto fail;
-                    ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL }; continue;
-                }
+
                 int end = pos;
                 while (end > s && isspace((unsigned char)src[end-1])) end--;
+                size_t clen = (size_t)(end - s);
+
+                int failed = 0;
+                if (t->modifier == MOD_ENDS || t->modifier == MOD_SUFFIX) {
+                    if (t->value.len > 0 && (clen < t->value.len || memcmp(src+end-t->value.len, t->value.ptr, t->value.len) != 0))
+                        failed = 1;
+                    else if (t->modifier == MOD_SUFFIX && clen <= t->value.len)
+                        failed = 1;
+                } else if (t->modifier == MOD_PREFIX) {
+                    if (clen <= t->value.len) failed = 1;
+                } else if (t->modifier == MOD_INFIX) {
+                    int found = 0;
+                    if (clen >= t->value.len + 2 &&
+                        memcmp(src + s, t->value.ptr, t->value.len) != 0 &&
+                        memcmp(src + end - t->value.len, t->value.ptr, t->value.len) != 0) 
+                    {
+                        for (size_t j = 1; j <= clen - t->value.len - 1; j++) {
+                            if (memcmp(src + s + j, t->value.ptr, t->value.len) == 0) {
+                                found = 1; break;
+                            }
+                        }
+                    }
+                    if (!found) failed = 1;
+                } else if (t->modifier == MOD_INCLUDES) {
+                    int found = 0;
+                    if (clen >= t->value.len) {
+                        for (size_t j = 0; j <= clen - t->value.len; j++) {
+                            if (memcmp(src + s + j, t->value.ptr, t->value.len) == 0) {
+                                found = 1; break;
+                            }
+                        }
+                    }
+                    if (!found) failed = 1;
+                }
+
+                if (failed) {
+                    if (!t->optional) goto fail;
+                    ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL }; 
+                    pos = s; continue;
+                }
                 if (end == s) {
                     if (!t->optional) goto fail;
-                    ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL }; continue;
+                    ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL }; 
+                    pos = s; continue;
                 }
                 ensure_cap(m);
                 m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(end-s) }, NULL };
@@ -1286,19 +1332,57 @@ static int match_pattern(const char *src, int src_len,
                 } else if (src[pos] == '\n') break; /* sem next: para só em newline */
                 if (!CHAR_VALID(src[pos], pos, s)) break;
                 pos++;
-                if (t->modifier == MOD_ENDS && t->value.len > 0 &&
+                if ((t->modifier == MOD_ENDS || t->modifier == MOD_SUFFIX) && t->value.len > 0 &&
                     (size_t)(pos-s) >= t->value.len &&
                     memcmp(src+pos-t->value.len, t->value.ptr, t->value.len) == 0) break;
             }
-            if (t->modifier == MOD_ENDS && t->value.len > 0 &&
-                ((size_t)(pos-s) < t->value.len ||
-                 memcmp(src+pos-t->value.len, t->value.ptr, t->value.len) != 0)) {
+
+            int end = pos;
+            while (end > s && isspace((unsigned char)src[end-1])) end--;
+            size_t clen = (size_t)(end - s);
+
+            int failed = 0;
+            if (t->modifier == MOD_ENDS || t->modifier == MOD_SUFFIX) {
+                if (t->value.len > 0 && (clen < t->value.len || memcmp(src+end-t->value.len, t->value.ptr, t->value.len) != 0))
+                    failed = 1;
+                else if (t->modifier == MOD_SUFFIX && clen <= t->value.len)
+                    failed = 1;
+            } else if (t->modifier == MOD_PREFIX) {
+                if (clen <= t->value.len) failed = 1;
+            } else if (t->modifier == MOD_INFIX) {
+                int found = 0;
+                if (clen >= t->value.len + 2 &&
+                    memcmp(src + s, t->value.ptr, t->value.len) != 0 &&
+                    memcmp(src + end - t->value.len, t->value.ptr, t->value.len) != 0) 
+                {
+                    for (size_t j = 1; j <= clen - t->value.len - 1; j++) {
+                        if (memcmp(src + s + j, t->value.ptr, t->value.len) == 0) {
+                            found = 1; break;
+                        }
+                    }
+                }
+                if (!found) failed = 1;
+            } else if (t->modifier == MOD_INCLUDES) {
+                int found = 0;
+                if (clen >= t->value.len) {
+                    for (size_t j = 0; j <= clen - t->value.len; j++) {
+                        if (memcmp(src + s + j, t->value.ptr, t->value.len) == 0) {
+                            found = 1; break;
+                        }
+                    }
+                }
+                if (!found) failed = 1;
+            }
+
+            if (failed) {
                 if (!t->optional) goto fail;
-                ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL }; continue;
+                ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL }; 
+                pos = s; continue;
             }
             if (pos == s) {
                 if (!t->optional) goto fail;
-                ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL }; continue;
+                ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL }; 
+                pos = s; continue;
             }
             ensure_cap(m);
             m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(pos-s) }, NULL };
