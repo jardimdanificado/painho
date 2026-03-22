@@ -81,12 +81,12 @@ Input:        calc 3
 Output:       6
 ```
 
-3. Block Sequence Matching
+3. Block Matching
 ```text
-Pattern:      $items$blockseq{[}{]}
-Replacement:  Items: $items
-Input:        [a][b][c]
-Output:       Items: a b c
+Pattern:      $item$block{[}{]}
+Replacement:  Item: $item
+Input:        [a] [b]
+Output:       Item: a Item: b
 ```
 
 4. Aliases and Optional Captures

@@ -1,7 +1,7 @@
 {
   "name": "papagaio",
-  "version": "0.13.1",
-  "description": "Execute Lua with embedded Lua 5.4 + papagaio + papagaio_ffi",
+  "version": "0.14.1",
+  "description": "papagaio",
   "main": "dist/main.js",
   "scripts": {
     "build": "node build.mjs",

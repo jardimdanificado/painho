@@ -115,7 +115,7 @@ typedef struct { char *data; size_t len; size_t cap; } StrBuf;
 
 typedef enum {
     TOK_LITERAL, TOK_VAR, TOK_REGEX, TOK_BLOCK, TOK_WS,
-    TOK_BLOCKSEQ, TOK_OPTIONS, TOK_OPTIONAL_LIT
+    TOK_OPTIONS, TOK_OPTIONAL_LIT
 } PapTokenType;
 
 typedef enum {
@@ -146,7 +146,7 @@ typedef struct {
 
 typedef struct {
     const char *sigil, *open, *close;
-    const char *pattern, *regex, *eval, *block, *blockseq, *optional, *changequote;
+    const char *pattern, *regex, *eval, *block, *optional, *changequote;
 } Symbols;
 
 typedef struct { PapToken *t; int count; int cap; Symbols sym; } Pattern;
@@ -296,7 +296,6 @@ static void register_papagaio_preload(lua_State *L)
 #define PAP_REGEX    "regex"
 #define PAP_EVAL     "eval"
 #define PAP_BLOCK    "block"
-#define PAP_BLOCKSEQ "blockseq"
 #define PAP_OPTIONAL "optional"
 #define PAP_CHANGEQUOTE "changequote"
 #define PAP_ESC      '\x01'
@@ -348,7 +347,7 @@ static Symbols make_symbols(const char *sigil, const char *open, const char *clo
     Symbols s;
     s.sigil    = sigil;  s.open  = open;  s.close = close;
     s.pattern  = PAP_PATTERN; s.regex   = PAP_REGEX; s.eval    = PAP_EVAL;
-    s.block    = PAP_BLOCK;   s.blockseq = PAP_BLOCKSEQ;
+    s.block    = PAP_BLOCK;
     s.optional = PAP_OPTIONAL;
     s.changequote = PAP_CHANGEQUOTE;
     return s;
@@ -1018,10 +1017,8 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                         t->value = (StrView){ pat + i, 0 };
                     }
                 }
-                else if (sv_eq(mod, (StrView){ sym->block, strlen(sym->block) }) ||
-                         sv_eq(mod, (StrView){ sym->blockseq, strlen(sym->blockseq) })) {
-                    int is_bsq = sv_eq(mod, (StrView){ sym->blockseq, strlen(sym->blockseq) });
-                    t->type = is_bsq ? TOK_BLOCKSEQ : TOK_BLOCK;
+                else if (sv_eq(mod, (StrView){ sym->block, strlen(sym->block) })) {
+                    t->type = TOK_BLOCK;
 
                     while (i < n && isspace((unsigned char)pat[i])) i++;
                     if (i < n && str_pfx(pat + i, sym->open)) {
@@ -1110,7 +1107,7 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
             }
 
             if (i < n && pat[i] == '?') { t->optional = 1; i++; }
-            if (t->type != TOK_REGEX && t->type != TOK_BLOCK && t->type != TOK_BLOCKSEQ) {
+            if (t->type != TOK_REGEX && t->type != TOK_BLOCK) {
                 t->type = TOK_VAR;
             }
             p->count++; continue;
@@ -1242,11 +1239,11 @@ static int match_pattern(const char *src, int src_len,
             }
 
             if (nx && (nx->type == TOK_LITERAL || nx->type == TOK_BLOCK ||
-                       nx->type == TOK_BLOCKSEQ || nx->type == TOK_OPTIONS)) {
+                       nx->type == TOK_OPTIONS)) {
                 while (src[pos]) {
                     if (src[pos] == '\n') break;
                     if (nx->type == TOK_LITERAL && sv_pfx(src+pos, nx->value)) break;
-                    if ((nx->type == TOK_BLOCK || nx->type == TOK_BLOCKSEQ) &&
+                    if (nx->type == TOK_BLOCK &&
                         sv_pfx(src+pos, nx->open)) break;
                     if (!CHAR_VALID(src[pos], pos, s)) break;
                     if (nx->type == TOK_OPTIONS) {
@@ -1284,7 +1281,7 @@ static int match_pattern(const char *src, int src_len,
                 if (nx && isspace((unsigned char)src[pos])) break;
                 if (nx) {
                     if (nx->type == TOK_LITERAL && sv_pfx(src+pos, nx->value)) break;
-                    if ((nx->type == TOK_BLOCK || nx->type == TOK_BLOCKSEQ) &&
+                    if (nx->type == TOK_BLOCK &&
                         sv_pfx(src+pos, nx->open)) break;
                 } else if (src[pos] == '\n') break; /* sem next: para só em newline */
                 if (!CHAR_VALID(src[pos], pos, s)) break;
@@ -1388,29 +1385,6 @@ static int match_pattern(const char *src, int src_len,
                 memcmp(src+pos, t->value.ptr, t->value.len) == 0)
                 pos += (int)t->value.len;
             continue;
-        }
-
-        if (t->type == TOK_BLOCKSEQ) {
-            if (!sv_pfx(src+pos, t->open)) {
-                if (!t->optional) goto fail;
-                ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL }; continue;
-            }
-            StrBuf buf; sb_init(&buf);
-            int blocks = 0;
-            while (sv_pfx(src+pos, t->open)) {
-                StrView v;
-                pos = extract_block(src, pos, t->open, t->close, &v);
-                if (blocks > 0) sb_append_char(&buf, ' ');
-                sb_append_n(&buf, v.ptr, v.len);
-                blocks++; skip_ws(src, &pos);
-            }
-            if (blocks == 0) {
-                if (!t->optional) goto fail;
-                sb_free(&buf); ensure_cap(m);
-                m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL }; continue;
-            }
-            ensure_cap(m);
-            m->cap[m->count++] = (Capture){ t->var, { buf.data, buf.len }, buf.data };
         }
     }
 
