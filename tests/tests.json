@@ -269,6 +269,42 @@
       "name": "Changequote",
       "code": "$changequote{@}{<}{>} @pattern {@n} {N:<@n>} @changequote{$}{[}{]} $pattern {$n} {M:[$n]}\nx y",
       "expected": "@pattern {@n} {N:<@n>} {$}{[}{]} $pattern {$n} {M:[$n]}\nx y"
+    },
+    {
+      "id": 46,
+      "name": "Starts modifier",
+      "code": "$pattern {$w$starts{pre}} {MATCH[$w]}\nprepare\npremium\npost\npre",
+      "expected": "MATCH[prepare]\nMATCH[premium]\npost\nMATCH[pre]"
+    },
+    {
+      "id": 47,
+      "name": "Ends modifier",
+      "code": "$pattern {$w$ends{ing}} {MATCH[$w]}\nrunning\nswimming\nsing\ning",
+      "expected": "MATCH[running]\nMATCH[swimming]\nMATCH[sing]\nMATCH[ing]"
+    },
+    {
+      "id": 48,
+      "name": "Prefix modifier",
+      "code": "$pattern {$w$prefix{pre}} {MATCH[$w]}\nprepare\npremium\npost\npre",
+      "expected": "MATCH[prepare]\nMATCH[premium]\npost\npre"
+    },
+    {
+      "id": 49,
+      "name": "Suffix modifier",
+      "code": "$pattern {$w$suffix{ing}} {MATCH[$w]}\nrunning\nswimming\nsing\ning",
+      "expected": "MATCH[running]\nMATCH[swimming]\nMATCH[sing]\ning"
+    },
+    {
+      "id": 50,
+      "name": "Infix modifier",
+      "code": "$pattern {$w$infix{in}} {MATCH[$w]}\npinball\nwindows\ninside\npin\nin",
+      "expected": "MATCH[pinball]\nMATCH[windows]\ninside\npin\nin"
+    },
+    {
+      "id": 51,
+      "name": "Includes modifier",
+      "code": "$pattern {$w$includes{in}} {MATCH[$w]}\npinball\nwindows\ninside\npin\nin",
+      "expected": "MATCH[pinball]\nMATCH[windows]\nMATCH[inside]\nMATCH[pin]\nMATCH[in]"
     }
   ]
 }
