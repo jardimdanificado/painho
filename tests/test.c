@@ -10,12 +10,12 @@ int main(void)
 {
     char *o;
 
-    o = papagaio_process("((()))", "${(}{)}inner", "", NULL);
+    o = papagaio_process("((()))", "$inner$block{(}{)}", "", NULL);
     printf("Test 1 - inner='%s'\n", o);
     free(o);
 
     o = papagaio_process("foo (a) (b) (c) bar",
-                         "foo $${(}{)}xs bar",
+                         "foo $xs$blockseq{(}{)} bar",
                          "OK [$xs]", NULL);
     printf("Test 2 - %s\n", o);
     free(o);
@@ -28,7 +28,7 @@ int main(void)
     printf("Test 4 - %s (esperado: [])\n", o);
     free(o);
 
-    o = papagaio_process("start end", "start $${(}{)}blk? end", "[$blk]", NULL);
+    o = papagaio_process("start end", "start $blk$blockseq{(}{)}? end", "[$blk]", NULL);
     printf("Test 5 - %s (esperado: [])\n", o);
     free(o);
 
@@ -93,7 +93,7 @@ int main(void)
     printf("Esperado:  \"x=a y=c z=\"\n");
     free(o);
 
-    o = papagaio_process("42 days", "$regex$num {[0-9]+}", "Number: $num", NULL);
+    o = papagaio_process("42 days", "$num$regex {[0-9]+}", "Number: $num", NULL);
     printf("Test 17 - %s (esperado: Number: 42 days)\n", o);
     free(o);
 

@@ -972,68 +972,6 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
 
         /* sigil-led */
         if (str_pfx(pat + i, sym->sigil)) {
-
-            /* $block{OPEN}{CLOSE}varname[?]
-             *
-             * Matches one or more consecutive OPEN...CLOSE blocks and
-             * concatenates their contents separated by a single space.
-             *
-             *   $block{[}{]}items       [a][b][c]  ->  "a b c"
-             *   $block{[}{]}items?      same, but optional
-             *   $block{<<}{>>}body      <<foo>><<bar>>  ->  "foo bar"
-             *   $block{\"}{\"} word   "hello"  ->  "hello"
-             *
-             * If {CLOSE} is omitted the parser reuses sym->close.
-             * The keyword ("block") is taken from sym->block so it follows
-             * any custom symbol set passed to process_ex / make_symbols.
-             */
-            {
-                size_t bkw_len = strlen(sym->block);
-                size_t bsq_len = strlen(sym->blockseq);
-                int is_bsq = ((i + (int)sl + (int)bsq_len) <= n)
-                    && memcmp(pat + i + sl, sym->blockseq, bsq_len) == 0
-                    && str_pfx(pat + i + sl + bsq_len, sym->open);
-                int is_blk = ((i + (int)sl + (int)bkw_len) <= n)
-                    && memcmp(pat + i + sl, sym->block, bkw_len) == 0
-                    && str_pfx(pat + i + sl + bkw_len, sym->open);
-
-                if (is_blk || is_bsq) {
-                    i += sl + (int)(is_blk ? bkw_len : bsq_len);
-
-                    i += ol; /* skip open delimiter */
-                    int o = i;
-                    while (i < n && !str_pfx(pat + i, sym->close)) i++;
-                    StrView raw_open = { pat + o, (size_t)(i - o) };
-                    if (str_pfx(pat + i, sym->close)) i += cl;
-
-                    StrView raw_close = { sym->close, strlen(sym->close) };
-                    if (str_pfx(pat + i, sym->open)) {
-                        i += ol; int c = i;
-                        while (i < n && !str_pfx(pat + i, sym->close)) i++;
-                        raw_close = (StrView){ pat + c, (size_t)(i - c) };
-                        if (str_pfx(pat + i, sym->close)) i += cl;
-                    }
-
-                    StrView ot = trim_sv(raw_open); size_t olen = 0;
-                    char *ou = unescape_delim(ot, &olen);
-                    if (olen == 0) { free(ou); t->open = (StrView){ sym->open, strlen(sym->open) }; }
-                    else { t->open_str = ou; t->open = (StrView){ t->open_str, olen }; }
-
-                    StrView ct2 = trim_sv(raw_close); size_t clen = 0;
-                    char *cu = unescape_delim(ct2, &clen);
-                    if (clen == 0) { free(cu); t->close = (StrView){ sym->close, strlen(sym->close) }; }
-                    else { t->close_str = cu; t->close = (StrView){ t->close_str, clen }; }
-
-                    int v = i;
-                    while (i < n && (isalnum((unsigned char)pat[i]) || pat[i] == '_')) i++;
-                    t->var = (StrView){ pat + v, (size_t)(i - v) };
-
-                    if (i < n && pat[i] == '?') { t->optional = 1; i++; }
-                    t->type = is_blk ? TOK_BLOCK : TOK_BLOCKSEQ;
-                    p->count++; continue;
-                }
-            }
-
             i += sl;
             int v = i;
             while (i < n && (isalnum((unsigned char)pat[i]) || pat[i] == '_')) i++;
@@ -1043,35 +981,6 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                 t->type  = TOK_LITERAL;
                 t->value = (StrView){ sym->sigil, (size_t)sl };
                 p->count++; continue;
-            }
-
-            /* $regex$VAR {pattern}
-             * The keyword is part of the syntax and is not the capture name.
-             */
-            StrView key = { pat + v, vlen };
-            if (sv_eq(key, (StrView){ sym->regex, (size_t)strlen(sym->regex) }) &&
-                (i + sl <= n && memcmp(pat + i, sym->sigil, sl) == 0)) {
-                i += sl; /* skip the second sigil */
-                /* Read capture variable name */
-                int v2 = i;
-                while (i < n && (isalnum((unsigned char)pat[i]) || pat[i] == '_')) i++;
-                t->var = (StrView){ pat + v2, (size_t)(i - v2) };
-
-                /* Read regex pattern block */
-                while (i < n && isspace((unsigned char)pat[i])) i++;
-                if (i < n && str_pfx(pat + i, sym->open)) {
-                    StrView blk;
-                    StrView so = { sym->open,  (size_t)ol };
-                    StrView sc = { sym->close, (size_t)cl };
-                    int next = extract_block(pat, i, so, sc, &blk);
-                    t->value = trim_sv(blk);
-                    i = next;
-                } else {
-                    t->value = (StrView){ pat + i, 0 };
-                }
-
-                if (i < n && pat[i] == '?') { t->optional = 1; i++; }
-                t->type = TOK_REGEX; p->count++; continue;
             }
 
             t->var = (StrView){ pat + v, vlen };
@@ -1095,6 +1004,52 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                 else if (sv_eq(mod, (StrView){"path",        4 })) t->modifier = MOD_PATH;
                 else if (sv_eq(mod, (StrView){"binary",      6 })) t->modifier = MOD_BINARY;
                 else if (sv_eq(mod, (StrView){"percent",     7 })) t->modifier = MOD_PERCENT;
+                else if (sv_eq(mod, (StrView){ sym->regex, strlen(sym->regex) })) {
+                    t->type = TOK_REGEX;
+                    while (i < n && isspace((unsigned char)pat[i])) i++;
+                    if (i < n && str_pfx(pat + i, sym->open)) {
+                        StrView blk;
+                        StrView so = { sym->open,  (size_t)ol };
+                        StrView sc = { sym->close, (size_t)cl };
+                        int next = extract_block(pat, i, so, sc, &blk);
+                        t->value = trim_sv(blk);
+                        i = next;
+                    } else {
+                        t->value = (StrView){ pat + i, 0 };
+                    }
+                }
+                else if (sv_eq(mod, (StrView){ sym->block, strlen(sym->block) }) ||
+                         sv_eq(mod, (StrView){ sym->blockseq, strlen(sym->blockseq) })) {
+                    int is_bsq = sv_eq(mod, (StrView){ sym->blockseq, strlen(sym->blockseq) });
+                    t->type = is_bsq ? TOK_BLOCKSEQ : TOK_BLOCK;
+
+                    while (i < n && isspace((unsigned char)pat[i])) i++;
+                    if (i < n && str_pfx(pat + i, sym->open)) {
+                        i += ol; /* skip open delimiter */
+                        int o = i;
+                        while (i < n && !str_pfx(pat + i, sym->close)) i++;
+                        StrView raw_open = { pat + o, (size_t)(i - o) };
+                        if (str_pfx(pat + i, sym->close)) i += cl;
+
+                        StrView raw_close = { sym->close, strlen(sym->close) };
+                        if (str_pfx(pat + i, sym->open)) {
+                            i += ol; int c = i;
+                            while (i < n && !str_pfx(pat + i, sym->close)) i++;
+                            raw_close = (StrView){ pat + c, (size_t)(i - c) };
+                            if (str_pfx(pat + i, sym->close)) i += cl;
+                        }
+
+                        StrView ot = trim_sv(raw_open); size_t olen = 0;
+                        char *ou = unescape_delim(ot, &olen);
+                        if (olen == 0) { free(ou); t->open = (StrView){ sym->open, strlen(sym->open) }; }
+                        else { t->open_str = ou; t->open = (StrView){ t->open_str, olen }; }
+
+                        StrView ct2 = trim_sv(raw_close); size_t clen = 0;
+                        char *cu = unescape_delim(ct2, &clen);
+                        if (clen == 0) { free(cu); t->close = (StrView){ sym->close, strlen(sym->close) }; }
+                        else { t->close_str = cu; t->close = (StrView){ t->close_str, clen }; }
+                    }
+                }
                 else if (sv_eq(mod, (StrView){"aliases",     7 })) {
                     t->modifier = MOD_ALIASES;
                     while (i < n && isspace((unsigned char)pat[i])) i++;

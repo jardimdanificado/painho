@@ -200,8 +200,8 @@ Pattern Syntax
   - A variable: `$name` (captures one token)
   - Optional: `$name?` (capture is optional)
   - With type: `$age$int`, `$word$upper` (see modifiers below)
-  - Regex: `$regex$id {\d+}` (captures using regex)
-  - Block: `$block{[}{]}item` (captures inside delimiters)
+  - Regex: `$id$regex {\d+}` (captures using regex)
+  - Block: `$item$block{[}{]}` (captures inside delimiters)
   - Aliases: `$kind$aliases{cat,dog}` (matches one of the listed words)
 
 Change Delimiters
@@ -226,7 +226,7 @@ Output:       Name: Alice, Age: 42
 
 **Regex + Eval:**
 ```txt
-Pattern:      $regex$n {\d+}
+Pattern:      $n$regex {\d+}
 Replacement:  Number: $n, doubled: $eval{ return tonumber(match) * 2 }
 Input:        123
 Output:       Number: 123, doubled: 246
@@ -234,7 +234,7 @@ Output:       Number: 123, doubled: 246
 
 **Block Sequence:**
 ```txt
-Pattern:      $blockseq{[}{]}items
+Pattern:      $items$blockseq{[}{]}
 Replacement:  Items: $items
 Input:        [a][b][c]
 Output:       Items: a b c
