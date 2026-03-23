@@ -128,6 +128,9 @@ typedef enum {
     MOD_INCLUDES
 } VarModifier;
 
+/* Forward declaration for recursive sub-patterns */
+typedef struct Pattern_s Pattern;
+
 typedef struct {
     PapTokenType type;
     VarModifier modifier;
@@ -144,6 +147,9 @@ typedef struct {
     char      **alts;
     int         alt_count;
     char       *literal_str;
+    Pattern    *sub_pattern;      /* for optional/starts/ends/etc: recursive sub-pattern */
+    Pattern   **alt_patterns;     /* for aliases: one sub-pattern per alternative */
+    int         alt_pattern_count;
 } PapToken;
 
 typedef struct {
@@ -151,7 +157,7 @@ typedef struct {
     const char *pattern, *regex, *eval, *block, *optional, *changequote;
 } Symbols;
 
-typedef struct { PapToken *t; int count; int cap; Symbols sym; } Pattern;
+struct Pattern_s { PapToken *t; int count; int cap; Symbols sym; };
 typedef struct { StrView name; StrView value; char *owned; } Capture;
 
 typedef struct {
@@ -391,6 +397,19 @@ static void free_pattern(Pattern *p)
             for (int j = 0; j < p->t[i].alt_count; j++)
                 free(p->t[i].alts[j]);
             free(p->t[i].alts);
+        }
+        if (p->t[i].sub_pattern) {
+            free_pattern(p->t[i].sub_pattern);
+            free(p->t[i].sub_pattern);
+        }
+        if (p->t[i].alt_patterns) {
+            for (int j = 0; j < p->t[i].alt_pattern_count; j++) {
+                if (p->t[i].alt_patterns[j]) {
+                    free_pattern(p->t[i].alt_patterns[j]);
+                    free(p->t[i].alt_patterns[j]);
+                }
+            }
+            free(p->t[i].alt_patterns);
         }
     }
     free(p->t); p->t = NULL; p->count = 0; p->cap = 0;
@@ -896,6 +915,7 @@ static char *apply_patterns(lua_State *L, const char *src,
 
         while (pos < len) {
             Match m;
+            int old_pos = pos;
             if (match_pattern(cur, len, &pat, pos, &m)) {
                 PatternPair *nested = NULL; int nc = 0;
                 char *clean = extract_nested(pairs[i].r, sym, &nested, &nc);
@@ -929,7 +949,12 @@ static char *apply_patterns(lua_State *L, const char *src,
                 free_evals(evls, en);
                 if (applied) { sb_append_n(&out, applied, strlen(applied)); free(applied); }
                 free(nout);
-                pos = m.end; free_match(&m); matched = 1; continue;
+                pos = m.end;
+                /* Prevent zero-length match infinite loops */
+                if (pos <= old_pos && pos < len) {
+                    sb_append_char(&out, cur[pos++]);
+                }
+                free_match(&m); matched = 1; continue;
             }
             sb_append_char(&out, cur[pos++]);
         }
@@ -1060,10 +1085,21 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                         int acap = 4;
                         t->alts = (char **)malloc(sizeof(char *) * acap);
                         t->alt_count = 0;
+                        /* Also prepare alt_patterns for recursive sub-patterns */
+                        int apcap = 4;
+                        t->alt_patterns = (Pattern **)malloc(sizeof(Pattern *) * apcap);
+                        t->alt_pattern_count = 0;
                         const char *cp = blk.ptr, *bend = blk.ptr + blk.len;
                         while (cp <= bend) {
                             const char *comma = cp;
-                            while (comma < bend && *comma != ',') comma++;
+                            /* Respect brace nesting when finding commas */
+                            int depth = 0;
+                            while (comma < bend) {
+                                if (memcmp(comma, sym->open, ol) == 0) { depth++; comma += ol; continue; }
+                                if (memcmp(comma, sym->close, cl) == 0) { depth--; comma += cl; continue; }
+                                if (*comma == ',' && depth == 0) break;
+                                comma++;
+                            }
                             StrView part = trim_sv((StrView){ cp, (size_t)(comma - cp) });
                             if (part.len > 0) {
                                 if (t->alt_count >= acap) {
@@ -1075,6 +1111,27 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                                     memcpy(t->alts[t->alt_count], part.ptr, part.len);
                                     t->alts[t->alt_count][part.len] = '\0';
                                     t->alt_count++;
+                                }
+                                /* Parse the alternative as a sub-pattern if it contains sigils */
+                                int has_sigil = 0;
+                                for (size_t si = 0; si + (size_t)sl <= part.len; si++) {
+                                    if (memcmp(part.ptr + si, sym->sigil, sl) == 0) { has_sigil = 1; break; }
+                                }
+                                if (t->alt_pattern_count >= apcap) {
+                                    apcap <<= 1;
+                                    t->alt_patterns = (Pattern **)realloc(t->alt_patterns, sizeof(Pattern *) * apcap);
+                                }
+                                if (has_sigil) {
+                                    char *sub_str = (char *)malloc(part.len + 1);
+                                    memcpy(sub_str, part.ptr, part.len);
+                                    sub_str[part.len] = '\0';
+                                    Pattern *sp = (Pattern *)malloc(sizeof(Pattern));
+                                    memset(sp, 0, sizeof(Pattern));
+                                    parse_pattern_ex(sub_str, sp, sym);
+                                    free(sub_str);
+                                    t->alt_patterns[t->alt_pattern_count++] = sp;
+                                } else {
+                                    t->alt_patterns[t->alt_pattern_count++] = NULL;
                                 }
                             }
                             if (comma >= bend) break;
@@ -1110,6 +1167,20 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                             t->literal_str[phrase.len] = '\0';
                             t->value.ptr = t->literal_str;
                             t->value.len = phrase.len;
+                        }
+                        /* Parse as recursive sub-pattern if it contains sigils */
+                        int has_sigil = 0;
+                        for (size_t si = 0; si + (size_t)sl <= phrase.len; si++) {
+                            if (memcmp(phrase.ptr + si, sym->sigil, sl) == 0) { has_sigil = 1; break; }
+                        }
+                        if (has_sigil) {
+                            char *sub_str = (char *)malloc(phrase.len + 1);
+                            memcpy(sub_str, phrase.ptr, phrase.len);
+                            sub_str[phrase.len] = '\0';
+                            t->sub_pattern = (Pattern *)malloc(sizeof(Pattern));
+                            memset(t->sub_pattern, 0, sizeof(Pattern));
+                            parse_pattern_ex(sub_str, t->sub_pattern, sym);
+                            free(sub_str);
                         }
                         i = next;
                     }
@@ -1176,6 +1247,19 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
     !(t->modifier == MOD_BINARY      && ((c)!='0' && (c)!='1' && (c)!='b' && (c)!='B')) && \
     !(t->modifier == MOD_PERCENT     && !(isdigit((unsigned char)(c)) || (c)=='.' || (c)=='%' || ((pos)==(s) && (c)=='-'))))
 
+/* Helper: check if a sub-pattern matches at position `at` within src[0..src_len).
+   Returns the end position of the match, or -1 if no match. */
+static int sub_pattern_matches_at(const char *src, int src_len, Pattern *sp, int at)
+{
+    Match sub_m;
+    if (match_pattern(src, src_len, sp, at, &sub_m)) {
+        int end = sub_m.end;
+        free_match(&sub_m);
+        return end;
+    }
+    return -1;
+}
+
 static int match_pattern(const char *src, int src_len,
                           Pattern *p, int start, Match *m)
 {
@@ -1215,11 +1299,34 @@ static int match_pattern(const char *src, int src_len,
 
             if (t->modifier == MOD_ALIASES) {
                 int hit = 0;
+                /* Fast path: try flat string match first */
                 for (int ai = 0; ai < t->alt_count; ai++) {
+                    /* Skip alternatives that have sub-patterns — try them in the recursive path */
+                    if (ai < t->alt_pattern_count && t->alt_patterns[ai]) continue;
                     size_t al = strlen(t->alts[ai]);
                     if ((size_t)(src_len - pos) >= al &&
                         memcmp(src + pos, t->alts[ai], al) == 0) {
                         pos += (int)al; hit = 1; break;
+                    }
+                }
+                /* Recursive path: try alternatives with sub-patterns */
+                if (!hit) {
+                    for (int ai = 0; ai < t->alt_pattern_count; ai++) {
+                        if (!t->alt_patterns[ai]) continue;
+                        Match sub_m;
+                        if (match_pattern(src, src_len, t->alt_patterns[ai], pos, &sub_m)) {
+                            /* Merge sub-captures into parent match */
+                            for (int ci = 0; ci < sub_m.count; ci++) {
+                                ensure_cap(m);
+                                m->cap[m->count++] = sub_m.cap[ci];
+                            }
+                            pos = sub_m.end;
+                            hit = 1;
+                            /* Free sub_m but NOT its captures (we moved them) */
+                            free(sub_m.cap);
+                            if (sub_m.regex.capture) free((void *)sub_m.regex.capture);
+                            break;
+                        }
                     }
                 }
                 if (!hit) {
@@ -1232,19 +1339,51 @@ static int match_pattern(const char *src, int src_len,
                 continue;
             }
             if (t->modifier == MOD_OPTIONAL) {
-                if ((size_t)(src_len-pos) >= t->value.len && t->value.len > 0 &&
-                    memcmp(src+pos, t->value.ptr, t->value.len) == 0)
-                    pos += (int)t->value.len;
+                if (t->sub_pattern) {
+                    /* Recursive: try matching the sub-pattern */
+                    Match sub_m;
+                    if (match_pattern(src, src_len, t->sub_pattern, pos, &sub_m)) {
+                        /* Merge sub-captures */
+                        for (int ci = 0; ci < sub_m.count; ci++) {
+                            ensure_cap(m);
+                            m->cap[m->count++] = sub_m.cap[ci];
+                        }
+                        pos = sub_m.end;
+                        free(sub_m.cap);
+                        if (sub_m.regex.capture) free((void *)sub_m.regex.capture);
+                    }
+                } else {
+                    if ((size_t)(src_len-pos) >= t->value.len && t->value.len > 0 &&
+                        memcmp(src+pos, t->value.ptr, t->value.len) == 0)
+                        pos += (int)t->value.len;
+                }
                 ensure_cap(m);
                 m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(pos-s) }, NULL };
                 continue;
             }
             if (t->modifier == MOD_STARTS || t->modifier == MOD_PREFIX) {
-                if ((size_t)(src_len-pos) < t->value.len ||
-                    memcmp(src+pos, t->value.ptr, t->value.len) != 0) {
-                    if (!t->optional) goto fail;
-                    ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL };
-                    continue;
+                if (t->sub_pattern) {
+                    Match sub_m;
+                    if (!match_pattern(src, src_len, t->sub_pattern, pos, &sub_m)) {
+                        if (!t->optional) goto fail;
+                        ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL };
+                        continue;
+                    }
+                    /* Merge sub-captures */
+                    for (int ci = 0; ci < sub_m.count; ci++) {
+                        ensure_cap(m);
+                        m->cap[m->count++] = sub_m.cap[ci];
+                    }
+                    free(sub_m.cap);
+                    if (sub_m.regex.capture) free((void *)sub_m.regex.capture);
+                    /* Don't advance pos yet — starts/prefix still need to consume more chars */
+                } else {
+                    if ((size_t)(src_len-pos) < t->value.len ||
+                        memcmp(src+pos, t->value.ptr, t->value.len) != 0) {
+                        if (!t->optional) goto fail;
+                        ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL };
+                        continue;
+                    }
                 }
             }
 
@@ -1266,42 +1405,89 @@ static int match_pattern(const char *src, int src_len,
                         if (fa) break;
                     }
                     pos++;
-                    if ((t->modifier == MOD_ENDS || t->modifier == MOD_SUFFIX) && t->value.len > 0 &&
-                        (size_t)(pos-s) >= t->value.len &&
+                    if ((t->modifier == MOD_ENDS || t->modifier == MOD_SUFFIX) && !t->sub_pattern &&
+                        t->value.len > 0 && (size_t)(pos-s) >= t->value.len &&
                         memcmp(src+pos-t->value.len, t->value.ptr, t->value.len) == 0) break;
+                    if ((t->modifier == MOD_ENDS || t->modifier == MOD_SUFFIX) && t->sub_pattern) {
+                        /* Try matching sub-pattern ending at current pos */
+                        for (int bp = s; bp < pos; bp++) {
+                            int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                            if (me == pos) { goto ends_break_1; }
+                        }
+                    }
                 }
+                ends_break_1:
 
+                {
                 int end = pos;
                 while (end > s && isspace((unsigned char)src[end-1])) end--;
                 size_t clen = (size_t)(end - s);
 
                 int failed = 0;
                 if (t->modifier == MOD_ENDS || t->modifier == MOD_SUFFIX) {
-                    if (t->value.len > 0 && (clen < t->value.len || memcmp(src+end-t->value.len, t->value.ptr, t->value.len) != 0))
-                        failed = 1;
-                    else if (t->modifier == MOD_SUFFIX && clen <= t->value.len)
-                        failed = 1;
+                    if (t->sub_pattern) {
+                        /* Check if sub-pattern matches at any position ending at end */
+                        int found_sp = 0;
+                        for (int bp = s; bp < end; bp++) {
+                            int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                            if (me == end) { found_sp = 1; break; }
+                        }
+                        if (!found_sp) failed = 1;
+                        else if (t->modifier == MOD_SUFFIX) {
+                            /* suffix needs more content before the sub-pattern match */
+                            int earliest = end;
+                            for (int bp = s; bp < end; bp++) {
+                                int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                                if (me == end && bp > s) { earliest = bp; break; }
+                            }
+                            if (earliest <= s) failed = 1;
+                        }
+                    } else {
+                        if (t->value.len > 0 && (clen < t->value.len || memcmp(src+end-t->value.len, t->value.ptr, t->value.len) != 0))
+                            failed = 1;
+                        else if (t->modifier == MOD_SUFFIX && clen <= t->value.len)
+                            failed = 1;
+                    }
                 } else if (t->modifier == MOD_PREFIX) {
-                    if (clen <= t->value.len) failed = 1;
+                    if (t->sub_pattern) {
+                        int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, s);
+                        if (me < 0 || me >= end) failed = 1;
+                    } else {
+                        if (clen <= t->value.len) failed = 1;
+                    }
                 } else if (t->modifier == MOD_INFIX) {
                     int found = 0;
-                    if (clen >= t->value.len + 2 &&
-                        memcmp(src + s, t->value.ptr, t->value.len) != 0 &&
-                        memcmp(src + end - t->value.len, t->value.ptr, t->value.len) != 0) 
-                    {
-                        for (size_t j = 1; j <= clen - t->value.len - 1; j++) {
-                            if (memcmp(src + s + j, t->value.ptr, t->value.len) == 0) {
-                                found = 1; break;
+                    if (t->sub_pattern) {
+                        for (int bp = s + 1; bp < end; bp++) {
+                            int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                            if (me > 0 && me < end && bp > s) { found = 1; break; }
+                        }
+                    } else {
+                        if (clen >= t->value.len + 2 &&
+                            memcmp(src + s, t->value.ptr, t->value.len) != 0 &&
+                            memcmp(src + end - t->value.len, t->value.ptr, t->value.len) != 0) 
+                        {
+                            for (size_t j = 1; j <= clen - t->value.len - 1; j++) {
+                                if (memcmp(src + s + j, t->value.ptr, t->value.len) == 0) {
+                                    found = 1; break;
+                                }
                             }
                         }
                     }
                     if (!found) failed = 1;
                 } else if (t->modifier == MOD_INCLUDES) {
                     int found = 0;
-                    if (clen >= t->value.len) {
-                        for (size_t j = 0; j <= clen - t->value.len; j++) {
-                            if (memcmp(src + s + j, t->value.ptr, t->value.len) == 0) {
-                                found = 1; break;
+                    if (t->sub_pattern) {
+                        for (int bp = s; bp < end; bp++) {
+                            int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                            if (me > 0 && me <= end) { found = 1; break; }
+                        }
+                    } else {
+                        if (clen >= t->value.len) {
+                            for (size_t j = 0; j <= clen - t->value.len; j++) {
+                                if (memcmp(src + s + j, t->value.ptr, t->value.len) == 0) {
+                                    found = 1; break;
+                                }
                             }
                         }
                     }
@@ -1321,6 +1507,7 @@ static int match_pattern(const char *src, int src_len,
                 ensure_cap(m);
                 m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(end-s) }, NULL };
                 pos = end; continue;
+                } /* end scope for nxt+lit/blk/opt branch */
             }
 
             while (src[pos]) {
@@ -1332,42 +1519,86 @@ static int match_pattern(const char *src, int src_len,
                 } else if (src[pos] == '\n') break; /* sem next: para só em newline */
                 if (!CHAR_VALID(src[pos], pos, s)) break;
                 pos++;
-                if ((t->modifier == MOD_ENDS || t->modifier == MOD_SUFFIX) && t->value.len > 0 &&
-                    (size_t)(pos-s) >= t->value.len &&
+                if ((t->modifier == MOD_ENDS || t->modifier == MOD_SUFFIX) && !t->sub_pattern &&
+                    t->value.len > 0 && (size_t)(pos-s) >= t->value.len &&
                     memcmp(src+pos-t->value.len, t->value.ptr, t->value.len) == 0) break;
+                if ((t->modifier == MOD_ENDS || t->modifier == MOD_SUFFIX) && t->sub_pattern) {
+                    for (int bp = s; bp < pos; bp++) {
+                        int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                        if (me == pos) { goto ends_break_2; }
+                    }
+                }
             }
+            ends_break_2:
 
+            {
             int end = pos;
             while (end > s && isspace((unsigned char)src[end-1])) end--;
             size_t clen = (size_t)(end - s);
 
             int failed = 0;
             if (t->modifier == MOD_ENDS || t->modifier == MOD_SUFFIX) {
-                if (t->value.len > 0 && (clen < t->value.len || memcmp(src+end-t->value.len, t->value.ptr, t->value.len) != 0))
-                    failed = 1;
-                else if (t->modifier == MOD_SUFFIX && clen <= t->value.len)
-                    failed = 1;
+                if (t->sub_pattern) {
+                    int found_sp = 0;
+                    for (int bp = s; bp < end; bp++) {
+                        int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                        if (me == end) { found_sp = 1; break; }
+                    }
+                    if (!found_sp) failed = 1;
+                    else if (t->modifier == MOD_SUFFIX) {
+                        int earliest = end;
+                        for (int bp = s; bp < end; bp++) {
+                            int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                            if (me == end && bp > s) { earliest = bp; break; }
+                        }
+                        if (earliest <= s) failed = 1;
+                    }
+                } else {
+                    if (t->value.len > 0 && (clen < t->value.len || memcmp(src+end-t->value.len, t->value.ptr, t->value.len) != 0))
+                        failed = 1;
+                    else if (t->modifier == MOD_SUFFIX && clen <= t->value.len)
+                        failed = 1;
+                }
             } else if (t->modifier == MOD_PREFIX) {
-                if (clen <= t->value.len) failed = 1;
+                if (t->sub_pattern) {
+                    int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, s);
+                    if (me < 0 || me >= end) failed = 1;
+                } else {
+                    if (clen <= t->value.len) failed = 1;
+                }
             } else if (t->modifier == MOD_INFIX) {
                 int found = 0;
-                if (clen >= t->value.len + 2 &&
-                    memcmp(src + s, t->value.ptr, t->value.len) != 0 &&
-                    memcmp(src + end - t->value.len, t->value.ptr, t->value.len) != 0) 
-                {
-                    for (size_t j = 1; j <= clen - t->value.len - 1; j++) {
-                        if (memcmp(src + s + j, t->value.ptr, t->value.len) == 0) {
-                            found = 1; break;
+                if (t->sub_pattern) {
+                    for (int bp = s + 1; bp < end; bp++) {
+                        int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                        if (me > 0 && me < end && bp > s) { found = 1; break; }
+                    }
+                } else {
+                    if (clen >= t->value.len + 2 &&
+                        memcmp(src + s, t->value.ptr, t->value.len) != 0 &&
+                        memcmp(src + end - t->value.len, t->value.ptr, t->value.len) != 0) 
+                    {
+                        for (size_t j = 1; j <= clen - t->value.len - 1; j++) {
+                            if (memcmp(src + s + j, t->value.ptr, t->value.len) == 0) {
+                                found = 1; break;
+                            }
                         }
                     }
                 }
                 if (!found) failed = 1;
             } else if (t->modifier == MOD_INCLUDES) {
                 int found = 0;
-                if (clen >= t->value.len) {
-                    for (size_t j = 0; j <= clen - t->value.len; j++) {
-                        if (memcmp(src + s + j, t->value.ptr, t->value.len) == 0) {
-                            found = 1; break;
+                if (t->sub_pattern) {
+                    for (int bp = s; bp < end; bp++) {
+                        int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                        if (me > 0 && me <= end) { found = 1; break; }
+                    }
+                } else {
+                    if (clen >= t->value.len) {
+                        for (size_t j = 0; j <= clen - t->value.len; j++) {
+                            if (memcmp(src + s + j, t->value.ptr, t->value.len) == 0) {
+                                found = 1; break;
+                            }
                         }
                     }
                 }
@@ -1387,6 +1618,7 @@ static int match_pattern(const char *src, int src_len,
             ensure_cap(m);
             m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(pos-s) }, NULL };
             continue;
+            } /* end scope for no-nxt branch */
         }
 
         if (t->type == TOK_REGEX) {

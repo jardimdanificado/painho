@@ -305,6 +305,30 @@
       "name": "Includes modifier",
       "code": "$pattern {$w$includes{in}} {MATCH[$w]}\npinball\nwindows\ninside\npin\nin",
       "expected": "MATCH[pinball]\nMATCH[windows]\nMATCH[inside]\nMATCH[pin]\nMATCH[in]"
+    },
+    {
+      "id": 52,
+      "name": "Nested: int modifier inside aliases",
+      "code": "$pattern {$n$aliases{$x$int,abc,hello}} {MATCH[$n]}\n42\nabc\nhello\nxyz",
+      "expected": "MATCH[42]\nMATCH[abc]\nMATCH[hello]\nxyz"
+    },
+    {
+      "id": 53,
+      "name": "Nested: aliases inside optional with anchor",
+      "code": "$pattern {say $x$optional{$y$aliases{hello,hi}}} {SAID[$x]}\nsay hello\nsay hi\nsay\nnothing",
+      "expected": "SAID[hello]\nSAID[hi]\nSAID[]\nnothing"
+    },
+    {
+      "id": 54,
+      "name": "Nested: includes with nested aliases",
+      "code": "$pattern {$w$includes{$x$aliases{cat,dog}}} {HAS_PET[$w]}\nbigcatfoo\nhelldogend\nnothing",
+      "expected": "HAS_PET[bigcatfoo]\nHAS_PET[helldogend]\nnothing"
+    },
+    {
+      "id": 55,
+      "name": "Nested: starts with nested optional",
+      "code": "$pattern {$w$starts{un}} {MATCH[$w]}\nunhappy\nundo\nhappy",
+      "expected": "MATCH[unhappy]\nMATCH[undo]\nhappy"
     }
   ]
 }

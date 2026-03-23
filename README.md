@@ -58,6 +58,11 @@ Modifiers allow you to specify the exact type of match you want:
   - `$var$suffix{literal}`: Matches if the literal is at the end (and characters precede it).
   - `$var$infix{literal}`: Matches if the literal is in the middle (not at start or end).
   - `$var$includes{literal}`: Matches if the literal is anywhere within the capture.
+- Nested patterns: All modifiers that accept `{...}` arguments support full recursive nesting. You can place any pattern feature inside another:
+  - `$kind$aliases{$x$int,abc}`: Aliases where one alternative is a typed capture.
+  - `$x$optional{$y$aliases{hello,hi}}`: Optional match that contains an aliases sub-pattern.
+  - `$w$includes{$x$aliases{cat,dog}}`: Includes check using an aliases sub-pattern.
+  - Nesting is recursive — you can nest `$optional{}` inside `$aliases{}` inside `$starts{}`, etc.
 
 Replacement Syntax
 ------------------
@@ -103,6 +108,20 @@ Output:       Kind: dog, Name: Rover
 
 Input:        cat
 Output:       Kind: cat, Name: 
+```
+
+5. Nested Patterns (int inside aliases)
+```text
+Pattern:      $n$aliases{$x$int,abc}
+Replacement:  MATCH[$n]
+Input:        42
+Output:       MATCH[42]
+
+Input:        abc
+Output:       MATCH[abc]
+
+Input:        xyz
+Output:       xyz
 ```
 
 Customization
