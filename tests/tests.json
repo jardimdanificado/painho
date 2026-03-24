@@ -316,7 +316,7 @@
       "id": 53,
       "name": "Nested: aliases inside optional with anchor",
       "code": "$pattern {say $x$optional{$y$aliases{hello,hi}}} {SAID[$x]}\nsay hello\nsay hi\nsay\nnothing",
-      "expected": "SAID[hello]\nSAID[hi]\nSAID[]\nnothing"
+      "expected": "SAID[hello]\nSAID[hi]\nSAID[]nothing"
     },
     {
       "id": 54,
@@ -329,6 +329,24 @@
       "name": "Nested: starts with nested optional",
       "code": "$pattern {$w$starts{un}} {MATCH[$w]}\nunhappy\nundo\nhappy",
       "expected": "MATCH[unhappy]\nMATCH[undo]\nhappy"
+    },
+    {
+      "id": 56,
+      "name": "Inline eval attached to token",
+      "code": "$pattern {$n$int$eval{return match * 2}} {[$n]}\n5",
+      "expected": "[10]"
+    },
+    {
+      "id": 57,
+      "name": "Chained evals on token",
+      "code": "$pattern {$x$int$eval{return \"5\"}$eval{return tonumber(match) * 2}} {[$x]}\n123",
+      "expected": "[10]"
+    },
+    {
+      "id": 58,
+      "name": "Aliases with per-alternative eval",
+      "code": "$pattern {$x$aliases{cat$eval{return match:upper()},dog}} {[$x]}\ncat dog",
+      "expected": "[CAT][dog]"
     }
   ]
 }

@@ -150,6 +150,14 @@ typedef struct {
     Pattern    *sub_pattern;      /* for optional/starts/ends/etc: recursive sub-pattern */
     Pattern   **alt_patterns;     /* for aliases: one sub-pattern per alternative */
     int         alt_pattern_count;
+    /* inline $eval{} chain applied after capture */
+    char      **eval_codes;       /* array of chained eval code strings */
+    size_t     *eval_code_lens;
+    int         eval_code_count;
+    /* per-alias inline $eval{} chains */
+    char     ***alt_eval_codes;   /* alt_eval_codes[ai] = array of codes */
+    size_t    **alt_eval_lens;
+    int        *alt_eval_counts;
 } PapToken;
 
 typedef struct {
@@ -410,6 +418,25 @@ static void free_pattern(Pattern *p)
                 }
             }
             free(p->t[i].alt_patterns);
+        }
+        if (p->t[i].eval_codes) {
+            for (int j = 0; j < p->t[i].eval_code_count; j++)
+                free(p->t[i].eval_codes[j]);
+            free(p->t[i].eval_codes);
+            free(p->t[i].eval_code_lens);
+        }
+        if (p->t[i].alt_eval_codes) {
+            for (int j = 0; j < p->t[i].alt_count; j++) {
+                if (p->t[i].alt_eval_codes[j]) {
+                    for (int k = 0; k < p->t[i].alt_eval_counts[j]; k++)
+                        free(p->t[i].alt_eval_codes[j][k]);
+                    free(p->t[i].alt_eval_codes[j]);
+                    free(p->t[i].alt_eval_lens[j]);
+                }
+            }
+            free(p->t[i].alt_eval_codes);
+            free(p->t[i].alt_eval_lens);
+            free(p->t[i].alt_eval_counts);
         }
     }
     free(p->t); p->t = NULL; p->count = 0; p->cap = 0;
@@ -970,6 +997,44 @@ static char *apply_patterns(lua_State *L, const char *src,
  * parse_pattern_ex
  * ====================================================================== */
 
+/* Parse zero or more consecutive $eval{...} blocks starting at pat[*i].
+ * Appends code strings to *codes / *lens / *count. */
+static void parse_inline_evals(const char *pat, int n, int *i,
+                                const Symbols *sym,
+                                char ***codes, size_t **lens, int *count)
+{
+    int sl  = (int)strlen(sym->sigil);
+    int el  = (int)strlen(sym->eval);
+    int ol  = (int)strlen(sym->open);
+    int cl2 = (int)strlen(sym->close);
+    StrView so = { sym->open,  (size_t)ol  };
+    StrView sc = { sym->close, (size_t)cl2 };
+
+    while (*i + sl + el <= n &&
+           memcmp(pat + *i, sym->sigil, sl) == 0 &&
+           memcmp(pat + *i + sl, sym->eval, el) == 0)
+    {
+        int j = *i + sl + el;
+        while (j < n && isspace((unsigned char)pat[j])) j++;
+        if (j >= n || !str_pfx(pat + j, sym->open)) break;
+        StrView blk;
+        int next = extract_block(pat, j, so, sc, &blk);
+        if (next == j) break;
+        StrView code = trim_sv(blk);
+        char *cs = (char *)malloc(code.len + 1);
+        if (!cs) break;
+        memcpy(cs, code.ptr, code.len); cs[code.len] = '\0';
+        /* grow arrays */
+        int idx = *count;
+        *codes = (char   **)realloc(*codes, sizeof(char *)   * (idx + 1));
+        *lens  = (size_t  *)realloc(*lens,  sizeof(size_t)   * (idx + 1));
+        (*codes)[idx] = cs;
+        (*lens)[idx]  = code.len;
+        (*count)++;
+        *i = next;
+    }
+}
+
 static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
 {
     int n = (int)strlen(pat);
@@ -1089,6 +1154,10 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                         int apcap = 4;
                         t->alt_patterns = (Pattern **)malloc(sizeof(Pattern *) * apcap);
                         t->alt_pattern_count = 0;
+                        /* per-alias eval chains */
+                        t->alt_eval_codes  = (char ***)calloc(acap, sizeof(char **));
+                        t->alt_eval_lens   = (size_t **)calloc(acap, sizeof(size_t *));
+                        t->alt_eval_counts = (int *)calloc(acap, sizeof(int));
                         const char *cp = blk.ptr, *bend = blk.ptr + blk.len;
                         while (cp <= bend) {
                             const char *comma = cp;
@@ -1104,31 +1173,65 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                             if (part.len > 0) {
                                 if (t->alt_count >= acap) {
                                     acap <<= 1;
-                                    t->alts = (char **)realloc(t->alts, sizeof(char *) * acap);
+                                    t->alts            = (char **)realloc(t->alts,            sizeof(char *)   * acap);
+                                    t->alt_eval_codes  = (char ***)realloc(t->alt_eval_codes,  sizeof(char **)  * acap);
+                                    t->alt_eval_lens   = (size_t **)realloc(t->alt_eval_lens,  sizeof(size_t *) * acap);
+                                    t->alt_eval_counts = (int *)realloc(t->alt_eval_counts,    sizeof(int)      * acap);
                                 }
-                                t->alts[t->alt_count] = (char *)malloc(part.len + 1);
-                                if (t->alts[t->alt_count]) {
-                                    memcpy(t->alts[t->alt_count], part.ptr, part.len);
-                                    t->alts[t->alt_count][part.len] = '\0';
-                                    t->alt_count++;
+                                /* Copy part to temp buffer to find any trailing $eval{} */
+                                char *part_tmp = (char *)malloc(part.len + 1);
+                                memcpy(part_tmp, part.ptr, part.len);
+                                part_tmp[part.len] = '\0';
+                                /* Find where trailing $eval{} chain starts */
+                                int text_end = (int)part.len;
+                                {
+                                    int pi = 0;
+                                    int el2 = (int)strlen(sym->eval);
+                                    while (pi < (int)part.len) {
+                                        if (pi + sl + el2 <= (int)part.len &&
+                                            memcmp(part_tmp + pi, sym->sigil, sl) == 0 &&
+                                            memcmp(part_tmp + pi + sl, sym->eval, el2) == 0) {
+                                            int j2 = pi + sl + el2;
+                                            while (j2 < (int)part.len && isspace((unsigned char)part_tmp[j2])) j2++;
+                                            if (j2 < (int)part.len && str_pfx(part_tmp + j2, sym->open)) {
+                                                text_end = pi;
+                                                break;
+                                            }
+                                        }
+                                        pi++;
+                                    }
                                 }
+                                /* Store alt string (text only, no eval suffix) */
+                                StrView alt_text = trim_sv((StrView){ part_tmp, (size_t)text_end });
+                                int ai_idx = t->alt_count;
+                                t->alts[ai_idx] = (char *)malloc(alt_text.len + 1);
+                                if (t->alts[ai_idx]) {
+                                    memcpy(t->alts[ai_idx], alt_text.ptr, alt_text.len);
+                                    t->alts[ai_idx][alt_text.len] = '\0';
+                                }
+                                t->alt_count++;
+                                /* Parse per-alias inline $eval{} chain starting at text_end */
+                                int pi2 = text_end;
+                                parse_inline_evals(part_tmp, (int)part.len, &pi2, sym,
+                                                  &t->alt_eval_codes[ai_idx],
+                                                  &t->alt_eval_lens[ai_idx],
+                                                  &t->alt_eval_counts[ai_idx]);
+                                free(part_tmp);
                                 /* Parse the alternative as a sub-pattern if it contains sigils */
                                 int has_sigil = 0;
-                                for (size_t si = 0; si + (size_t)sl <= part.len; si++) {
-                                    if (memcmp(part.ptr + si, sym->sigil, sl) == 0) { has_sigil = 1; break; }
+                                const char *alt_str = t->alts[ai_idx] ? t->alts[ai_idx] : "";
+                                size_t alt_len = strlen(alt_str);
+                                for (size_t si = 0; si + (size_t)sl <= alt_len; si++) {
+                                    if (memcmp(alt_str + si, sym->sigil, sl) == 0) { has_sigil = 1; break; }
                                 }
                                 if (t->alt_pattern_count >= apcap) {
                                     apcap <<= 1;
                                     t->alt_patterns = (Pattern **)realloc(t->alt_patterns, sizeof(Pattern *) * apcap);
                                 }
-                                if (has_sigil) {
-                                    char *sub_str = (char *)malloc(part.len + 1);
-                                    memcpy(sub_str, part.ptr, part.len);
-                                    sub_str[part.len] = '\0';
+                                if (has_sigil && alt_str[0]) {
                                     Pattern *sp = (Pattern *)malloc(sizeof(Pattern));
                                     memset(sp, 0, sizeof(Pattern));
-                                    parse_pattern_ex(sub_str, sp, sym);
-                                    free(sub_str);
+                                    parse_pattern_ex(alt_str, sp, sym);
                                     t->alt_patterns[t->alt_pattern_count++] = sp;
                                 } else {
                                     t->alt_patterns[t->alt_pattern_count++] = NULL;
@@ -1191,6 +1294,9 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
             if (t->type != TOK_REGEX && t->type != TOK_BLOCK) {
                 t->type = TOK_VAR;
             }
+            /* parse trailing $eval{} chain for this token */
+            parse_inline_evals(pat, n, &i, sym,
+                               &t->eval_codes, &t->eval_code_lens, &t->eval_code_count);
             p->count++; continue;
         }
 
@@ -1260,6 +1366,28 @@ static int sub_pattern_matches_at(const char *src, int src_len, Pattern *sp, int
     return -1;
 }
 
+/* Apply a chain of eval codes to `text`, returning a new malloc'd string.
+ * If no eval codes or all evals return NULL, returns NULL (caller keeps original).
+ * The returned string is owned by the caller. */
+static char *apply_eval_chain(lua_State *L,
+                               char **codes, size_t *lens, int count,
+                               const char *text, size_t text_len)
+{
+    if (!codes || count <= 0) return NULL;
+    char *cur = NULL;
+    const char *cur_ptr = text;
+    size_t      cur_len = text_len;
+    for (int ei = 0; ei < count; ei++) {
+        char *res = pap_eval(L, codes[ei], lens[ei], cur_ptr, cur_len);
+        if (cur) free(cur); /* free previous iteration's result */
+        if (!res) { cur = NULL; cur_ptr = text; cur_len = text_len; break; }
+        cur     = res;
+        cur_ptr = cur;
+        cur_len = strlen(cur);
+    }
+    return cur; /* NULL if eval chain produced nothing useful */
+}
+
 static int match_pattern(const char *src, int src_len,
                           Pattern *p, int start, Match *m)
 {
@@ -1299,6 +1427,7 @@ static int match_pattern(const char *src, int src_len,
 
             if (t->modifier == MOD_ALIASES) {
                 int hit = 0;
+                int matched_ai = -1;
                 /* Fast path: try flat string match first */
                 for (int ai = 0; ai < t->alt_count; ai++) {
                     /* Skip alternatives that have sub-patterns — try them in the recursive path */
@@ -1306,7 +1435,7 @@ static int match_pattern(const char *src, int src_len,
                     size_t al = strlen(t->alts[ai]);
                     if ((size_t)(src_len - pos) >= al &&
                         memcmp(src + pos, t->alts[ai], al) == 0) {
-                        pos += (int)al; hit = 1; break;
+                        pos += (int)al; hit = 1; matched_ai = ai; break;
                     }
                 }
                 /* Recursive path: try alternatives with sub-patterns */
@@ -1321,7 +1450,7 @@ static int match_pattern(const char *src, int src_len,
                                 m->cap[m->count++] = sub_m.cap[ci];
                             }
                             pos = sub_m.end;
-                            hit = 1;
+                            hit = 1; matched_ai = ai;
                             /* Free sub_m but NOT its captures (we moved them) */
                             free(sub_m.cap);
                             if (sub_m.regex.capture) free((void *)sub_m.regex.capture);
@@ -1336,6 +1465,17 @@ static int match_pattern(const char *src, int src_len,
                 }
                 ensure_cap(m);
                 m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(pos-s) }, NULL };
+                /* apply token or per-alias eval chain */
+                {
+                    char **ec = t->eval_codes; size_t *el = t->eval_code_lens; int cnt = t->eval_code_count;
+                    if (matched_ai >= 0 && t->alt_eval_codes && t->alt_eval_codes[matched_ai]) {
+                        ec = t->alt_eval_codes[matched_ai];
+                        el = t->alt_eval_lens[matched_ai];
+                        cnt = t->alt_eval_counts[matched_ai];
+                    }
+                    char *ev = apply_eval_chain(NULL, ec, el, cnt, src+s, (size_t)(pos-s));
+                    if (ev) { m->cap[m->count-1].value.ptr = ev; m->cap[m->count-1].value.len = strlen(ev); m->cap[m->count-1].owned = ev; }
+                }
                 continue;
             }
             if (t->modifier == MOD_OPTIONAL) {
@@ -1359,6 +1499,10 @@ static int match_pattern(const char *src, int src_len,
                 }
                 ensure_cap(m);
                 m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(pos-s) }, NULL };
+                {
+                    char *ev = apply_eval_chain(NULL, t->eval_codes, t->eval_code_lens, t->eval_code_count, src+s, (size_t)(pos-s));
+                    if (ev) { m->cap[m->count-1].value.ptr = ev; m->cap[m->count-1].value.len = strlen(ev); m->cap[m->count-1].owned = ev; }
+                }
                 continue;
             }
             if (t->modifier == MOD_STARTS || t->modifier == MOD_PREFIX) {
@@ -1506,6 +1650,10 @@ static int match_pattern(const char *src, int src_len,
                 }
                 ensure_cap(m);
                 m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(end-s) }, NULL };
+                {
+                    char *ev = apply_eval_chain(NULL, t->eval_codes, t->eval_code_lens, t->eval_code_count, src+s, (size_t)(end-s));
+                    if (ev) { m->cap[m->count-1].value.ptr = ev; m->cap[m->count-1].value.len = strlen(ev); m->cap[m->count-1].owned = ev; }
+                }
                 pos = end; continue;
                 } /* end scope for nxt+lit/blk/opt branch */
             }
@@ -1617,6 +1765,10 @@ static int match_pattern(const char *src, int src_len,
             }
             ensure_cap(m);
             m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(pos-s) }, NULL };
+            {
+                char *ev = apply_eval_chain(NULL, t->eval_codes, t->eval_code_lens, t->eval_code_count, src+s, (size_t)(pos-s));
+                if (ev) { m->cap[m->count-1].value.ptr = ev; m->cap[m->count-1].value.len = strlen(ev); m->cap[m->count-1].owned = ev; }
+            }
             continue;
             } /* end scope for no-nxt branch */
         }
@@ -1668,6 +1820,11 @@ static int match_pattern(const char *src, int src_len,
 
             ensure_cap(m);
             m->cap[m->count++] = (Capture){ t->var, { src + match_start, (size_t)(match_end - match_start) }, NULL };
+            {
+                char *ev = apply_eval_chain(NULL, t->eval_codes, t->eval_code_lens, t->eval_code_count,
+                                           src + match_start, (size_t)(match_end - match_start));
+                if (ev) { m->cap[m->count-1].value.ptr = ev; m->cap[m->count-1].value.len = strlen(ev); m->cap[m->count-1].owned = ev; }
+            }
             pos = (int)match_end;
 
             continue;
@@ -1680,7 +1837,13 @@ static int match_pattern(const char *src, int src_len,
             }
             StrView v;
             pos = extract_block(src, pos, t->open, t->close, &v);
-            ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, v, NULL }; continue;
+            ensure_cap(m);
+            m->cap[m->count++] = (Capture){ t->var, v, NULL };
+            {
+                char *ev = apply_eval_chain(NULL, t->eval_codes, t->eval_code_lens, t->eval_code_count, v.ptr, v.len);
+                if (ev) { m->cap[m->count-1].value.ptr = ev; m->cap[m->count-1].value.len = strlen(ev); m->cap[m->count-1].owned = ev; }
+            }
+            continue;
         }
 
         if (t->type == TOK_OPTIONS) {
