@@ -423,20 +423,6 @@ static char *extract_nested(const char *src, const Symbols *sym,
  * replace_all
  * ====================================================================== */
 
-static char *replace_all(const char *src, const char *needle, const char *repl)
-{
-    if (!src || !needle || !*needle) return NULL;
-    StrBuf out; sb_init(&out);
-    size_t nl = strlen(needle), rl = repl ? strlen(repl) : 0, len = strlen(src);
-    size_t i = 0;
-    while (i < len) {
-        if (i + nl <= len && memcmp(src + i, needle, nl) == 0) {
-            if (rl) sb_append_n(&out, repl, rl);
-            i += nl;
-        } else sb_append_char(&out, src[i++]);
-    }
-    return out.data;
-}
 
 /* =========================================================================
  * Forward declarations
@@ -1433,7 +1419,14 @@ int papagaio_load_plugin(Papagaio *ctx, const char *path)
     plugin.get_args          = plugin_get_args;
 
     int r = init_fn(&plugin, ctx);
-    if (r != 0) { dlclose(handle); return r; }
+    if (r != 0) { 
+#ifdef _WIN32
+        FreeLibrary((HMODULE)handle);
+#else
+        dlclose(handle);
+#endif
+        return r; 
+    }
 
     ctx->dl_handles = (void **)realloc(ctx->dl_handles, sizeof(void*) * (ctx->dl_count + 1));
     ctx->dl_handles[ctx->dl_count++] = handle;
