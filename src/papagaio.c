@@ -1,7 +1,11 @@
 #define _DEFAULT_SOURCE
 #include "papagaio.h"
 #include "papagaio_plugin.h"
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <dlfcn.h>
+#endif
 #include "../lib/libregexp/libregexp.h"
 #include <ctype.h>
 #include <stdarg.h>
@@ -445,59 +449,6 @@ static char *apply_replacement_ex(const char *rep, const Match *m,
                                    const Symbols *sym);
 static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym);
 static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sym);
-
-/* =========================================================================
- * apply_evals / apply_patterns
- * ====================================================================== */
-
-static char *apply_patterns(const char *src,
-                              PatternPair *pairs, int pc, const Symbols *sym)
-{
-    if (!src) return NULL;
-    char *cur = (char *)malloc(strlen(src) + 1);
-    if (!cur) return NULL;
-    strcpy(cur, src);
-
-    for (int i = 0; i < pc; i++) {
-        Pattern pat; parse_pattern_ex(pairs[i].m, &pat, sym);
-        StrBuf out; sb_init(&out);
-        int len = (int)strlen(cur), pos = 0, matched = 0;
-
-        while (pos < len) {
-            Match m;
-            int old_pos = pos;
-            if (match_pattern(cur, len, &pat, pos, &m)) {
-                PatternPair *nested = NULL; int nc = 0;
-                char *clean = extract_nested(pairs[i].r, sym, &nested, &nc);
-                char *rep   = apply_replacement_ex(
-                    clean ? clean : pairs[i].r, &m, sym);
-                free(clean);
-
-                char *nout = rep;
-                if (nc > 0) {
-                    char *next = apply_patterns(nout, nested, nc, sym);
-                    if (next) { free(nout); nout = next; }
-                }
-                free_pairs(nested, nc);
-
-                sb_append_n(&out, nout, strlen(nout));
-                free(nout);
-                pos = m.end;
-                /* Prevent zero-length match infinite loops */
-                if (pos <= old_pos && pos < len) {
-                    sb_append_char(&out, cur[pos++]);
-                }
-                free_match(&m); matched = 1; continue;
-            }
-            sb_append_char(&out, cur[pos++]);
-        }
-
-        free_pattern(&pat);
-        if (matched) { free(cur); cur = out.data; }
-        else            sb_free(&out);
-    }
-    return cur;
-}
 
 /* =========================================================================
  * parse_pattern_ex
@@ -1405,7 +1356,11 @@ void papagaio_close(Papagaio *ctx)
             ctx->finalizers[i].fn(ctx->finalizers[i].userdata);
     }
     for (int i = 0; i < ctx->dl_count; i++) {
+#ifdef _WIN32
+        FreeLibrary((HMODULE)ctx->dl_handles[i]);
+#else
         dlclose(ctx->dl_handles[i]);
+#endif
     }
     free(ctx->dl_handles);
     free(ctx->commands);
@@ -1437,17 +1392,36 @@ static void plugin_get_args(PapPlugin *self, int *argc, char ***argv)
 
 int papagaio_load_plugin(Papagaio *ctx, const char *path)
 {
+#ifdef _WIN32
+    void *handle = LoadLibraryA(path);
+#else
     void *handle = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
+#endif
     if (!handle) {
         /* try .so or .dll if not provided? for now, use literal path */
-        fprintf(stderr, "papagaio: failed to load plugin %s: %s\n", path, dlerror());
+        fprintf(stderr, "papagaio: failed to load plugin %s: %s\n", path,
+#ifdef _WIN32
+            "LoadLibraryA failed" // Simplified error for Windows
+#else
+            dlerror()
+#endif
+        );
         return -1;
     }
 
-    papagaio_plugin_init_fn init_fn = (papagaio_plugin_init_fn)dlsym(handle, PAPAGAIO_PLUGIN_INIT);
+#ifdef _WIN32
+    int (*init_fn)(PapPlugin *, Papagaio *) = (int (*)(PapPlugin *, Papagaio *))GetProcAddress((HMODULE)handle, PAPAGAIO_PLUGIN_INIT);
+#else
+    int (*init_fn)(PapPlugin *, Papagaio *) = (int (*)(PapPlugin *, Papagaio *))dlsym(handle, PAPAGAIO_PLUGIN_INIT);
+#endif
     if (!init_fn) {
         fprintf(stderr, "papagaio: sym %s not found in %s\n", PAPAGAIO_PLUGIN_INIT, path);
-        dlclose(handle); return -1;
+#ifdef _WIN32
+        FreeLibrary((HMODULE)handle);
+#else
+        dlclose(handle);
+#endif
+        return -1;
     }
 
     PapPlugin plugin;
@@ -1536,8 +1510,6 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
 {
     StrBuf out; sb_init(&out);
     size_t i = 0, len = strlen(src);
-    StrView so_fixed = { "{", 1 };
-    StrView sc_fixed = { "}", 1 };
 
     while (i < len) {
         if (src[i] == '$') { /* FIXED SIGIL for preprocessor */

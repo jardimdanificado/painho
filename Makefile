@@ -33,7 +33,12 @@ else
 endif
 
 CFLAGS  ?= -O2 -Wall -Wextra -std=c99
-LDFLAGS ?= -ldl
+ifneq (,$(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S)))
+  LDFLAGS = 
+else
+  LDFLAGS = -ldl
+endif
+LDFLAGS += -lm
 
 TARGET_SO = papagaio$(SO_EXT)
 TARGET_A  = libpapagaio.a

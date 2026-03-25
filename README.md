@@ -1,16 +1,15 @@
 # Papagaio
 
-Papagaio is a C-first, embeddable text processing and pattern-matching preprocessor. It provides a highly flexible pattern and replacement engine designed for rapid source preprocessing, code generation, and templating.
-
-Papagaio is highly modular, supporting dynamic script-based extensions via Lua and WebAssembly/JavaScript.
+Papagaio is a C-first, embeddable text processing engine. It is designed to be highly modular and **script-agnostic**, allowing core pattern matching to be used alone or extended via third-party plugins (e.g., Lua).
 
 ## Key Features
 
-- **Pattern-Matching Engine**: Powerful capture system with built-in and custom modifiers.
-- **Modular Plugins**: Extend the language with custom commands and scripts.
-- **Variadic Scripting**: Execute complex logic in-process via `$lua` (or other script plugins) with multi-block arguments.
-- **Highly Configurable**: Redefine the entire syntax (sigils, delimiters, markers) at runtime.
-- **Cross-Platform**: Seamless usage in C, Lua, and Node.js/WebAssembly.
+- **Lightweight Core**: Efficient C engine for pattern matching and transformation.
+- **Pattern-Matching**: Powerful capture system with built-in and custom modifiers.
+- **Modular Plugins**: Extend the language with custom commands.
+- **Optional Scripting**: High-level logic via `$lua` (or other script plugins) with multi-block arguments.
+- **Configurable Delimiters**: Redefine sigils, delimiters, and markers at runtime.
+- **Language Bindings**: Native usage in C, Lua (as a library), and Node.js/WebAssembly.
 
 ## Quick Start
 
@@ -72,21 +71,21 @@ $pattern {$n$aliases{$x$int}{abc}} {VALUE: $n}
 
 ---
 
-## Replacement & Scripting
+## Scripting & Extensibility
 
-### Variable Interpolation
-Use `$name` in the replacement string to insert captured content.
+Papagaio follows a plugin-first architecture. Core features are limited to pattern matching and transformation, while scripting capabilities like Lua are provided by modular plugins.
 
 ### Scripting Blocks (`$lua`)
-Papagaio uses script plugins for dynamic transformations. The `$lua` command (if the Lua plugin is loaded) supports multiple blocks:
+The `$lua` command is provided by the **Lua Plugin**. It allows executing logic via multi-block arguments:
 ```text
 $lua{ return params[1] .. params[2] }{HELLO}{WORLD}
 ```
+- **Isolation**: Scripts operate in a clean environment; no automatic shared state (like legacy `match`/`content` variables).
 - **Arguments**: Script blocks are passed to the `params` table (1-indexed in Lua). 
-- **Isolation**: Scripts operate in a clean environment without automatic shared state (like legacy `match` or `content` variables).
 
 ### Built-in Operators
-- **$document**: Injects the current state of the preprocessed document into the output.
+- **$document**: Injects the current state of the document.
+- **$import{path}**: Loads a plugin (`.so`) or a script (`.lua`) into the current context.
 
 ---
 
@@ -127,6 +126,52 @@ Handlers receive the command name and a variadic list of arguments:
 ```c
 typedef char *(*PapCommandHandler)(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
 ```
+
+---
+
+## Creating Plugins
+
+Papagaio can be extended native C plugins.
+
+### Native Plugins
+For maximum performance or system integration, use C plugins.
+
+1.  **Implement the handler** (`hello.c`):
+    ```c
+    #include "papagaio_plugin.h"
+    #include <string.h>
+
+    static char *hello_handler(Papagaio *ctx, const char *name, int argc, 
+                              const char **argv, const size_t *argl, void *ud) {
+        return strdup("Hello from native C!");
+    }
+
+    int papagaio_plugin_init(PapPlugin *p, Papagaio *ctx) {
+        p->register_command(p, "chello", hello_handler, NULL);
+        return 0;
+    }
+    ```
+2.  **Compile and load**:
+    ```sh
+    cc -shared -fPIC -I./src -o hello.so hello.c
+    ```
+    Usage: `$import{./hello.so} $chello{}`
+
+### Lua Plugin Functions
+An easier way to add new commands is using `papagaio.register` within a script in the lua plugin.
+
+1.  **Create your plugin** (`greet.lua`):
+    ```lua
+    papagaio.register("hello", function(name)
+      return "Hello, " .. (name or "stranger") .. "!"
+    end)
+    ```
+2.  **Load and use it**:
+    ```text
+    $import{greet.lua} $hello{Papagaio}
+    ```
+    *Output: Hello, Papagaio!*
+
 
 ---
 
