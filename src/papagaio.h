@@ -7,27 +7,19 @@
 extern "C" {
 #endif
 
-/* Forward declaration for Lua state to avoid mandatory lua.h dependency in user code.
-   Users who need to access the inner VM can still include lua.h in their own .c files. */
-struct lua_State;
-
 typedef struct Papagaio Papagaio;
 
 /**
- * Papagaio — Standalone Text Processing & Pattern Matching Engine (C-First)
+ * Papagaio — Modular Plugin-Based Text Processing & Pattern Matching Engine (C-First)
  *
- * This is a C library which EMBEDS a Lua 5.1-5.4/LuaJIT VM to handle script-based
- * substitutions ($eval{} blocks). It can be used anywhere C is available.
- *
- * It ALSO functions as a native Lua module (papagaio.so) for Lua developers.
+ * This is a C library which uses a plugin architecture to support various
+ * scripting languages (Lua, QuickJS, etc) and custom commands via $import{}.
  *
  * ---------------------------------------------------------------------
  * C API
  *
- *   Papagaio *papagaio_open()           -- create context (fresh Lua state)
- *   void      papagaio_close(ctx)       -- destroy context
- *   void      papagaio_cleanup()         -- cleanup lazy VM (auto-called via atexit)
- *   struct lua_State *papagaio_L(ctx)   -- borrow inner lua_State
+ *   Papagaio *papagaio_open()           -- create context
+ *   void      papagaio_close(ctx)       -- destroy context and unload plugins
  *
  *   char *papagaio_process(input, ...)              -- NULL-terminated pairs
  *   char *papagaio_process_ex(input, sig, o, c, ...)
@@ -35,16 +27,21 @@ typedef struct Papagaio Papagaio;
  *   char *papagaio_process_text(ctx, input, len)
  *
  *   All return malloc'd strings; caller must free().
- *   Pass NULL as ctx to use the lazy internal VM for $eval{} support.
  */
 
 
 /* Lifecycle */
 Papagaio  *papagaio_open(void);
 void       papagaio_close(Papagaio *ctx);
-void       papagaio_cleanup(void);
-struct lua_State *papagaio_L(Papagaio *ctx);
 void       papagaio_set_args(Papagaio *ctx, int argc, char **argv);
+void       papagaio_get_args(Papagaio *ctx, int *argc, char ***argv);
+
+/* Plugin System */
+#include "papagaio_plugin.h"
+int   papagaio_load_plugin(Papagaio *ctx, const char *path);
+int   papagaio_has_command(Papagaio *ctx, const char *name);
+int   papagaio_register_command(Papagaio *ctx, const char *name, PapCommandHandler handler, void *ud);
+int   papagaio_register_modifier(Papagaio *ctx, const char *name, PapModifierHandler handler, void *ud);
 
 /* C API Execution Functions */
 char *papagaio_process(const char *input, ...);
@@ -60,19 +57,6 @@ char *papagaio_process_pairs(Papagaio   *ctx,
 char *papagaio_process_text(Papagaio   *ctx,
                             const char *input,
                             size_t      len);
-
-/* Lua module entry point — called automatically by require "papagaio" */
-#ifndef LUALIB_API
-#if defined(_WIN32)
-#define LUALIB_API __declspec(dllexport)
-#else
-#define LUALIB_API extern
-#endif
-#endif
-
-/* Note: we use struct lua_State* here to keep the header C-only/Lua-free */
-LUALIB_API int luaopen_papagaio(struct lua_State *L);
-LUALIB_API int luaopen_memory(struct lua_State *L);
 
 #ifdef __cplusplus
 }

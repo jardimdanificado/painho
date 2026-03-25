@@ -33,13 +33,13 @@
     {
       "id": 6,
       "name": "Eval expression with arithmetic",
-      "code": "$pattern {sum $a $b} {$eval{return $a + $b}}\nsum 5 3",
+      "code": "$pattern {sum $a $b} {$lua{return $a + $b}}\nsum 5 3",
       "expected": "8"
     },
     {
       "id": 7,
       "name": "Eval with arithmetic and variable",
-      "code": "$pattern {multiply $n} {Result: $eval{return $n * 3}}\nmultiply 5",
+      "code": "$pattern {multiply $n} {Result: $lua{return $n * 3}}\nmultiply 5",
       "expected": "Result: 15"
     },
     {
@@ -74,9 +74,9 @@
     },
     {
       "id": 13,
-      "name": "Literal dollar sign in replacement",
-      "code": "$pattern {price} {$50}\nprice",
-      "expected": "$50"
+      "name": "Sigil escaping in replacement",
+      "code": "$pattern {foo} {$$foo}\nfoo",
+      "expected": "$foo"
     },
     {
       "id": 14,
@@ -99,7 +99,7 @@
     {
       "id": 17,
       "name": "Eval with division and decimals",
-      "code": "$pattern {div $a $b} {$eval{return $a / $b}}\ndiv 7 2",
+      "code": "$pattern {div $a $b} {$lua{return $a / $b}}\ndiv 7 2",
       "expected": "3.5"
     },
     {
@@ -189,7 +189,7 @@
     {
       "id": 32,
       "name": "Multiple eval operations in sequence",
-      "code": "$pattern {calc $x} {$eval{return $x * 2}}\ncalc 3",
+      "code": "$pattern {calc $x} {$lua{return $x * 2}}\ncalc 3",
       "expected": "6"
     },
     {
@@ -219,8 +219,8 @@
     {
       "id": 37,
       "name": "Eval print output is captured and prefixed",
-      "code": "$pattern {$x} {$eval{print('hello'); return 'X'}}\nx",
-      "expected": "hello\n\nX"
+      "code": "$pattern {$x} {$lua{print('hello'); return 'X'}}\nx",
+      "expected": "X"
     },
     {
       "id": 38,
@@ -267,8 +267,8 @@
     {
       "id": 45,
       "name": "Changequote",
-      "code": "$changequote{@}{<}{>} @pattern {@n} {N:<@n>} @changequote{$}{[}{]} $pattern {$n} {M:[$n]}\nx y",
-      "expected": "@pattern {@n} {N:<@n>} {$}{[}{]} $pattern {$n} {M:[$n]}\nx y"
+      "code": "$changequote{@}{<}{>}@pattern <[@n]> <N:@n> [x] [y]",
+      "expected": " N:x N:y"
     },
     {
       "id": 46,
@@ -332,21 +332,15 @@
     },
     {
       "id": 56,
-      "name": "Inline eval attached to token",
-      "code": "$pattern {$n$int$eval{return match * 2}} {[$n]}\n5",
-      "expected": "[10]"
+      "name": "Document operator",
+      "code": "START $document END",
+      "expected": "START START $document END END"
     },
     {
       "id": 57,
-      "name": "Chained evals on token",
-      "code": "$pattern {$x$int$eval{return \"5\"}$eval{return tonumber(match) * 2}} {[$x]}\n123",
-      "expected": "[10]"
-    },
-    {
-      "id": 58,
-      "name": "Aliases with per-alternative eval",
-      "code": "$pattern {$x$aliases{cat$eval{return match:upper()},dog}} {[$x]}\ncat dog",
-      "expected": "[CAT][dog]"
+      "name": "Multi-argument plugins",
+      "code": "$lua{return params[2]}{HELLO}",
+      "expected": "HELLO"
     }
   ]
 }

@@ -1,17 +1,7 @@
-/*
- * papagaio.c — shared library, Lua 5.1 / 5.2 / 5.3 / 5.4+ / LuaJIT 2.x
- * Original logic: https://github.com/jardimdanificado/urb
- *
- * Build:
- *   cc -shared -fPIC -o papagaio.so papagaio.c $(pkg-config --cflags --libs lua5.4)
- *   cc -shared -fPIC -o papagaio.so papagaio.c $(pkg-config --cflags --libs luajit)
- */
-#ifndef LUA_IMPL
-#define LUA_IMPL
-#include "../lib/minilua.h"
-#endif
-
+#define _DEFAULT_SOURCE
 #include "papagaio.h"
+#include "papagaio_plugin.h"
+#include <dlfcn.h>
 #include "../lib/libregexp/libregexp.h"
 #include <ctype.h>
 #include <stdarg.h>
@@ -32,79 +22,7 @@ void *lre_realloc(void *opaque, void *ptr, size_t size) {
     return realloc(ptr, size);
 }
 
-/* =========================================================================
- * Lua version compatibility shims
- * Targets: Lua 5.1, LuaJIT 2.x (reports 5.1), Lua 5.2, 5.3, 5.4
- * ====================================================================== */
 
-#if LUA_VERSION_NUM < 502
-/*
- * luaL_newlib — Lua 5.1 only has luaL_register.
- * In 5.1 luaL_register(L, NULL, l) pushes nothing when name is NULL and the
- * table is already on the stack, so we create the table first.
- */
-#undef  luaL_newlib
-#define luaL_newlib(L, funcs) \
-    (lua_newtable(L), luaL_register(L, NULL, (funcs)))
-
-/*
- * luaL_requiref — not available in 5.1.
- * We only use it in papagaio_open() which is the C-embedding path; the Lua
- * module path (luaopen_papagaio) does not call it.
- */
-static
-#ifdef __GNUC__
-__attribute__((unused))
-#endif
-void luaL_requiref(lua_State *L, const char *modname,
-                           lua_CFunction openf, int glb)
-{
-    lua_pushcfunction(L, openf);
-    lua_pushstring(L, modname);
-    lua_call(L, 1, 1);
-    if (glb) {
-        lua_pushvalue(L, -1);
-        lua_setglobal(L, modname);
-    }
-}
-
-/*
- * luaL_tolstring — not available in 5.1.
- * Mimics the 5.2+ behavior: tries __tostring metamethod, then falls back to
- * a type-based default.  Always leaves one new string on the stack.
- */
-static const char *luaL_tolstring(lua_State *L, int idx, size_t *len)
-{
-    if (luaL_callmeta(L, idx, "__tostring")) {
-        /* metamethod left result on stack — accept only strings */
-        if (lua_type(L, -1) != LUA_TSTRING) {
-            lua_pop(L, 1);
-            lua_pushstring(L, "(invalid __tostring)");
-        }
-    } else {
-        switch (lua_type(L, idx)) {
-            case LUA_TNUMBER:
-                lua_pushfstring(L, "%g", (double)lua_tonumber(L, idx));
-                break;
-            case LUA_TSTRING:
-                lua_pushvalue(L, idx);
-                break;
-            case LUA_TBOOLEAN:
-                lua_pushstring(L, lua_toboolean(L, idx) ? "true" : "false");
-                break;
-            case LUA_TNIL:
-                lua_pushliteral(L, "nil");
-                break;
-            default:
-                lua_pushfstring(L, "%s: %p",
-                    luaL_typename(L, idx),
-                    lua_topointer(L, idx));
-                break;
-        }
-    }
-    return lua_tolstring(L, -1, len);
-}
-#endif /* LUA_VERSION_NUM < 502 */
 
 /* =========================================================================
  * Internal types (previously in papagaio_internal.h)
@@ -150,19 +68,11 @@ typedef struct {
     Pattern    *sub_pattern;      /* for optional/starts/ends/etc: recursive sub-pattern */
     Pattern   **alt_patterns;     /* for aliases: one sub-pattern per alternative */
     int         alt_pattern_count;
-    /* inline $eval{} chain applied after capture */
-    char      **eval_codes;       /* array of chained eval code strings */
-    size_t     *eval_code_lens;
-    int         eval_code_count;
-    /* per-alias inline $eval{} chains */
-    char     ***alt_eval_codes;   /* alt_eval_codes[ai] = array of codes */
-    size_t    **alt_eval_lens;
-    int        *alt_eval_counts;
 } PapToken;
 
 typedef struct {
-    const char *sigil, *open, *close;
-    const char *pattern, *regex, *eval, *block, *optional, *changequote;
+    char sigil[16], open[16], close[16];
+    const char *pattern, *regex, *block, *optional, *changequote;
 } Symbols;
 
 struct Pattern_s { PapToken *t; int count; int cap; Symbols sym; };
@@ -186,120 +96,48 @@ typedef struct {
 
 typedef struct { Pattern pattern; const char *replacement; } Rule;
 typedef struct { char *m; char *r; } PatternPair;
-typedef struct { char *code; size_t len; } EvalBlock;
 
 /* =========================================================================
  * Embedded Papagaio Lua Script
  * ====================================================================== */
 
-static const char *PAP_CORE_LUA = 
-"local pap = {}\n"
-"local function trim(s) return s:match('^%s*(.-)%s*$') end\n"
-"_G.papagaio_internal = pap\n"
-"_G.papagaio = pap\n"
-"local ok, mod = pcall(require, 'papagaio')\n"
-"if ok and type(mod) == 'table' then\n"
-"  pap.process_text = mod.process_text\n"
-"  pap.process = mod.process_text\n"
-"  pap.process_ex = mod.process_ex\n"
-"  pap.process_pairs = mod.process_pairs\n"
-"end\n";
+#define PAP_MAX_PLUGINS 64
 
-struct Papagaio { lua_State *L; int owned; };
+typedef struct {
+    const char        *name;
+    PapCommandHandler  handler;
+    void              *userdata;
+} RegisteredCommand;
 
-/* Internal global for lazy-loaded Lua VM (for C library users NOT passing a context) */
-static lua_State *g_lazy_L = NULL;
-void papagaio_cleanup(void);
+typedef struct {
+    const char         *name;
+    PapModifierHandler  handler;
+    void               *userdata;
+} RegisteredModifier;
 
-static void register_papagaio_preload(lua_State *L);
-LUALIB_API int luaopen_memory(lua_State *L);
+typedef struct {
+    PapFinalizer fn;
+    void        *userdata;
+} RegisteredFinalizer;
 
-static void papagaio_stdout_clear(lua_State *L)
-{
-    lua_pushstring(L, "");
-    lua_setglobal(L, "papagaio_stdout");
-}
+struct Papagaio {
+    /* plugin registry */
+    void              **dl_handles;          /* dlopen handles p/ dlclose */
+    int                 dl_count;
 
-static void papagaio_stdout_append(lua_State *L, const char *msg, size_t len)
-{
-    lua_getglobal(L, "papagaio_stdout");
-    size_t old_len = 0;
-    const char *old = lua_tolstring(L, -1, &old_len);
-    if (!old) old = "";
+    RegisteredCommand  *commands;
+    int                 cmd_count, cmd_cap;
 
-    luaL_Buffer b;
-    luaL_buffinit(L, &b);
-    luaL_addlstring(&b, old, old_len);
-    luaL_addlstring(&b, msg, len);
-    luaL_pushresult(&b);
-    lua_setglobal(L, "papagaio_stdout");
+    RegisteredModifier *modifiers;
+    int                 mod_count, mod_cap;
 
-    lua_pop(L, 1); /* pop old value */
-}
+    RegisteredFinalizer *finalizers;
+    int                  fin_count, fin_cap;
 
-static int papagaio_print(lua_State *L)
-{
-    int n = lua_gettop(L);
-    luaL_Buffer b;
-    luaL_buffinit(L, &b);
-
-    for (int i = 1; i <= n; i++) {
-        if (i > 1) luaL_addchar(&b, '\t');
-        size_t sl;
-        luaL_tolstring(L, i, &sl);
-        const char *s = lua_tostring(L, -1);
-        if (s && sl) luaL_addlstring(&b, s, sl);
-        lua_pop(L, 1);
-    }
-    luaL_addchar(&b, '\n');
-    luaL_pushresult(&b);
-
-    size_t out_len;
-    const char *out = lua_tolstring(L, -1, &out_len);
-    if (out && out_len > 0) {
-        fwrite(out, 1, out_len, stdout);
-        fflush(stdout);
-        papagaio_stdout_append(L, out, out_len);
-    }
-    lua_pop(L, 1); /* pop the output string */
-
-    return 0;
-}
-
-static lua_State *ensure_L(lua_State *L)
-{
-    if (L) return L;
-    if (!g_lazy_L) {
-        g_lazy_L = luaL_newstate();
-        if (g_lazy_L) {
-            luaL_openlibs(g_lazy_L);
-            if (luaL_dostring(g_lazy_L, PAP_CORE_LUA) != LUA_OK) {
-                fprintf(stderr, "papagaio: error loading core logic: %s\n", lua_tostring(g_lazy_L, -1));
-            }
-            register_papagaio_preload(g_lazy_L);
-            papagaio_stdout_clear(g_lazy_L);
-            lua_pushcfunction(g_lazy_L, papagaio_print);
-            lua_setglobal(g_lazy_L, "print");
-            lua_settop(g_lazy_L, 0);
-            atexit(papagaio_cleanup);
-        }
-    }
-    return g_lazy_L;
-}
-
-static void register_papagaio_preload(lua_State *L)
-{
-    if (!L) return;
-    lua_getglobal(L, "package");
-    if (!lua_istable(L, -1)) { lua_pop(L, 1); return; }
-    lua_getfield(L, -1, "preload");
-    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
-    lua_pushcfunction(L, luaopen_papagaio);
-    lua_setfield(L, -2, "papagaio");
-    lua_pushcfunction(L, luaopen_memory);
-    lua_setfield(L, -2, "memory");
-    lua_pop(L, 2);
-}
+    /* host arguments */
+    int    argc;
+    char **argv;
+};
 
 /* =========================================================================
  * Constants
@@ -310,7 +148,6 @@ static void register_papagaio_preload(lua_State *L)
 #define PAP_CLOSE    "}"
 #define PAP_PATTERN  "pattern"
 #define PAP_REGEX    "regex"
-#define PAP_EVAL     "eval"
 #define PAP_BLOCK    "block"
 #define PAP_OPTIONAL "optional"
 #define PAP_CHANGEQUOTE "changequote"
@@ -361,8 +198,11 @@ static void sb_free(StrBuf *b)
 static Symbols make_symbols(const char *sigil, const char *open, const char *close)
 {
     Symbols s;
-    s.sigil    = sigil;  s.open  = open;  s.close = close;
-    s.pattern  = PAP_PATTERN; s.regex   = PAP_REGEX; s.eval    = PAP_EVAL;
+    memset(&s, 0, sizeof(s));
+    if (sigil) { strncpy(s.sigil, sigil, 15); s.sigil[15] = '\0'; }
+    if (open)  { strncpy(s.open,  open,  15); s.open[15]  = '\0'; }
+    if (close) { strncpy(s.close, close, 15); s.close[15] = '\0'; }
+    s.pattern  = PAP_PATTERN; s.regex   = PAP_REGEX;
     s.block    = PAP_BLOCK;
     s.optional = PAP_OPTIONAL;
     s.changequote = PAP_CHANGEQUOTE;
@@ -419,25 +259,7 @@ static void free_pattern(Pattern *p)
             }
             free(p->t[i].alt_patterns);
         }
-        if (p->t[i].eval_codes) {
-            for (int j = 0; j < p->t[i].eval_code_count; j++)
-                free(p->t[i].eval_codes[j]);
-            free(p->t[i].eval_codes);
-            free(p->t[i].eval_code_lens);
-        }
-        if (p->t[i].alt_eval_codes) {
-            for (int j = 0; j < p->t[i].alt_count; j++) {
-                if (p->t[i].alt_eval_codes[j]) {
-                    for (int k = 0; k < p->t[i].alt_eval_counts[j]; k++)
-                        free(p->t[i].alt_eval_codes[j][k]);
-                    free(p->t[i].alt_eval_codes[j]);
-                    free(p->t[i].alt_eval_lens[j]);
-                }
-            }
-            free(p->t[i].alt_eval_codes);
-            free(p->t[i].alt_eval_lens);
-            free(p->t[i].alt_eval_counts);
-        }
+
     }
     free(p->t); p->t = NULL; p->count = 0; p->cap = 0;
 }
@@ -469,12 +291,7 @@ static void free_pairs(PatternPair *p, int n)
     free(p);
 }
 
-static void free_evals(EvalBlock *e, int n)
-{
-    if (!e) return;
-    for (int i = 0; i < n; i++) free(e[i].code);
-    free(e);
-}
+
 
 /* =========================================================================
  * Unescape delimiter
@@ -483,85 +300,6 @@ static void free_evals(EvalBlock *e, int n)
 static int extract_block(const char *src, int pos,
                           StrView o, StrView c, StrView *out);
 
-static int extract_changequote_args(const char *src, int pos, const Symbols *sym,
-                                   char **nsig, char **nopen, char **nclose)
-{
-    int n = (int)strlen(src);
-    int i = pos;
-    int ol = (int)strlen(sym->open);
-    int cl = (int)strlen(sym->close);
-    StrView so = { sym->open, (size_t)ol };
-    StrView sc = { sym->close, (size_t)cl };
-
-    *nsig = *nopen = *nclose = NULL;
-
-    /* Skip spaces between changequote and first { */
-    while (i < n && isspace((unsigned char)src[i])) i++;
-    if (i < n && str_pfx(src + i, sym->open)) {
-        StrView v;
-        i = extract_block(src, i, so, sc, &v);
-        v = trim_sv(v);
-        *nsig = (char *)malloc(v.len + 1);
-        memcpy(*nsig, v.ptr, v.len); (*nsig)[v.len] = '\0';
-    }
-
-    while (i < n && isspace((unsigned char)src[i])) i++;
-    if (i < n && str_pfx(src + i, sym->open)) {
-        StrView v;
-        i = extract_block(src, i, so, sc, &v);
-        v = trim_sv(v);
-        *nopen = (char *)malloc(v.len + 1);
-        memcpy(*nopen, v.ptr, v.len); (*nopen)[v.len] = '\0';
-    }
-
-    while (i < n && isspace((unsigned char)src[i])) i++;
-    if (i < n && str_pfx(src + i, sym->open)) {
-        StrView v;
-        i = extract_block(src, i, so, sc, &v);
-        v = trim_sv(v);
-        *nclose = (char *)malloc(v.len + 1);
-        memcpy(*nclose, v.ptr, v.len); (*nclose)[v.len] = '\0';
-    }
-
-    return i;
-}
-
-static char *handle_changequotes(const char *input, Symbols *sym)
-{
-    if (!input) return NULL;
-    int n = (int)strlen(input);
-    int sl = (int)strlen(sym->sigil);
-    int cql = (int)strlen(sym->changequote);
-    
-    StrBuf out; sb_init(&out);
-    
-    for (int i = 0; i < n; ) {
-        if (str_pfx(input + i, sym->sigil) && 
-            i + sl + cql <= n && 
-            memcmp(input + i + sl, sym->changequote, cql) == 0) 
-        {
-            char *ns = NULL, *no = NULL, *nc = NULL;
-            int next = extract_changequote_args(input, i + sl + cql, sym, &ns, &no, &nc);
-            
-            if (ns) sym->sigil = ns;
-            if (no) sym->open = no;
-            if (nc) sym->close = nc;
-            
-            /* Recurse with new symbols for the REST of the string */
-            char *rest = handle_changequotes(input + next, sym);
-            if (rest) {
-                sb_append_n(&out, rest, strlen(rest));
-                free(rest);
-            }
-            return out.data;
-        } else {
-            sb_append_char(&out, input[i]);
-            i++;
-        }
-    }
-    return out.data;
-}
-
 static char *unescape_delim(StrView v, size_t *out_len)
 {
     StrBuf out; sb_init(&out);
@@ -569,7 +307,9 @@ static char *unescape_delim(StrView v, size_t *out_len)
         char c = v.ptr[i];
         if (c == '\\' && i + 1 < v.len) {
             char n = v.ptr[i+1];
-            if (n == '"' || n == '\'' || n == '\\') { sb_append_char(&out, n); i++; continue; }
+            if (n == '{' || n == '}' || n == '[' || n == ']' || n == '(' || n == ')' || n == '\\') {
+                sb_append_char(&out, n); i++; continue;
+            }
         }
         sb_append_char(&out, c);
     }
@@ -577,36 +317,7 @@ static char *unescape_delim(StrView v, size_t *out_len)
     return out.data;
 }
 
-/* =========================================================================
- * Sigil escape / restore
- * ====================================================================== */
 
-static char *pap_prepare(const char *input, const Symbols *sym)
-{
-    if (!input) return NULL;
-    StrBuf out; sb_init(&out);
-    size_t sl = strlen(sym->sigil), len = strlen(input);
-    for (size_t i = 0; i < len; i++) {
-        if (input[i] == '\\' && sl > 0 && i + sl < len &&
-            memcmp(input + i + 1, sym->sigil, sl) == 0) {
-            sb_append_char(&out, PAP_ESC); i += sl; continue;
-        }
-        sb_append_char(&out, input[i]);
-    }
-    return out.data;
-}
-
-static char *pap_restore(const char *input, const Symbols *sym)
-{
-    if (!input) return NULL;
-    StrBuf out; sb_init(&out);
-    size_t sl = strlen(sym->sigil), len = strlen(input);
-    for (size_t i = 0; i < len; i++) {
-        if (input[i] == PAP_ESC) { sb_append_n(&out, sym->sigil, sl); continue; }
-        sb_append_char(&out, input[i]);
-    }
-    return out.data;
-}
 
 /* =========================================================================
  * Block extraction
@@ -646,114 +357,7 @@ static int extract_block(const char *src, int pos,
     return (int)strlen(src);
 }
 
-/* =========================================================================
- * Lua eval
- *
- * Stack contract: enters and exits with the same depth.
- * Returns malloc'd string or NULL on error.
- * ====================================================================== */
 
-static char *pap_eval(lua_State *L,
-                       const char *code, size_t code_len,
-                       const char *match, size_t match_len)
-{
-    L = ensure_L(L);
-    if (!L) return NULL;
-
-    /* save old `match` → stack: [old_match] */
-    lua_getglobal(L, "match");
-
-    lua_pushlstring(L, match ? match : "", match_len);
-    lua_setglobal(L, "match");                          /* stack: [old_match] */
-
-    if (luaL_loadbuffer(L, code, code_len, "papagaio") != LUA_OK) {
-        /* stack: [old_match, errmsg] */
-        const char *errmsg = lua_tostring(L, -1);
-        fprintf(stderr, "papagaio eval load failed: %s\n", errmsg ? errmsg : "(nil)");
-        if (errmsg && errmsg[0] != '\0') {
-            papagaio_stdout_append(L, "[papagaio eval load failed] ", 25);
-            papagaio_stdout_append(L, errmsg, strlen(errmsg));
-            papagaio_stdout_append(L, "\n", 1);
-        }
-        lua_pop(L, 1);
-        lua_setglobal(L, "match");                      /* restore → [] */
-        return NULL;
-    }
-
-    if (lua_pcall(L, 0, 1, 0) != LUA_OK) {
-        /* stack: [old_match, errmsg] */
-        const char *errmsg = lua_tostring(L, -1);
-        fprintf(stderr, "papagaio eval runtime failed: %s\n", errmsg ? errmsg : "(nil)");
-        if (errmsg && errmsg[0] != '\0') {
-            papagaio_stdout_append(L, "[papagaio eval runtime failed] ", 30);
-            papagaio_stdout_append(L, errmsg, strlen(errmsg));
-            papagaio_stdout_append(L, "\n", 1);
-        }
-        lua_pop(L, 1);
-        lua_setglobal(L, "match");
-        return NULL;
-    }
-
-    /* stack: [old_match, result] */
-    size_t rlen = 0;
-    const char *raw = "";
-    if (!lua_isnil(L, -1)) {
-        luaL_tolstring(L, -1, &rlen);
-        raw = lua_tostring(L, -1);
-        lua_pop(L, 1); /* pop tolstring result */
-    }
-
-    char *out = (char *)malloc(rlen + 1);
-    if (out) {
-        if (rlen) memcpy(out, raw, rlen);
-        out[rlen] = '\0';
-    }
-
-    lua_pop(L, 1);             /* pop result → [old_match] */
-    lua_setglobal(L, "match"); /* restore → []                   */
-    return out;
-}
-
-/* =========================================================================
- * Inline $eval{} in replacement strings
- * ====================================================================== */
-
-static int apply_eval_ph(StrBuf *out, const char *rep, size_t rlen,
-                          size_t *idx, const Symbols *sym,
-                          lua_State *L, const Match *m)
-{
-    if (!sym->eval) return 0;
-    lua_State *actual_L = ensure_L(L);
-    if (!actual_L) return 0;
-    size_t sl  = strlen(sym->sigil);
-    size_t el  = strlen(sym->eval);
-    size_t pos = *idx + sl + el;
-    while (pos < rlen && isspace((unsigned char)rep[pos])) pos++;
-
-    StrView o = { sym->open,  strlen(sym->open)  };
-    StrView c = { sym->close, strlen(sym->close) };
-    StrView blk;
-    int next = extract_block(rep, (int)pos, o, c, &blk);
-    if ((size_t)next == pos) return 0;
-
-    StrView t = trim_sv(blk);
-    char *code = (char *)malloc(t.len + 1);
-    if (!code) return 0;
-    memcpy(code, t.ptr, t.len); code[t.len] = '\0';
-
-    const char *ms = ""; size_t ml = 0;
-    if (m && m->src && m->end >= m->start) {
-        ms = m->src + m->start; ml = (size_t)(m->end - m->start);
-    }
-
-    char *res = pap_eval(actual_L, code, t.len, ms, ml);
-    free(code);
-    if (!res) return 0;
-    sb_append_n(out, res, strlen(res));
-    free(res);
-    *idx = (size_t)next;
-    return 1;
-}
 
 /* =========================================================================
  * Nested pattern / eval extraction
@@ -819,57 +423,6 @@ static char *extract_nested(const char *src, const Symbols *sym,
     return out.data;
 }
 
-static char *extract_evals(const char *src, const Symbols *sym,
-                             EvalBlock **out_evals, int *out_count)
-{
-    if (out_evals) *out_evals = NULL;
-    if (out_count) *out_count = 0;
-    if (!src || !sym || !sym->eval) return NULL;
-
-    EvalBlock *evals = NULL;
-    int ec = 0, ecap = 0;
-
-    StrBuf out; sb_init(&out);
-    size_t sl = strlen(sym->sigil), el = strlen(sym->eval);
-    StrView o = { sym->open,  strlen(sym->open)  };
-    StrView c = { sym->close, strlen(sym->close) };
-    size_t len = strlen(src), i = 0;
-
-    while (i < len) {
-        if (sl > 0 && i + sl + el <= len &&
-            memcmp(src + i,      sym->sigil, sl) == 0 &&
-            memcmp(src + i + sl, sym->eval,  el) == 0) {
-
-            size_t j = i + sl + el;
-            while (j < len && isspace((unsigned char)src[j])) j++;
-
-            if (j < len && sv_pfx(src + j, o)) {
-                StrView cb;
-                int next = extract_block(src, (int)j, o, c, &cb);
-                StrView ct = trim_sv(cb);
-
-                if (ec >= ecap) {
-                    ecap = ecap ? ecap * 2 : 8;
-                    evals = (EvalBlock *)realloc(evals, sizeof(EvalBlock) * ecap);
-                }
-                evals[ec].code = (char *)malloc(ct.len + 1);
-                evals[ec].len  = ct.len;
-                if (evals[ec].code) {
-                    memcpy(evals[ec].code, ct.ptr, ct.len);
-                    evals[ec].code[ct.len] = '\0';
-                    char ph[32];
-                    snprintf(ph, sizeof(ph), "__E%d__", ec);
-                    sb_append_n(&out, ph, strlen(ph));
-                    ec++; i = (size_t)next; continue;
-                }
-            }
-        }
-        sb_append_char(&out, src[i++]);
-    }
-    if (out_evals) *out_evals = evals;
-    if (out_count) *out_count = ec;
-    return out.data;
-}
 
 /* =========================================================================
  * replace_all
@@ -898,36 +451,15 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym);
 static int  match_pattern(const char *src, int src_len,
                            Pattern *p, int start, Match *m);
 static char *apply_replacement_ex(const char *rep, const Match *m,
-                                   const Symbols *sym, lua_State *L);
+                                   const Symbols *sym);
+static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym);
+static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sym);
 
 /* =========================================================================
  * apply_evals / apply_patterns
  * ====================================================================== */
 
-static char *apply_evals(lua_State *L, const char *src,
-                          EvalBlock *evals, int n, const Symbols *sym,
-                          const char *match, size_t mlen)
-{
-    (void)sym;
-    if (!src) return NULL;
-    char *cur = (char *)malloc(strlen(src) + 1);
-    if (!cur) return NULL;
-    strcpy(cur, src);
-
-    for (int i = n - 1; i >= 0; i--) {
-        char ph[32]; snprintf(ph, sizeof(ph), "__E%d__", i);
-        char *res = pap_eval(L, evals[i].code, evals[i].len, match, mlen);
-        if (!res) { res = (char *)malloc(20); if (res) strcpy(res, "error: eval failed"); }
-        if (res) {
-            char *next = replace_all(cur, ph, res);
-            free(res);
-            if (next) { free(cur); cur = next; }
-        }
-    }
-    return cur;
-}
-
-static char *apply_patterns(lua_State *L, const char *src,
+static char *apply_patterns(const char *src,
                               PatternPair *pairs, int pc, const Symbols *sym)
 {
     if (!src) return NULL;
@@ -947,34 +479,17 @@ static char *apply_patterns(lua_State *L, const char *src,
                 PatternPair *nested = NULL; int nc = 0;
                 char *clean = extract_nested(pairs[i].r, sym, &nested, &nc);
                 char *rep   = apply_replacement_ex(
-                    clean ? clean : pairs[i].r, &m, sym, NULL);
+                    clean ? clean : pairs[i].r, &m, sym);
                 free(clean);
 
                 char *nout = rep;
                 if (nc > 0) {
-                    char *next = apply_patterns(L, nout, nested, nc, sym);
+                    char *next = apply_patterns(nout, nested, nc, sym);
                     if (next) { free(nout); nout = next; }
                 }
                 free_pairs(nested, nc);
 
-                if (L && m.src && m.end >= m.start) {
-                    lua_pushlstring(L, m.src + m.start,
-                                   (size_t)(m.end - m.start));
-                    lua_setglobal(L, "match");
-                }
-
-                EvalBlock *evls = NULL; int en = 0;
-                char *ph = extract_evals(nout, sym, &evls, &en);
-                char *applied = NULL;
-                if (ph) {
-                    const char *ms = m.src ? m.src + m.start : "";
-                    size_t      ml = (m.src && m.end >= m.start)
-                                     ? (size_t)(m.end - m.start) : 0;
-                    applied = apply_evals(L, ph, evls, en, sym, ms, ml);
-                    free(ph);
-                }
-                free_evals(evls, en);
-                if (applied) { sb_append_n(&out, applied, strlen(applied)); free(applied); }
+                sb_append_n(&out, nout, strlen(nout));
                 free(nout);
                 pos = m.end;
                 /* Prevent zero-length match infinite loops */
@@ -996,44 +511,6 @@ static char *apply_patterns(lua_State *L, const char *src,
 /* =========================================================================
  * parse_pattern_ex
  * ====================================================================== */
-
-/* Parse zero or more consecutive $eval{...} blocks starting at pat[*i].
- * Appends code strings to *codes / *lens / *count. */
-static void parse_inline_evals(const char *pat, int n, int *i,
-                                const Symbols *sym,
-                                char ***codes, size_t **lens, int *count)
-{
-    int sl  = (int)strlen(sym->sigil);
-    int el  = (int)strlen(sym->eval);
-    int ol  = (int)strlen(sym->open);
-    int cl2 = (int)strlen(sym->close);
-    StrView so = { sym->open,  (size_t)ol  };
-    StrView sc = { sym->close, (size_t)cl2 };
-
-    while (*i + sl + el <= n &&
-           memcmp(pat + *i, sym->sigil, sl) == 0 &&
-           memcmp(pat + *i + sl, sym->eval, el) == 0)
-    {
-        int j = *i + sl + el;
-        while (j < n && isspace((unsigned char)pat[j])) j++;
-        if (j >= n || !str_pfx(pat + j, sym->open)) break;
-        StrView blk;
-        int next = extract_block(pat, j, so, sc, &blk);
-        if (next == j) break;
-        StrView code = trim_sv(blk);
-        char *cs = (char *)malloc(code.len + 1);
-        if (!cs) break;
-        memcpy(cs, code.ptr, code.len); cs[code.len] = '\0';
-        /* grow arrays */
-        int idx = *count;
-        *codes = (char   **)realloc(*codes, sizeof(char *)   * (idx + 1));
-        *lens  = (size_t  *)realloc(*lens,  sizeof(size_t)   * (idx + 1));
-        (*codes)[idx] = cs;
-        (*lens)[idx]  = code.len;
-        (*count)++;
-        *i = next;
-    }
-}
 
 static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
 {
@@ -1154,69 +631,23 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                         int apcap = 4;
                         t->alt_patterns = (Pattern **)malloc(sizeof(Pattern *) * apcap);
                         t->alt_pattern_count = 0;
-                        /* per-alias eval chains */
-                        t->alt_eval_codes  = (char ***)calloc(acap, sizeof(char **));
-                        t->alt_eval_lens   = (size_t **)calloc(acap, sizeof(size_t *));
-                        t->alt_eval_counts = (int *)calloc(acap, sizeof(int));
                         const char *cp = blk.ptr, *bend = blk.ptr + blk.len;
-                        while (cp <= bend) {
-                            const char *comma = cp;
-                            /* Respect brace nesting when finding commas */
-                            int depth = 0;
-                            while (comma < bend) {
-                                if (memcmp(comma, sym->open, ol) == 0) { depth++; comma += ol; continue; }
-                                if (memcmp(comma, sym->close, cl) == 0) { depth--; comma += cl; continue; }
-                                if (*comma == ',' && depth == 0) break;
-                                comma++;
-                            }
+                        while (cp < bend) {
+                            const char *comma = strchr(cp, ',');
+                            if (!comma) comma = bend;
                             StrView part = trim_sv((StrView){ cp, (size_t)(comma - cp) });
                             if (part.len > 0) {
                                 if (t->alt_count >= acap) {
                                     acap <<= 1;
-                                    t->alts            = (char **)realloc(t->alts,            sizeof(char *)   * acap);
-                                    t->alt_eval_codes  = (char ***)realloc(t->alt_eval_codes,  sizeof(char **)  * acap);
-                                    t->alt_eval_lens   = (size_t **)realloc(t->alt_eval_lens,  sizeof(size_t *) * acap);
-                                    t->alt_eval_counts = (int *)realloc(t->alt_eval_counts,    sizeof(int)      * acap);
+                                    t->alts = (char **)realloc(t->alts, sizeof(char *) * acap);
                                 }
-                                /* Copy part to temp buffer to find any trailing $eval{} */
-                                char *part_tmp = (char *)malloc(part.len + 1);
-                                memcpy(part_tmp, part.ptr, part.len);
-                                part_tmp[part.len] = '\0';
-                                /* Find where trailing $eval{} chain starts */
-                                int text_end = (int)part.len;
-                                {
-                                    int pi = 0;
-                                    int el2 = (int)strlen(sym->eval);
-                                    while (pi < (int)part.len) {
-                                        if (pi + sl + el2 <= (int)part.len &&
-                                            memcmp(part_tmp + pi, sym->sigil, sl) == 0 &&
-                                            memcmp(part_tmp + pi + sl, sym->eval, el2) == 0) {
-                                            int j2 = pi + sl + el2;
-                                            while (j2 < (int)part.len && isspace((unsigned char)part_tmp[j2])) j2++;
-                                            if (j2 < (int)part.len && str_pfx(part_tmp + j2, sym->open)) {
-                                                text_end = pi;
-                                                break;
-                                            }
-                                        }
-                                        pi++;
-                                    }
-                                }
-                                /* Store alt string (text only, no eval suffix) */
-                                StrView alt_text = trim_sv((StrView){ part_tmp, (size_t)text_end });
                                 int ai_idx = t->alt_count;
-                                t->alts[ai_idx] = (char *)malloc(alt_text.len + 1);
+                                t->alts[ai_idx] = (char *)malloc(part.len + 1);
                                 if (t->alts[ai_idx]) {
-                                    memcpy(t->alts[ai_idx], alt_text.ptr, alt_text.len);
-                                    t->alts[ai_idx][alt_text.len] = '\0';
+                                    memcpy(t->alts[ai_idx], part.ptr, part.len);
+                                    t->alts[ai_idx][part.len] = '\0';
                                 }
                                 t->alt_count++;
-                                /* Parse per-alias inline $eval{} chain starting at text_end */
-                                int pi2 = text_end;
-                                parse_inline_evals(part_tmp, (int)part.len, &pi2, sym,
-                                                  &t->alt_eval_codes[ai_idx],
-                                                  &t->alt_eval_lens[ai_idx],
-                                                  &t->alt_eval_counts[ai_idx]);
-                                free(part_tmp);
                                 /* Parse the alternative as a sub-pattern if it contains sigils */
                                 int has_sigil = 0;
                                 const char *alt_str = t->alts[ai_idx] ? t->alts[ai_idx] : "";
@@ -1294,9 +725,6 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
             if (t->type != TOK_REGEX && t->type != TOK_BLOCK) {
                 t->type = TOK_VAR;
             }
-            /* parse trailing $eval{} chain for this token */
-            parse_inline_evals(pat, n, &i, sym,
-                               &t->eval_codes, &t->eval_code_lens, &t->eval_code_count);
             p->count++; continue;
         }
 
@@ -1366,27 +794,6 @@ static int sub_pattern_matches_at(const char *src, int src_len, Pattern *sp, int
     return -1;
 }
 
-/* Apply a chain of eval codes to `text`, returning a new malloc'd string.
- * If no eval codes or all evals return NULL, returns NULL (caller keeps original).
- * The returned string is owned by the caller. */
-static char *apply_eval_chain(lua_State *L,
-                               char **codes, size_t *lens, int count,
-                               const char *text, size_t text_len)
-{
-    if (!codes || count <= 0) return NULL;
-    char *cur = NULL;
-    const char *cur_ptr = text;
-    size_t      cur_len = text_len;
-    for (int ei = 0; ei < count; ei++) {
-        char *res = pap_eval(L, codes[ei], lens[ei], cur_ptr, cur_len);
-        if (cur) free(cur); /* free previous iteration's result */
-        if (!res) { cur = NULL; cur_ptr = text; cur_len = text_len; break; }
-        cur     = res;
-        cur_ptr = cur;
-        cur_len = strlen(cur);
-    }
-    return cur; /* NULL if eval chain produced nothing useful */
-}
 
 static int match_pattern(const char *src, int src_len,
                           Pattern *p, int start, Match *m)
@@ -1427,7 +834,6 @@ static int match_pattern(const char *src, int src_len,
 
             if (t->modifier == MOD_ALIASES) {
                 int hit = 0;
-                int matched_ai = -1;
                 /* Fast path: try flat string match first */
                 for (int ai = 0; ai < t->alt_count; ai++) {
                     /* Skip alternatives that have sub-patterns — try them in the recursive path */
@@ -1435,7 +841,7 @@ static int match_pattern(const char *src, int src_len,
                     size_t al = strlen(t->alts[ai]);
                     if ((size_t)(src_len - pos) >= al &&
                         memcmp(src + pos, t->alts[ai], al) == 0) {
-                        pos += (int)al; hit = 1; matched_ai = ai; break;
+                        pos += (int)al; hit = 1; break;
                     }
                 }
                 /* Recursive path: try alternatives with sub-patterns */
@@ -1450,7 +856,7 @@ static int match_pattern(const char *src, int src_len,
                                 m->cap[m->count++] = sub_m.cap[ci];
                             }
                             pos = sub_m.end;
-                            hit = 1; matched_ai = ai;
+                            hit = 1;
                             /* Free sub_m but NOT its captures (we moved them) */
                             free(sub_m.cap);
                             if (sub_m.regex.capture) free((void *)sub_m.regex.capture);
@@ -1465,17 +871,6 @@ static int match_pattern(const char *src, int src_len,
                 }
                 ensure_cap(m);
                 m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(pos-s) }, NULL };
-                /* apply token or per-alias eval chain */
-                {
-                    char **ec = t->eval_codes; size_t *el = t->eval_code_lens; int cnt = t->eval_code_count;
-                    if (matched_ai >= 0 && t->alt_eval_codes && t->alt_eval_codes[matched_ai]) {
-                        ec = t->alt_eval_codes[matched_ai];
-                        el = t->alt_eval_lens[matched_ai];
-                        cnt = t->alt_eval_counts[matched_ai];
-                    }
-                    char *ev = apply_eval_chain(NULL, ec, el, cnt, src+s, (size_t)(pos-s));
-                    if (ev) { m->cap[m->count-1].value.ptr = ev; m->cap[m->count-1].value.len = strlen(ev); m->cap[m->count-1].owned = ev; }
-                }
                 continue;
             }
             if (t->modifier == MOD_OPTIONAL) {
@@ -1499,10 +894,6 @@ static int match_pattern(const char *src, int src_len,
                 }
                 ensure_cap(m);
                 m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(pos-s) }, NULL };
-                {
-                    char *ev = apply_eval_chain(NULL, t->eval_codes, t->eval_code_lens, t->eval_code_count, src+s, (size_t)(pos-s));
-                    if (ev) { m->cap[m->count-1].value.ptr = ev; m->cap[m->count-1].value.len = strlen(ev); m->cap[m->count-1].owned = ev; }
-                }
                 continue;
             }
             if (t->modifier == MOD_STARTS || t->modifier == MOD_PREFIX) {
@@ -1650,10 +1041,6 @@ static int match_pattern(const char *src, int src_len,
                 }
                 ensure_cap(m);
                 m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(end-s) }, NULL };
-                {
-                    char *ev = apply_eval_chain(NULL, t->eval_codes, t->eval_code_lens, t->eval_code_count, src+s, (size_t)(end-s));
-                    if (ev) { m->cap[m->count-1].value.ptr = ev; m->cap[m->count-1].value.len = strlen(ev); m->cap[m->count-1].owned = ev; }
-                }
                 pos = end; continue;
                 } /* end scope for nxt+lit/blk/opt branch */
             }
@@ -1765,10 +1152,6 @@ static int match_pattern(const char *src, int src_len,
             }
             ensure_cap(m);
             m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(pos-s) }, NULL };
-            {
-                char *ev = apply_eval_chain(NULL, t->eval_codes, t->eval_code_lens, t->eval_code_count, src+s, (size_t)(pos-s));
-                if (ev) { m->cap[m->count-1].value.ptr = ev; m->cap[m->count-1].value.len = strlen(ev); m->cap[m->count-1].owned = ev; }
-            }
             continue;
             } /* end scope for no-nxt branch */
         }
@@ -1806,8 +1189,8 @@ static int match_pattern(const char *src, int src_len,
                 continue;
             }
 
-            size_t match_start = capture[0] ? (size_t)(capture[0] - (const uint8_t *)src) : pos;
-            size_t match_end   = capture[1] ? (size_t)(capture[1] - (const uint8_t *)src) : pos;
+            size_t match_start = capture[0] ? (size_t)(capture[0] - (uint8_t *)src) : (size_t)pos;
+            size_t match_end   = capture[1] ? (size_t)(capture[1] - (uint8_t *)src) : (size_t)pos;
             if (match_end < match_start) match_end = match_start;
 
             /* keep last regex capture info for potential introspection */
@@ -1820,11 +1203,6 @@ static int match_pattern(const char *src, int src_len,
 
             ensure_cap(m);
             m->cap[m->count++] = (Capture){ t->var, { src + match_start, (size_t)(match_end - match_start) }, NULL };
-            {
-                char *ev = apply_eval_chain(NULL, t->eval_codes, t->eval_code_lens, t->eval_code_count,
-                                           src + match_start, (size_t)(match_end - match_start));
-                if (ev) { m->cap[m->count-1].value.ptr = ev; m->cap[m->count-1].value.len = strlen(ev); m->cap[m->count-1].owned = ev; }
-            }
             pos = (int)match_end;
 
             continue;
@@ -1839,10 +1217,6 @@ static int match_pattern(const char *src, int src_len,
             pos = extract_block(src, pos, t->open, t->close, &v);
             ensure_cap(m);
             m->cap[m->count++] = (Capture){ t->var, v, NULL };
-            {
-                char *ev = apply_eval_chain(NULL, t->eval_codes, t->eval_code_lens, t->eval_code_count, v.ptr, v.len);
-                if (ev) { m->cap[m->count-1].value.ptr = ev; m->cap[m->count-1].value.len = strlen(ev); m->cap[m->count-1].owned = ev; }
-            }
             continue;
         }
 
@@ -1882,14 +1256,19 @@ fail:
  * ====================================================================== */
 
 static char *apply_replacement_ex(const char *rep, const Match *m,
-                                   const Symbols *sym, lua_State *L)
+                                   const Symbols *sym)
 {
     StrBuf out; sb_init(&out);
     size_t n = strlen(rep), i = 0, sl = strlen(sym->sigil);
 
     while (i < n) {
         if (str_pfx(rep + i, sym->sigil)) {
-            // if (sym->eval && apply_eval_ph(&out, rep, n, &i, sym, L, m)) continue;
+            /* Case 1: Escaped sigil (e.g., $$ -> $) */
+            if (i + sl < n && str_pfx(rep + i + sl, sym->sigil)) {
+                sb_append_n(&out, sym->sigil, sl);
+                i += sl * 2;
+                continue;
+            }
 
             size_t ns = i + sl, ne = ns;
             while (ne < n && (isalnum((unsigned char)rep[ne]) || rep[ne] == '_')) ne++;
@@ -1917,7 +1296,19 @@ static char *apply_replacement_ex(const char *rep, const Match *m,
  * Internal process loop
  * ====================================================================== */
 
-static char *pap_process_impl(lua_State *L, const char *input,
+static Papagaio *g_lazy_ctx = NULL;
+static void pap_close_lazy_ctx(void) { if (g_lazy_ctx) { papagaio_close(g_lazy_ctx); g_lazy_ctx = NULL; } }
+
+static Papagaio *pap_get_lazy_ctx(void)
+{
+    if (!g_lazy_ctx) {
+        g_lazy_ctx = papagaio_open();
+        if (g_lazy_ctx) atexit(pap_close_lazy_ctx);
+    }
+    return g_lazy_ctx;
+}
+
+static char *pap_process_impl(const char *input,
                                const char *sigil, const char *open,
                                const char *close, va_list ap)
 {
@@ -1934,21 +1325,28 @@ static char *pap_process_impl(lua_State *L, const char *input,
     }
 
     StrBuf out; sb_init(&out);
-    int len = (int)strlen(input), pos = 0;
+    Papagaio *ctx = pap_get_lazy_ctx();
+    char *prepared = strdup(input);
+    char *preprocessed = resolve_preprocessor(ctx, prepared, &sym); free(prepared);
+    char *dispatched = dispatch_commands(ctx, preprocessed, &sym); free(preprocessed);
+
+    const char *work = dispatched;
+    int len = (int)strlen(work), pos = 0;
 
     while (pos < len) {
         int matched = 0;
         for (int i = 0; i < rc; i++) {
             Match m;
-            if (match_pattern(input, len, &rules[i].pattern, pos, &m)) {
-                char *r = apply_replacement_ex(rules[i].replacement, &m, &sym, L);
-                sb_append_n(&out, r, strlen(r)); free(r);
+            if (match_pattern(work, len, &rules[i].pattern, pos, &m)) {
+                char *r = apply_replacement_ex(rules[i].replacement, &m, &sym);
+                sb_append_n(&out, r, (int)strlen(r)); free(r);
                 pos = m.end; free_match(&m); matched = 1; break;
             }
         }
-        if (!matched) sb_append_char(&out, input[pos++]);
+        if (!matched) sb_append_char(&out, work[pos++]);
     }
 
+    free(dispatched);
     for (int i = 0; i < rc; i++) free_pattern(&rules[i].pattern);
     free(rules);
 
@@ -1959,6 +1357,62 @@ static char *pap_process_impl(lua_State *L, const char *input,
 }
 
 /* =========================================================================
+ * Plugin Implementation Helpers
+ * ====================================================================== */
+
+int papagaio_register_command(Papagaio *ctx, const char *name, PapCommandHandler handler, void *ud)
+{
+    if (!ctx) return -1;
+    fprintf(stderr, "[CORE] REGISTER START ctx=%p name=%s\n", (void*)ctx, name?name:"NULL");
+    if (!name || !handler) return -1;
+    if (ctx->cmd_count >= ctx->cmd_cap) {
+        ctx->cmd_cap = ctx->cmd_cap ? ctx->cmd_cap << 1 : 8;
+        ctx->commands = (RegisteredCommand *)realloc(ctx->commands, sizeof(RegisteredCommand) * ctx->cmd_cap);
+    }
+    ctx->commands[ctx->cmd_count].name = strdup(name);
+    ctx->commands[ctx->cmd_count].handler = handler;
+    ctx->commands[ctx->cmd_count].userdata = ud;
+    ctx->cmd_count++;
+    return 0;
+}
+
+static int reg_command(PapPlugin *self, const char *name, PapCommandHandler handler, void *ud)
+{
+    return papagaio_register_command((Papagaio *)self->_core, name, handler, ud);
+}
+
+int papagaio_register_modifier(Papagaio *ctx, const char *name, PapModifierHandler handler, void *ud)
+{
+    if (!ctx || !name || !handler) return -1;
+    if (ctx->mod_count >= ctx->mod_cap) {
+        ctx->mod_cap = ctx->mod_cap ? ctx->mod_cap << 1 : 8;
+        ctx->modifiers = (RegisteredModifier *)realloc(ctx->modifiers, sizeof(RegisteredModifier) * ctx->mod_cap);
+    }
+    ctx->modifiers[ctx->mod_count].name = strdup(name);
+    ctx->modifiers[ctx->mod_count].handler = handler;
+    ctx->modifiers[ctx->mod_count].userdata = ud;
+    ctx->mod_count++;
+    return 0;
+}
+
+static int reg_modifier(PapPlugin *self, const char *name, PapModifierHandler handler, void *ud)
+{
+    return papagaio_register_modifier((Papagaio *)self->_core, name, handler, ud);
+}
+
+static void reg_finalizer(PapPlugin *self, PapFinalizer fn, void *ud)
+{
+    Papagaio *ctx = (Papagaio *)self->_core;
+    if (ctx->fin_count >= ctx->fin_cap) {
+        ctx->fin_cap = ctx->fin_cap ? ctx->fin_cap << 1 : 8;
+        ctx->finalizers = (RegisteredFinalizer *)realloc(ctx->finalizers, sizeof(RegisteredFinalizer) * ctx->fin_cap);
+    }
+    ctx->finalizers[ctx->fin_count].fn = fn;
+    ctx->finalizers[ctx->fin_count].userdata = ud;
+    ctx->fin_count++;
+}
+
+/* =========================================================================
  * Public C API
  * ====================================================================== */
 
@@ -1966,59 +1420,96 @@ Papagaio *papagaio_open(void)
 {
     Papagaio *ctx = (Papagaio *)malloc(sizeof(Papagaio));
     if (!ctx) return NULL;
-    ctx->L     = luaL_newstate();
-    ctx->owned = 1;
-    if (!ctx->L) { free(ctx); return NULL; }
-    luaL_openlibs(ctx->L);
-    if (luaL_dostring(ctx->L, PAP_CORE_LUA) != LUA_OK) {
-        fprintf(stderr, "papagaio: error loading core logic: %s\n", lua_tostring(ctx->L, -1));
-    }
-
-    register_papagaio_preload(ctx->L);
-    papagaio_stdout_clear(ctx->L);
-    lua_pushcfunction(ctx->L, papagaio_print);
-    lua_setglobal(ctx->L, "print");
-    lua_settop(ctx->L, 0);
+    ctx->dl_handles = NULL; ctx->dl_count = 0;
+    ctx->commands   = NULL; ctx->cmd_count = 0; ctx->cmd_cap = 0;
+    ctx->modifiers  = NULL; ctx->mod_count = 0; ctx->mod_cap = 0;
+    ctx->finalizers = NULL; ctx->fin_count = 0; ctx->fin_cap = 0;
+    ctx->argc       = 0;    ctx->argv      = NULL;
     return ctx;
 }
-
 
 void papagaio_close(Papagaio *ctx)
 {
     if (!ctx) return;
-    if (ctx->owned && ctx->L) lua_close(ctx->L);
-    free(ctx);
-}
-
-void papagaio_cleanup(void)
-{
-    if (g_lazy_L) {
-        lua_close(g_lazy_L);
-        g_lazy_L = NULL;
+    for (int i = 0; i < ctx->fin_count; i++) {
+        if (ctx->finalizers[i].fn)
+            ctx->finalizers[i].fn(ctx->finalizers[i].userdata);
     }
+    for (int i = 0; i < ctx->dl_count; i++) {
+        dlclose(ctx->dl_handles[i]);
+    }
+    free(ctx->dl_handles);
+    free(ctx->commands);
+    free(ctx->modifiers);
+    free(ctx->finalizers);
+    free(ctx);
 }
 
 void papagaio_set_args(Papagaio *ctx, int argc, char **argv)
 {
-    lua_State *L = ctx ? ctx->L : ensure_L(NULL);
-    if (!L) return;
-
-    lua_settop(L, 0);
-    lua_newtable(L);
-    for (int i = 0; i < argc; i++) {
-        lua_pushstring(L, argv[i]);
-        lua_rawseti(L, -2, i);
-    }
-    lua_setglobal(L, "arg");
-    lua_settop(L, 0);
+    if (!ctx) return;
+    ctx->argc = argc;
+    ctx->argv = argv;
 }
 
-lua_State *papagaio_L(Papagaio *ctx) { return ctx ? ctx->L : NULL; }
+void papagaio_get_args(Papagaio *ctx, int *argc, char ***argv)
+{
+    if (!ctx) { if (argc) *argc = 0; if (argv) *argv = NULL; return; }
+    if (argc) *argc = ctx->argc;
+    if (argv) *argv = ctx->argv;
+}
+
+static void plugin_get_args(PapPlugin *self, int *argc, char ***argv)
+{
+    if (!self || !self->_core) return;
+    Papagaio *ctx = (Papagaio *)self->_core;
+    papagaio_get_args(ctx, argc, argv);
+}
+
+int papagaio_load_plugin(Papagaio *ctx, const char *path)
+{
+    void *handle = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
+    if (!handle) {
+        /* try .so or .dll if not provided? for now, use literal path */
+        fprintf(stderr, "papagaio: failed to load plugin %s: %s\n", path, dlerror());
+        return -1;
+    }
+
+    papagaio_plugin_init_fn init_fn = (papagaio_plugin_init_fn)dlsym(handle, PAPAGAIO_PLUGIN_INIT);
+    if (!init_fn) {
+        fprintf(stderr, "papagaio: sym %s not found in %s\n", PAPAGAIO_PLUGIN_INIT, path);
+        dlclose(handle); return -1;
+    }
+
+    PapPlugin plugin;
+    memset(&plugin, 0, sizeof(plugin));
+    plugin._core            = (void *)ctx;
+    plugin.register_command  = reg_command;
+    plugin.register_modifier = reg_modifier;
+    plugin.register_finalizer= reg_finalizer;
+    plugin.get_args          = plugin_get_args;
+
+    int r = init_fn(&plugin, ctx);
+    if (r != 0) { dlclose(handle); return r; }
+
+    ctx->dl_handles = (void **)realloc(ctx->dl_handles, sizeof(void*) * (ctx->dl_count + 1));
+    ctx->dl_handles[ctx->dl_count++] = handle;
+    return 0;
+}
+
+int papagaio_has_command(Papagaio *ctx, const char *name)
+{
+    if (!ctx) return 0;
+    for (int i = 0; i < ctx->cmd_count; i++) {
+        if (strcmp(ctx->commands[i].name, name) == 0) return 1;
+    }
+    return 0;
+}
 
 char *papagaio_process(const char *input, ...)
 {
     va_list args; va_start(args, input);
-    char *r = pap_process_impl(NULL, input, PAP_SIGIL, PAP_OPEN, PAP_CLOSE, args);
+    char *r = pap_process_impl(input, PAP_SIGIL, PAP_OPEN, PAP_CLOSE, args);
     va_end(args); return r;
 }
 
@@ -2026,7 +1517,7 @@ char *papagaio_process_ex(const char *input, const char *sigil,
                           const char *open, const char *close, ...)
 {
     va_list args; va_start(args, close);
-    char *r = pap_process_impl(NULL, input, sigil, open, close, args);
+    char *r = pap_process_impl(input, sigil, open, close, args);
     va_end(args); return r;
 }
 
@@ -2034,7 +1525,7 @@ char *papagaio_process_pairs(Papagaio *ctx, const char *input,
                              const char **patterns, const char **repls,
                              int pair_count)
 {
-    lua_State *L = ctx ? ctx->L : NULL;
+    (void)ctx;
     Symbols sym  = make_symbols(PAP_SIGIL, PAP_OPEN, PAP_CLOSE);
     Rule *rules  = (Rule *)malloc(sizeof(Rule) * (pair_count ? pair_count : 1));
     if (!rules) return NULL;
@@ -2052,7 +1543,7 @@ char *papagaio_process_pairs(Papagaio *ctx, const char *input,
         for (int i = 0; i < pair_count; i++) {
             Match m;
             if (match_pattern(input, len, &rules[i].pattern, pos, &m)) {
-                char *r = apply_replacement_ex(rules[i].replacement, &m, &sym, L);
+                char *r = apply_replacement_ex(rules[i].replacement, &m, &sym);
                 sb_append_n(&out, r, strlen(r)); free(r);
                 pos = m.end; free_match(&m); matched = 1; break;
             }
@@ -2069,608 +1560,175 @@ char *papagaio_process_pairs(Papagaio *ctx, const char *input,
     sb_free(&out); return result;
 }
 
+/* =========================================================================
+ * resolve_directives
+ * ====================================================================== */
+static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
+{
+    StrBuf out; sb_init(&out);
+    size_t i = 0, len = strlen(src);
+    StrView so_fixed = { "{", 1 };
+    StrView sc_fixed = { "}", 1 };
+
+    while (i < len) {
+        size_t sl = strlen(sym->sigil);
+        if (sl > 0 && i + sl <= len && memcmp(src + i, sym->sigil, sl) == 0) {
+            size_t j = i + sl;
+            size_t ks = j;
+            while (j < len && (isalnum((unsigned char)src[j]) || src[j] == '_')) j++;
+            size_t klen = j - ks;
+
+            if (klen > 0) {
+                int is_imp = (klen == 6 && memcmp(src + ks, "import", 6) == 0);
+                int is_sig = (klen == 11 && memcmp(src + ks, "changesigil", 11) == 0);
+                int is_qte = (klen == 11 && memcmp(src + ks, "changequote", 11) == 0);
+
+                if (is_imp || is_sig || is_qte) {
+                    while (j < len && isspace((unsigned char)src[j])) j++;
+                    if (j < len && sv_pfx(src + j, so_fixed)) {
+                        StrView b1, b2, b3;
+                        int next = extract_block(src, (int)j, so_fixed, sc_fixed, &b1);
+
+                        if (is_imp) {
+                            if (ctx) {
+                                StrView t = trim_sv(b1);
+                                char *path = (char *)malloc(t.len + 1);
+                                memcpy(path, t.ptr, t.len); path[t.len] = '\0';
+                                papagaio_load_plugin(ctx, path); free(path);
+                            }
+                            i = (size_t)next; continue;
+                        } else if (is_sig) {
+                            StrView t = trim_sv(b1);
+                            if (t.len > 0 && t.len < 16) {
+                                memcpy(sym->sigil, t.ptr, t.len); sym->sigil[t.len] = '\0';
+                            }
+                            i = (size_t)next; continue;
+                        } else if (is_qte) {
+                            j = (size_t)next;
+                            while (j < len && isspace((unsigned char)src[j])) j++;
+                            if (j < len && sv_pfx(src + j, so_fixed)) {
+                                next = extract_block(src, (int)j, so_fixed, sc_fixed, &b2);
+                                j = (size_t)next;
+                                while (j < len && isspace((unsigned char)src[j])) j++;
+                                if (j < len && sv_pfx(src + j, so_fixed)) {
+                                    next = extract_block(src, (int)j, so_fixed, sc_fixed, &b3);
+                                    StrView t1 = trim_sv(b1), t2 = trim_sv(b2), t3 = trim_sv(b3);
+                                    if (t1.len < 16 && t2.len < 16 && t3.len < 16) {
+                                        memcpy(sym->sigil, t1.ptr, t1.len); sym->sigil[t1.len] = '\0';
+                                        memcpy(sym->open,  t2.ptr, t2.len); sym->open[t2.len]  = '\0';
+                                        memcpy(sym->close, t3.ptr, t3.len); sym->close[t3.len] = '\0';
+                                    }
+                                    i = (size_t)next; continue;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        sb_append_char(&out, src[i++]);
+    }
+    return out.data;
+}
+
+static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sym)
+{
+    if (!ctx) return strdup(src);
+    if (ctx->cmd_count == 0) {
+        return strdup(src);
+    }
+    StrBuf out; sb_init(&out);
+    size_t i = 0, len = strlen(src);
+    size_t sl = strlen(sym->sigil);
+    StrView so = { sym->open,  strlen(sym->open)  };
+    StrView sc = { sym->close, strlen(sym->close) };
+
+    while (i < len) {
+        if (memcmp(src + i, sym->sigil, sl) == 0) {
+            size_t j = i + sl;
+            size_t ks = j;
+            while (j < len && (isalnum((unsigned char)src[j]) || src[j]=='_'))
+                j++;
+            size_t klen = j - ks;
+
+            int found = -1;
+            for (int ci = 0; ci < ctx->cmd_count && found < 0; ci++) {
+                if (strlen(ctx->commands[ci].name) == klen &&
+                    memcmp(ctx->commands[ci].name, src + ks, klen) == 0)
+                    found = ci;
+            }
+
+            if (found >= 0) {
+                const char *vargv[32]; size_t vargl[32]; int vargc = 0;
+                while (vargc < 32) {
+                    while (j < len && isspace((unsigned char)src[j])) j++;
+                    if (j < len && sv_pfx(src + j, so)) {
+                        StrView blk;
+                        j = (size_t)extract_block(src, (int)j, so, sc, &blk);
+                        vargv[vargc] = blk.ptr;
+                        vargl[vargc] = blk.len;
+                        vargc++;
+                    } else break;
+                }
+                RegisteredCommand *cmd = &ctx->commands[found];
+                char *res = cmd->handler(ctx, vargc, vargv, vargl, cmd->userdata);
+                if (res) { sb_append_n(&out, res, strlen(res)); free(res); }
+                i = j; continue;
+            } else if (klen == 8 && memcmp(src + ks, "document", 8) == 0) {
+                /* Special built-in $document operator */
+                sb_append_n(&out, src, len);
+                i = j; continue;
+            }
+        }
+        sb_append_char(&out, src[i++]);
+    }
+    return out.data;
+}
+
 char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
 {
     if (!input) return NULL;
-    lua_State *L = ctx ? ctx->L : NULL;
-    L = ensure_L(L);
-    if (L) papagaio_stdout_clear(L);
-
-    Symbols sym  = make_symbols(PAP_SIGIL, PAP_OPEN, PAP_CLOSE);
-    const char *orig_sigil = sym.sigil;
-    const char *orig_open  = sym.open;
-    const char *orig_close = sym.close;
+    Symbols sym = make_symbols(PAP_SIGIL, PAP_OPEN, PAP_CLOSE);
 
     char *buf = (char *)malloc(len + 1);
     if (!buf) return NULL;
     memcpy(buf, input, len); buf[len] = '\0';
 
-    char *with_quotes = handle_changequotes(buf, &sym); free(buf);
-    if (!with_quotes) return NULL;
+    char *preprocessed = resolve_preprocessor(ctx, buf, &sym); free(buf);
 
-    char *prepared = pap_prepare(with_quotes, &sym); free(with_quotes);
-    if (!prepared) {
-        if (sym.sigil != orig_sigil) free((void*)sym.sigil);
-        if (sym.open  != orig_open)  free((void*)sym.open);
-        if (sym.close != orig_close) free((void*)sym.close);
-        return NULL;
-    }
-
-    /* A. Resolve Patterns First */
+    /* A. Resolve Patterns */
     PatternPair *pairs = NULL; int pc = 0;
-    char *text_no_patterns = extract_nested(prepared, &sym, &pairs, &pc);
-    free(prepared);
-    if (!text_no_patterns) { 
-        free_pairs(pairs, pc); 
-        if (sym.sigil != orig_sigil) free((void*)sym.sigil);
-        if (sym.open  != orig_open)  free((void*)sym.open);
-        if (sym.close != orig_close) free((void*)sym.close);
-        return NULL; 
-    }
+    char *text_no_patterns = extract_nested(preprocessed, &sym, &pairs, &pc);
+    free(preprocessed);
+    if (!text_no_patterns) { free_pairs(pairs, pc); return NULL; }
 
     char *cur = text_no_patterns;
-    if (pc > 0) {
-        char *last = NULL;
-        while (1) {
-            if (last && strcmp(cur, last) == 0) break;
-            free(last);
-            last = (char *)malloc(strlen(cur) + 1);
-            if (!last) break;
-            strcpy(last, cur);
-
-            char *next = apply_patterns(L, cur, pairs, pc, &sym);
-            if (next && next != cur) { free(cur); cur = next; }
-
-            PatternPair *nested = NULL; int nc = 0;
-            char *check = extract_nested(cur, &sym, &nested, &nc);
-            free(check); free_pairs(nested, nc);
-            if (nc == 0) break;
+    for (int i = 0; i < pc; i++) {
+        StrBuf out; sb_init(&out);
+        size_t clen = strlen(cur), pos = 0;
+        Pattern pat;
+        parse_pattern_ex(pairs[i].m, &pat, &sym);
+        
+        while (pos < clen) {
+            Match m;
+            if (match_pattern(cur, (int)clen, &pat, (int)pos, &m)) {
+                char *r = apply_replacement_ex(pairs[i].r, &m, &sym);
+                sb_append_n(&out, r, strlen(r));
+                free(r);
+                pos = (size_t)m.end;
+                free_match(&m);
+            } else {
+                sb_append_char(&out, cur[pos++]);
+            }
         }
-        free(last);
+        free_pattern(&pat);
+        free(cur);
+        cur = out.data;
     }
     free_pairs(pairs, pc);
-
-    /* B. If we have evals, enter AST mode */
-    EvalBlock *evals = NULL; int ec = 0;
-    char *ph = extract_evals(cur, &sym, &evals, &ec);
-
-    if (ec > 0) {
-        L = ensure_L(L);
-
-        /* Restore placeholders as text */
-        char *tmp_restored = pap_restore(ph, &sym);
-
-        /* 2. Run evals once */
-        char **results = (char **)malloc(sizeof(char *) * ec);
-        for (int i = 0; i < ec; i++) {
-            results[i] = pap_eval(L, evals[i].code, evals[i].len, "", 0);
-        }
-
-        /* 3. Substitute placeholders */
-        char *final = tmp_restored;
-        for (int i = ec - 1; i >= 0; i--) {
-            char eph[32]; snprintf(eph, sizeof(eph), "__E%d__", i);
-            char *res = results[i];
-            if (!res) {
-                const char *emsg = "error";
-                res = (char *)malloc(strlen(emsg) + 1);
-                if (res) strcpy(res, emsg);
-            }
-            char *next = replace_all(final, eph, res);
-            free(res);
-            if (next) { free(final); final = next; }
-        }
-        free(results);
-        free(cur); free(ph); free_evals(evals, ec); cur = final;
-    } else {
-        free(ph); free_evals(evals, ec);
-    }
-
-    char *restored = pap_restore(cur, &sym);
+    
+    char *final = dispatch_commands(ctx, cur, &sym);
     free(cur);
-
-    if (sym.sigil != orig_sigil) free((void*)sym.sigil);
-    if (sym.open  != orig_open)  free((void*)sym.open);
-    if (sym.close != orig_close) free((void*)sym.close);
-
-    if (L && restored) {
-        lua_pushlstring(L, restored, strlen(restored));
-        lua_setglobal(L, "papagaio_content");
-
-        lua_getglobal(L, "papagaio_stdout");
-        size_t stdout_len = 0;
-        const char *stdout_data = lua_tolstring(L, -1, &stdout_len);
-        if (stdout_data && stdout_len > 0) {
-            size_t restored_len = strlen(restored);
-            char *combined = (char *)malloc(stdout_len + restored_len + 1);
-            if (combined) {
-                memcpy(combined, stdout_data, stdout_len);
-                memcpy(combined + stdout_len, restored, restored_len + 1);
-                free(restored);
-                restored = combined;
-            }
-        }
-        lua_pop(L, 1);
-        papagaio_stdout_clear(L);
-    }
-
-    return restored;
+    return final;
 }
 
-/* =========================================================================
- * Lua module
- * ====================================================================== */
-
-/* pap.process(input, pat, repl [, pat, repl, ...]) */
-static int l_process(lua_State *L)
-{
-    const char *input = luaL_checkstring(L, 1);
-    int nargs = lua_gettop(L) - 1;
-    if (nargs % 2 != 0)
-        return luaL_error(L, "process: expected pairs of pattern/replacement");
-
-    Symbols sym    = make_symbols(PAP_SIGIL, PAP_OPEN, PAP_CLOSE);
-    int     pc     = nargs / 2;
-    Rule   *rules  = (Rule *)malloc(sizeof(Rule) * (pc ? pc : 1));
-
-    for (int i = 0; i < pc; i++) {
-        parse_pattern_ex(luaL_checkstring(L, 2 + i*2),
-                         &rules[i].pattern, &sym);
-        rules[i].replacement = luaL_checkstring(L, 3 + i*2);
-    }
-
-    StrBuf out; sb_init(&out);
-    int len = (int)strlen(input), pos = 0;
-    while (pos < len) {
-        int matched = 0;
-        for (int i = 0; i < pc; i++) {
-            Match m;
-            if (match_pattern(input, len, &rules[i].pattern, pos, &m)) {
-                char *r = apply_replacement_ex(rules[i].replacement, &m, &sym, L);
-                sb_append_n(&out, r, strlen(r)); free(r);
-                pos = m.end; free_match(&m); matched = 1; break;
-            }
-        }
-        if (!matched) sb_append_char(&out, input[pos++]);
-    }
-    for (int i = 0; i < pc; i++) free_pattern(&rules[i].pattern);
-    free(rules);
-    lua_pushlstring(L, out.data, out.len);
-    sb_free(&out);
-    return 1;
-}
-
-/* pap.process_ex(input, sigil, open, close, pat, repl [...]) */
-static int l_process_ex(lua_State *L)
-{
-    const char *input = luaL_checkstring(L, 1);
-    const char *sigil = luaL_checkstring(L, 2);
-    const char *open  = luaL_checkstring(L, 3);
-    const char *close = luaL_checkstring(L, 4);
-    int nargs = lua_gettop(L) - 4;
-    if (nargs % 2 != 0)
-        return luaL_error(L, "process_ex: expected pairs of pattern/replacement");
-
-    Symbols sym   = make_symbols(sigil, open, close);
-    int     pc    = nargs / 2;
-    Rule   *rules = (Rule *)malloc(sizeof(Rule) * (pc ? pc : 1));
-
-    for (int i = 0; i < pc; i++) {
-        parse_pattern_ex(luaL_checkstring(L, 5 + i*2), &rules[i].pattern, &sym);
-        rules[i].replacement = luaL_checkstring(L, 6 + i*2);
-    }
-
-    StrBuf out; sb_init(&out);
-    int len = (int)strlen(input), pos = 0;
-    while (pos < len) {
-        int matched = 0;
-        for (int i = 0; i < pc; i++) {
-            Match m;
-            if (match_pattern(input, len, &rules[i].pattern, pos, &m)) {
-                char *r = apply_replacement_ex(rules[i].replacement, &m, &sym, L);
-                sb_append_n(&out, r, strlen(r)); free(r);
-                pos = m.end; free_match(&m); matched = 1; break;
-            }
-        }
-        if (!matched) sb_append_char(&out, input[pos++]);
-    }
-    for (int i = 0; i < pc; i++) free_pattern(&rules[i].pattern);
-    free(rules);
-    lua_pushlstring(L, out.data, out.len);
-    sb_free(&out);
-    return 1;
-}
-
-/* pap.process_pairs(input, { ["$pat"]="repl", ... } | { {"$pat","repl"}, ... }) */
-static int l_process_pairs(lua_State *L)
-{
-    const char *input = luaL_checkstring(L, 1);
-    luaL_checktype(L, 2, LUA_TTABLE);
-
-    int    cap  = 8, count = 0;
-    char **pats  = (char **)malloc(sizeof(char *) * cap);
-    char **repls = (char **)malloc(sizeof(char *) * cap);
-
-    lua_pushnil(L);
-    while (lua_next(L, 2)) {
-        const char *pat = NULL, *rep = NULL;
-        if (lua_type(L, -1) == LUA_TTABLE) {
-            lua_rawgeti(L, -1, 1); lua_rawgeti(L, -2, 2);
-            pat = lua_tostring(L, -2); rep = lua_tostring(L, -1);
-            lua_pop(L, 2);
-        } else {
-            pat = lua_tostring(L, -2); rep = lua_tostring(L, -1);
-        }
-        if (pat && rep) {
-            if (count >= cap) {
-                cap <<= 1;
-                pats  = (char **)realloc(pats,  sizeof(char *) * cap);
-                repls = (char **)realloc(repls, sizeof(char *) * cap);
-            }
-            pats[count] = (char *)pat; repls[count] = (char *)rep; count++;
-        }
-        lua_pop(L, 1);
-    }
-
-    /* borrow the calling state so $eval{} sees the caller's globals */
-    Papagaio borrow; borrow.L = L; borrow.owned = 0;
-    char *result = papagaio_process_pairs(&borrow, input,
-                                          (const char **)pats,
-                                          (const char **)repls, count);
-    free(pats); free(repls);
-    if (!result) return luaL_error(L, "process_pairs: internal error");
-    lua_pushstring(L, result); free(result);
-    return 1;
-}
-
-/* pap.process_text(input) */
-static int l_process_text(lua_State *L)
-{
-    size_t len; const char *input = luaL_checklstring(L, 1, &len);
-    Papagaio borrow; borrow.L = L; borrow.owned = 0;
-    char *result = papagaio_process_text(&borrow, input, len);
-    if (!result) return luaL_error(L, "process_text: internal error");
-    lua_pushstring(L, result); free(result);
-    return 1;
-}
-
-static const luaL_Reg papagaio_funcs[] = {
-    { "process",       l_process       },
-    { "process_ex",    l_process_ex    },
-    { "process_pairs", l_process_pairs },
-    { "process_text",  l_process_text  },
-    { NULL, NULL }
-};
-
-LUALIB_API int luaopen_papagaio(lua_State *L)
-{
-    lua_getglobal(L, "papagaio_internal");
-    if (lua_isnil(L, -1)) {
-        lua_pop(L, 1);
-        luaL_dostring(L, PAP_CORE_LUA);
-    } else {
-        lua_pop(L, 1);
-    }
-
-    /* Make memory module available via require("memory") */
-    lua_getglobal(L, "package");
-    if (lua_istable(L, -1)) {
-        lua_getfield(L, -1, "preload");
-        if (lua_istable(L, -1)) {
-            lua_pushcfunction(L, luaopen_memory);
-            lua_setfield(L, -2, "memory");
-        }
-        lua_pop(L, 1);
-    }
-    lua_pop(L, 1);
-
-    luaL_newlib(L, papagaio_funcs);
-    return 1;
-}
-
-/* --------------------------- memory module --------------------------- */
-
-static uintptr_t mem_check_ptr(lua_State *L, int idx)
-{
-    if (lua_islightuserdata(L, idx)) return (uintptr_t)lua_touserdata(L, idx);
-#if LUA_VERSION_NUM >= 502
-    if (lua_isinteger(L, idx)) return (uintptr_t)lua_tointeger(L, idx);
-    if (lua_isnumber(L, idx)) return (uintptr_t)lua_tonumber(L, idx);
-#else
-    if (lua_isnumber(L, idx)) return (uintptr_t)lua_tonumber(L, idx);
-#endif
-    luaL_argerror(L, idx, "expected pointer (lightuserdata or number)");
-    return 0;
-}
-
-static int l_memory_alloc(lua_State *L)
-{
-    lua_Integer size = luaL_checkinteger(L, 1);
-    if (size <= 0) return luaL_error(L, "alloc: invalid size");
-    void *p = malloc((size_t)size);
-    if (!p) return luaL_error(L, "alloc: out of memory");
-    lua_pushinteger(L, (lua_Integer)(uintptr_t)p);
-    return 1;
-}
-
-static int l_memory_free(lua_State *L)
-{
-    if (!lua_isnil(L, 1)) {
-        void *p = (void *)(uintptr_t)mem_check_ptr(L, 1);
-        free(p);
-    }
-    return 0;
-}
-
-static int l_memory_realloc(lua_State *L)
-{
-    void *p = (void *)(uintptr_t)mem_check_ptr(L, 1);
-    lua_Integer size = luaL_checkinteger(L, 2);
-    if (size <= 0) {
-        free(p);
-        lua_pushnil(L);
-        return 1;
-    }
-    void *n = realloc(p, (size_t)size);
-    if (!n) return luaL_error(L, "realloc: out of memory");
-    lua_pushinteger(L, (lua_Integer)(uintptr_t)n);
-    return 1;
-}
-
-static int l_memory_zero(lua_State *L)
-{
-    void *p = (void *)(uintptr_t)mem_check_ptr(L, 1);
-    lua_Integer size = luaL_checkinteger(L, 2);
-    if (size < 0) return luaL_error(L, "zero: invalid size");
-    memset(p, 0, (size_t)size);
-    return 0;
-}
-
-static int l_memory_copy(lua_State *L)
-{
-    void *dst = (void *)(uintptr_t)mem_check_ptr(L, 1);
-    void *src = (void *)(uintptr_t)mem_check_ptr(L, 2);
-    lua_Integer size = luaL_checkinteger(L, 3);
-    if (size < 0) return luaL_error(L, "copy: invalid size");
-    memcpy(dst, src, (size_t)size);
-    lua_pushinteger(L, (lua_Integer)(uintptr_t)dst);
-    return 1;
-}
-
-static int l_memory_set(lua_State *L)
-{
-    void *p = (void *)(uintptr_t)mem_check_ptr(L, 1);
-    int byte = (int)luaL_checkinteger(L, 2);
-    lua_Integer size = luaL_checkinteger(L, 3);
-    if (byte < 0 || byte > 0xFF) return luaL_error(L, "set: byte value out of range");
-    if (size < 0) return luaL_error(L, "set: invalid size");
-    memset(p, (unsigned char)byte, (size_t)size);
-    return 0;
-}
-
-static int l_memory_compare(lua_State *L)
-{
-    void *a = (void *)(uintptr_t)mem_check_ptr(L, 1);
-    void *b = (void *)(uintptr_t)mem_check_ptr(L, 2);
-    lua_Integer size = luaL_checkinteger(L, 3);
-    if (size < 0) return luaL_error(L, "compare: invalid size");
-    int r = memcmp(a, b, (size_t)size);
-    lua_pushinteger(L, r);
-    return 1;
-}
-
-static int l_memory_string(lua_State *L)
-{
-    void *p = (void *)(uintptr_t)mem_check_ptr(L, 1);
-    if (!p) { lua_pushnil(L); return 1; }
-    lua_pushstring(L, (const char *)p);
-    return 1;
-}
-
-static int l_memory_readi8(lua_State *L)
-{
-    int8_t v;
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy(&v, (void *)p, sizeof(v));
-    lua_pushinteger(L, (lua_Integer)v);
-    return 1;
-}
-
-static int l_memory_writei8(lua_State *L)
-{
-    int8_t v = (int8_t)luaL_checkinteger(L, 2);
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy((void *)p, &v, sizeof(v));
-    return 0;
-}
-
-static int l_memory_readu8(lua_State *L)
-{
-    uint8_t v;
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy(&v, (void *)p, sizeof(v));
-    lua_pushinteger(L, (lua_Integer)v);
-    return 1;
-}
-
-static int l_memory_writeu8(lua_State *L)
-{
-    uint8_t v = (uint8_t)luaL_checkinteger(L, 2);
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy((void *)p, &v, sizeof(v));
-    return 0;
-}
-
-static int l_memory_readi16(lua_State *L)
-{
-    int16_t v;
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy(&v, (void *)p, sizeof(v));
-    lua_pushinteger(L, (lua_Integer)v);
-    return 1;
-}
-
-static int l_memory_writei16(lua_State *L)
-{
-    int16_t v = (int16_t)luaL_checkinteger(L, 2);
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy((void *)p, &v, sizeof(v));
-    return 0;
-}
-
-static int l_memory_readu16(lua_State *L)
-{
-    uint16_t v;
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy(&v, (void *)p, sizeof(v));
-    lua_pushinteger(L, (lua_Integer)v);
-    return 1;
-}
-
-static int l_memory_writeu16(lua_State *L)
-{
-    uint16_t v = (uint16_t)luaL_checkinteger(L, 2);
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy((void *)p, &v, sizeof(v));
-    return 0;
-}
-
-static int l_memory_readi32(lua_State *L)
-{
-    int32_t v;
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy(&v, (void *)p, sizeof(v));
-    lua_pushinteger(L, (lua_Integer)v);
-    return 1;
-}
-
-static int l_memory_writei32(lua_State *L)
-{
-    int32_t v = (int32_t)luaL_checkinteger(L, 2);
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy((void *)p, &v, sizeof(v));
-    return 0;
-}
-
-static int l_memory_readu32(lua_State *L)
-{
-    uint32_t v;
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy(&v, (void *)p, sizeof(v));
-    lua_pushinteger(L, (lua_Integer)v);
-    return 1;
-}
-
-static int l_memory_writeu32(lua_State *L)
-{
-    uint32_t v = (uint32_t)luaL_checkinteger(L, 2);
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy((void *)p, &v, sizeof(v));
-    return 0;
-}
-
-static int l_memory_readi64(lua_State *L)
-{
-    int64_t v;
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy(&v, (void *)p, sizeof(v));
-    lua_pushinteger(L, (lua_Integer)v);
-    return 1;
-}
-
-static int l_memory_writei64(lua_State *L)
-{
-    int64_t v = (int64_t)luaL_checkinteger(L, 2);
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy((void *)p, &v, sizeof(v));
-    return 0;
-}
-
-static int l_memory_readu64(lua_State *L)
-{
-    uint64_t v;
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy(&v, (void *)p, sizeof(v));
-    lua_pushinteger(L, (lua_Integer)v);
-    return 1;
-}
-
-static int l_memory_writeu64(lua_State *L)
-{
-    uint64_t v = (uint64_t)luaL_checkinteger(L, 2);
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy((void *)p, &v, sizeof(v));
-    return 0;
-}
-
-static int l_memory_readf32(lua_State *L)
-{
-    float v;
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy(&v, (void *)p, sizeof(v));
-    lua_pushnumber(L, (lua_Number)v);
-    return 1;
-}
-
-static int l_memory_writef32(lua_State *L)
-{
-    float v = (float)luaL_checknumber(L, 2);
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy((void *)p, &v, sizeof(v));
-    return 0;
-}
-
-static int l_memory_readf64(lua_State *L)
-{
-    double v;
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy(&v, (void *)p, sizeof(v));
-    lua_pushnumber(L, (lua_Number)v);
-    return 1;
-}
-
-static int l_memory_writef64(lua_State *L)
-{
-    double v = (double)luaL_checknumber(L, 2);
-    uintptr_t p = mem_check_ptr(L, 1);
-    memcpy((void *)p, &v, sizeof(v));
-    return 0;
-}
-
-static const luaL_Reg memory_funcs[] = {
-    { "alloc",      l_memory_alloc },
-    { "free",       l_memory_free },
-    { "realloc",    l_memory_realloc },
-    { "zero",       l_memory_zero },
-    { "copy",       l_memory_copy },
-    { "set",        l_memory_set },
-    { "compare",    l_memory_compare },
-    { "string",     l_memory_string },
-    { "readi8",     l_memory_readi8 },
-    { "writei8",    l_memory_writei8 },
-    { "readu8",     l_memory_readu8 },
-    { "writeu8",    l_memory_writeu8 },
-    { "readi16",    l_memory_readi16 },
-    { "writei16",   l_memory_writei16 },
-    { "readu16",    l_memory_readu16 },
-    { "writeu16",   l_memory_writeu16 },
-    { "readi32",    l_memory_readi32 },
-    { "writei32",   l_memory_writei32 },
-    { "readu32",    l_memory_readu32 },
-    { "writeu32",   l_memory_writeu32 },
-    { "readi64",    l_memory_readi64 },
-    { "writei64",   l_memory_writei64 },
-    { "readu64",    l_memory_readu64 },
-    { "writeu64",   l_memory_writeu64 },
-    { "readf32",    l_memory_readf32 },
-    { "writef32",   l_memory_writef32 },
-    { "readf64",    l_memory_readf64 },
-    { "writef64",   l_memory_writef64 },
-    { NULL, NULL }
-};
-
-LUALIB_API int luaopen_memory(lua_State *L)
-{
-    luaL_newlib(L, memory_funcs);
-    return 1;
-}

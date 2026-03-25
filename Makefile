@@ -33,7 +33,7 @@ else
 endif
 
 CFLAGS  ?= -O2 -Wall -Wextra -std=c99
-LDFLAGS ?=
+LDFLAGS ?= -ldl
 
 TARGET_SO = papagaio$(SO_EXT)
 TARGET_A  = libpapagaio.a
@@ -49,9 +49,9 @@ LIBDIR     ?= $(PREFIX)/lib
 INCDIR     ?= $(PREFIX)/include
 
 # ── Targets ─────────────────────────────────────────────────────────────
-.PHONY: all clean test install static
+.PHONY: all clean test install static plugins
 
-all: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
+all: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN) plugins
 
 %.o: %.c
 	$(CC) -c $(CFLAGS) -fPIC -o $@ $<
@@ -66,12 +66,26 @@ $(TARGET_A): $(OBJ)
 $(TARGET_BIN): src/main.c $(TARGET_A)
 	$(CC) $(CFLAGS) -o $@ src/main.c $(TARGET_A) $(LDFLAGS) -lm
 
+plugins:
+	$(MAKE) -C plugins/lua
+	$(MAKE) -C plugins/quickjs
+
 static: $(TARGET_A)
 
-test: $(TARGET_SO)
-	@if [ -z "$(LUA_BIN)" ]; then echo "Lua not found in PATH"; exit 1; fi
-	@echo "=== papagaio test ==="
-	LUA_CPATH="./?.so;;" $(LUA_BIN) teste.lua
+test: test_c test_node
+
+test_c: $(TARGET_A) plugins
+	$(CC) $(CFLAGS) -o tests/test_bin tests/test.c $(TARGET_A) $(LDFLAGS) -lm
+	@echo "=== Starting Papagaio C Tests ==="
+	./tests/test_bin
+
+test_node: wasm
+	@if command -v node > /dev/null 2>&1; then \
+		echo "=== Starting Papagaio Node.js Tests ==="; \
+		node tests/test.js; \
+	else \
+		echo "Node.js not found, skipping Node tests."; \
+	fi
 
 install: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 	install -d $(BINDIR)
@@ -86,6 +100,8 @@ install: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 
 clean:
 	rm -f $(TARGET_SO) $(TARGET_A) $(TARGET_BIN) $(OBJ)
+	$(MAKE) -C plugins/lua clean
+	$(MAKE) -C plugins/quickjs clean
 	rm -rf dist/
 
 wasm: src/papagaio.c src/papagaio.h
@@ -95,11 +111,10 @@ wasm: src/papagaio.c src/papagaio.h
 		-s MODULARIZE=1 \
 		-s EXPORT_ES6=1 \
 		-s SINGLE_FILE=1 \
-		-s "EXPORTED_FUNCTIONS=['_papagaio_open', '_papagaio_close', '_papagaio_process_text', '_papagaio_cleanup', '_malloc', '_free']" \
-		-s "EXPORTED_RUNTIME_METHODS=['ccall', 'cwrap', 'UTF8ToString', 'stringToUTF8', 'lengthBytesUTF8']" \
+		-s "EXPORTED_FUNCTIONS=['_papagaio_open', '_papagaio_close', '_papagaio_process_text', '_papagaio_register_command', '_papagaio_register_modifier', '_malloc', '_free']" \
+		-s "EXPORTED_RUNTIME_METHODS=['ccall', 'cwrap', 'getValue', 'UTF8ToString', 'stringToUTF8', 'lengthBytesUTF8', 'addFunction', 'removeFunction']" \
 		-s ALLOW_MEMORY_GROWTH=1 \
+		-s ALLOW_TABLE_GROWTH=1 \
 		-s NODEJS_CATCH_EXIT=0 \
 		-s NODEJS_CATCH_REJECTION=0
 	cp src/papagaio.js dist/wasm/papagaio.js
-
-

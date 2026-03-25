@@ -38,6 +38,23 @@ for (const test of tests) {
     const p = new Papagaio();
     await p.init();
 
+    // Mock evaluator for WASM tests (variadic args)
+    const mockEval = (script, ...params) => {
+        try {
+            // we wrap it in a function providing 'print' and 'params' (ALL args)
+            // We use 1-based indexing for params to match Lua behavior
+            const paramsTable = [null, script, ...params];
+            const fn = new Function("print", "params", script);
+            const res = fn(console.log, paramsTable);
+            
+            // Result is ONLY the return value
+            return (res !== undefined && res !== null) ? String(res) : "";
+        } catch (e) {
+            return `[js error: ${e.message}]`;
+        }
+    };
+    p.registerCommand("lua", mockEval);
+
     try {
         const result = p.process(test.code).trim();
         const success = result === test.expected.trim();

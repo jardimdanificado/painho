@@ -170,8 +170,11 @@ jobs:
         if: startsWith(matrix.target, 'linux') || startsWith(matrix.target, 'macos')
         shell: bash
         run: |
-          mkdir -p dist_pkg
+          mkdir -p dist_pkg/plugins/lua
+          mkdir -p dist_pkg/plugins/quickjs
           cp papagaio dist_pkg/
+          cp plugins/lua/*.so dist_pkg/plugins/lua/ || true
+          cp plugins/quickjs/*.so dist_pkg/plugins/quickjs/ || true
           cp README.md dist_pkg/
           tar -czf "papagaio-v${{ inputs.version }}-${{ matrix.archive }}.tar.gz" -C dist_pkg .
 
