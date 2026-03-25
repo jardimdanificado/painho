@@ -107,7 +107,6 @@ jobs:
       - name: Install dependencies (macOS)
         if: startsWith(matrix.target, 'macos')
         run: |
-          brew update
           brew install libffi pkg-config
 
       - name: Setup MSYS2 (Windows MinGW)
