@@ -18,15 +18,16 @@ class Papagaio {
   registerCommand(name, handler) {
     if (!this._initialized) throw new Error("Not initialized");
     
-    // argc=ii, argv=iii, argl=iiii, userdata=iiiii
-    const wrapper = (ctx, argc, argvPtr, arglPtr, userdata) => {
+    // name=i, argc=ii, argv=iii, argl=iiii, userdata=iiiii
+    const wrapper = (ctx, namePtr, argc, argvPtr, arglPtr, userdata) => {
+        const cmdName = this._module.UTF8ToString(namePtr);
         const args = [];
         for (let i = 0; i < argc; i++) {
             const ptr = this._module.getValue(argvPtr + (i * 4), "i32");
             const len = this._module.getValue(arglPtr + (i * 4), "i32");
             args.push(this._module.UTF8ToString(ptr, len));
         }
-        const result = handler(...args);
+        const result = handler(cmdName, ...args);
         
         if (result === null || result === undefined) return 0;
         const resStr = String(result);
@@ -36,7 +37,7 @@ class Papagaio {
         return resPtr;
     };
 
-    const funcPtr = this._module.addFunction(wrapper, 'iiiiii');
+    const funcPtr = this._module.addFunction(wrapper, 'iiiiiii');
     this._module.ccall(
       "papagaio_register_command",
       null,

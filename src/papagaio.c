@@ -71,8 +71,11 @@ typedef struct {
 } PapToken;
 
 typedef struct {
-    char sigil[16], open[16], close[16];
-    const char *pattern, *regex, *block, *optional, *changequote;
+    char sigil[16];
+    char open[16];
+    char close[16];
+    char optional_char; 
+    const char *pattern, *regex, *block, *changequote;
 } Symbols;
 
 struct Pattern_s { PapToken *t; int count; int cap; Symbols sym; };
@@ -102,18 +105,6 @@ typedef struct { char *m; char *r; } PatternPair;
  * ====================================================================== */
 
 #define PAP_MAX_PLUGINS 64
-
-typedef struct {
-    const char        *name;
-    PapCommandHandler  handler;
-    void              *userdata;
-} RegisteredCommand;
-
-typedef struct {
-    const char         *name;
-    PapModifierHandler  handler;
-    void               *userdata;
-} RegisteredModifier;
 
 typedef struct {
     PapFinalizer fn;
@@ -202,9 +193,9 @@ static Symbols make_symbols(const char *sigil, const char *open, const char *clo
     if (sigil) { strncpy(s.sigil, sigil, 15); s.sigil[15] = '\0'; }
     if (open)  { strncpy(s.open,  open,  15); s.open[15]  = '\0'; }
     if (close) { strncpy(s.close, close, 15); s.close[15] = '\0'; }
+    s.optional_char = '?';
     s.pattern  = PAP_PATTERN; s.regex   = PAP_REGEX;
     s.block    = PAP_BLOCK;
-    s.optional = PAP_OPTIONAL;
     s.changequote = PAP_CHANGEQUOTE;
     return s;
 }
@@ -618,60 +609,34 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                 }
                 else if (sv_eq(mod, (StrView){"aliases",     7 })) {
                     t->modifier = MOD_ALIASES;
-                    while (i < n && isspace((unsigned char)pat[i])) i++;
-                    if (i < n && str_pfx(pat + i, sym->open)) {
-                        StrView blk;
-                        StrView so = { sym->open,  (size_t)ol };
-                        StrView sc = { sym->close, (size_t)cl };
-                        int next = extract_block(pat, i, so, sc, &blk);
-                        int acap = 4;
-                        t->alts = (char **)malloc(sizeof(char *) * acap);
-                        t->alt_count = 0;
-                        /* Also prepare alt_patterns for recursive sub-patterns */
-                        int apcap = 4;
-                        t->alt_patterns = (Pattern **)malloc(sizeof(Pattern *) * apcap);
-                        t->alt_pattern_count = 0;
-                        const char *cp = blk.ptr, *bend = blk.ptr + blk.len;
-                        while (cp < bend) {
-                            const char *comma = strchr(cp, ',');
-                            if (!comma) comma = bend;
-                            StrView part = trim_sv((StrView){ cp, (size_t)(comma - cp) });
-                            if (part.len > 0) {
-                                if (t->alt_count >= acap) {
-                                    acap <<= 1;
-                                    t->alts = (char **)realloc(t->alts, sizeof(char *) * acap);
-                                }
-                                int ai_idx = t->alt_count;
-                                t->alts[ai_idx] = (char *)malloc(part.len + 1);
-                                if (t->alts[ai_idx]) {
-                                    memcpy(t->alts[ai_idx], part.ptr, part.len);
-                                    t->alts[ai_idx][part.len] = '\0';
-                                }
-                                t->alt_count++;
-                                /* Parse the alternative as a sub-pattern if it contains sigils */
-                                int has_sigil = 0;
-                                const char *alt_str = t->alts[ai_idx] ? t->alts[ai_idx] : "";
-                                size_t alt_len = strlen(alt_str);
-                                for (size_t si = 0; si + (size_t)sl <= alt_len; si++) {
-                                    if (memcmp(alt_str + si, sym->sigil, sl) == 0) { has_sigil = 1; break; }
-                                }
-                                if (t->alt_pattern_count >= apcap) {
-                                    apcap <<= 1;
-                                    t->alt_patterns = (Pattern **)realloc(t->alt_patterns, sizeof(Pattern *) * apcap);
-                                }
-                                if (has_sigil && alt_str[0]) {
-                                    Pattern *sp = (Pattern *)malloc(sizeof(Pattern));
-                                    memset(sp, 0, sizeof(Pattern));
-                                    parse_pattern_ex(alt_str, sp, sym);
-                                    t->alt_patterns[t->alt_pattern_count++] = sp;
-                                } else {
-                                    t->alt_patterns[t->alt_pattern_count++] = NULL;
-                                }
+                    int acap = 4;
+                    t->alts = (char **)malloc(sizeof(char *) * acap);
+                    t->alt_count = 0;
+                    t->alt_patterns = (Pattern **)malloc(sizeof(Pattern *) * acap);
+                    t->alt_pattern_count = 0;
+
+                    StrView so = { sym->open,  strlen(sym->open) };
+                    StrView sc = { sym->close, strlen(sym->close) };
+
+                    while (i < n) {
+                        while (i < n && isspace((unsigned char)pat[i])) i++;
+                        if (i < n && sv_pfx(pat + i, so)) {
+                            StrView blk;
+                            i = (size_t)extract_block(pat, (int)i, so, sc, &blk);
+                            if (t->alt_count >= acap) {
+                                acap *= 2;
+                                t->alts = (char **)realloc(t->alts, sizeof(char *) * acap);
+                                t->alt_patterns = (Pattern **)realloc(t->alt_patterns, sizeof(Pattern *) * acap);
                             }
-                            if (comma >= bend) break;
-                            cp = comma + 1;
-                        }
-                        i = next;
+                            char *valt = (char*)malloc(blk.len + 1);
+                            memcpy(valt, blk.ptr, blk.len); valt[blk.len] = '\0';
+                            t->alts[t->alt_count++] = valt;
+                            
+                            Pattern *sp = (Pattern *)malloc(sizeof(Pattern));
+                            memset(sp, 0, sizeof(Pattern));
+                            parse_pattern_ex(valt, sp, sym);
+                            t->alt_patterns[t->alt_pattern_count++] = sp;
+                        } else break;
                     }
                 }
                 else if (sv_eq(mod, (StrView){"optional", 8}) ||
@@ -721,7 +686,7 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                 }
             }
 
-            if (i < n && pat[i] == '?') { t->optional = 1; i++; }
+            if (i < n && pat[i] == sym->optional_char) { t->optional = 1; i++; }
             if (t->type != TOK_REGEX && t->type != TOK_BLOCK) {
                 t->type = TOK_VAR;
             }
@@ -730,10 +695,11 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
 
         /* literal */
         int l = i;
-        while (i < n && !isspace((unsigned char)pat[i]) && !str_pfx(pat + i, sym->sigil)) i++;
+        while (i < n && !isspace((unsigned char)pat[i]) && !str_pfx(pat + i, sym->sigil) && pat[i] != sym->optional_char) i++;
         t->type  = TOK_LITERAL;
         t->value = (StrView){ pat + l, (size_t)(i - l) };
         p->count++;
+        if (i < n && pat[i] == sym->optional_char) { p->t[p->count-1].optional = 1; i++; }
     }
 
     /* next_sig + all_opt */
@@ -820,7 +786,10 @@ static int match_pattern(const char *src, int src_len,
         }
 
         if (t->type == TOK_LITERAL) {
-            if (!sv_pfx(src + pos, t->value)) goto fail;
+            if (!sv_pfx(src + pos, t->value)) {
+                if (t->optional) continue;
+                goto fail;
+            }
             pos += (int)t->value.len; continue;
         }
 
@@ -831,16 +800,15 @@ static int match_pattern(const char *src, int src_len,
                 while (src[pos] == ' ' || src[pos] == '\t') pos++;
             }
             int s = pos;
-
             if (t->modifier == MOD_ALIASES) {
                 int hit = 0;
                 /* Fast path: try flat string match first */
                 for (int ai = 0; ai < t->alt_count; ai++) {
-                    /* Skip alternatives that have sub-patterns — try them in the recursive path */
-                    if (ai < t->alt_pattern_count && t->alt_patterns[ai]) continue;
                     size_t al = strlen(t->alts[ai]);
                     if ((size_t)(src_len - pos) >= al &&
                         memcmp(src + pos, t->alts[ai], al) == 0) {
+                        ensure_cap(m);
+                        m->cap[m->count++] = (Capture){ t->var, { src + pos, al }, NULL };
                         pos += (int)al; hit = 1; break;
                     }
                 }
@@ -855,6 +823,9 @@ static int match_pattern(const char *src, int src_len,
                                 ensure_cap(m);
                                 m->cap[m->count++] = sub_m.cap[ci];
                             }
+                            /* The variable itself */
+                            ensure_cap(m);
+                            m->cap[m->count++] = (Capture){ t->var, { src + pos, (size_t)(sub_m.end - pos) }, NULL };
                             pos = sub_m.end;
                             hit = 1;
                             /* Free sub_m but NOT its captures (we moved them) */
@@ -869,8 +840,6 @@ static int match_pattern(const char *src, int src_len,
                     ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL };
                     continue;
                 }
-                ensure_cap(m);
-                m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(pos-s) }, NULL };
                 continue;
             }
             if (t->modifier == MOD_OPTIONAL) {
@@ -1571,25 +1540,23 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
     StrView sc_fixed = { "}", 1 };
 
     while (i < len) {
-        size_t sl = strlen(sym->sigil);
-        if (sl > 0 && i + sl <= len && memcmp(src + i, sym->sigil, sl) == 0) {
-            size_t j = i + sl;
+        if (src[i] == '$') { /* FIXED SIGIL for preprocessor */
+            size_t j = i + 1;
             size_t ks = j;
             while (j < len && (isalnum((unsigned char)src[j]) || src[j] == '_')) j++;
             size_t klen = j - ks;
 
             if (klen > 0) {
                 int is_imp = (klen == 6 && memcmp(src + ks, "import", 6) == 0);
-                int is_sig = (klen == 11 && memcmp(src + ks, "changesigil", 11) == 0);
-                int is_qte = (klen == 11 && memcmp(src + ks, "changequote", 11) == 0);
+                int is_sym = (klen == 13 && memcmp(src + ks, "changesymbols", 13) == 0);
 
-                if (is_imp || is_sig || is_qte) {
+                if (is_imp || is_sym) {
+                    size_t saved_j = j;
                     while (j < len && isspace((unsigned char)src[j])) j++;
-                    if (j < len && sv_pfx(src + j, so_fixed)) {
-                        StrView b1, b2, b3;
-                        int next = extract_block(src, (int)j, so_fixed, sc_fixed, &b1);
-
+                    if (j < len && src[j] == '{') {
+                        StrView b1, b2, b3, b4;
                         if (is_imp) {
+                            int next = extract_block(src, (int)j, (StrView){"{",1}, (StrView){"}",1}, &b1);
                             if (ctx) {
                                 StrView t = trim_sv(b1);
                                 char *path = (char *)malloc(t.len + 1);
@@ -1597,32 +1564,33 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                                 papagaio_load_plugin(ctx, path); free(path);
                             }
                             i = (size_t)next; continue;
-                        } else if (is_sig) {
-                            StrView t = trim_sv(b1);
-                            if (t.len > 0 && t.len < 16) {
-                                memcpy(sym->sigil, t.ptr, t.len); sym->sigil[t.len] = '\0';
-                            }
-                            i = (size_t)next; continue;
-                        } else if (is_qte) {
-                            j = (size_t)next;
-                            while (j < len && isspace((unsigned char)src[j])) j++;
-                            if (j < len && sv_pfx(src + j, so_fixed)) {
-                                next = extract_block(src, (int)j, so_fixed, sc_fixed, &b2);
-                                j = (size_t)next;
-                                while (j < len && isspace((unsigned char)src[j])) j++;
-                                if (j < len && sv_pfx(src + j, so_fixed)) {
-                                    next = extract_block(src, (int)j, so_fixed, sc_fixed, &b3);
-                                    StrView t1 = trim_sv(b1), t2 = trim_sv(b2), t3 = trim_sv(b3);
-                                    if (t1.len < 16 && t2.len < 16 && t3.len < 16) {
-                                        memcpy(sym->sigil, t1.ptr, t1.len); sym->sigil[t1.len] = '\0';
-                                        memcpy(sym->open,  t2.ptr, t2.len); sym->open[t2.len]  = '\0';
-                                        memcpy(sym->close, t3.ptr, t3.len); sym->close[t3.len] = '\0';
+                        } else if (is_sym) {
+                            int next1 = extract_block(src, (int)j, (StrView){"{",1}, (StrView){"}",1}, &b1);
+                            size_t j2 = (size_t)next1; while (j2 < len && isspace((unsigned char)src[j2])) j2++;
+                            if (j2 < len && src[j2] == '{') {
+                                int next2 = extract_block(src, (int)j2, (StrView){"{",1}, (StrView){"}",1}, &b2);
+                                size_t j3 = (size_t)next2; while (j3 < len && isspace((unsigned char)src[j3])) j3++;
+                                if (j3 < len && src[j3] == '{') {
+                                    int next3 = extract_block(src, (int)j3, (StrView){"{",1}, (StrView){"}",1}, &b3);
+                                    size_t j4 = (size_t)next3; while (j4 < len && isspace((unsigned char)src[j4])) j4++;
+                                    if (j4 < len && src[j4] == '{') {
+                                        int next4 = extract_block(src, (int)j4, (StrView){"{",1}, (StrView){"}",1}, &b4);
+                                        StrView t1 = trim_sv(b1), t2 = trim_sv(b2), t3 = trim_sv(b3), t4 = trim_sv(b4);
+                                        if (t1.len > 0 && t1.len < 16) {
+                                            memcpy(sym->sigil, t1.ptr, t1.len); sym->sigil[t1.len] = '\0';
+                                        }
+                                        if (t2.len > 0 && t2.len < 16 && t3.len > 0 && t3.len < 16) {
+                                            memcpy(sym->open,  t2.ptr, t2.len); sym->open[t2.len]  = '\0';
+                                            memcpy(sym->close, t3.ptr, t3.len); sym->close[t3.len] = '\0';
+                                        }
+                                        if (t4.len > 0) sym->optional_char = *t4.ptr;
+                                        i = (size_t)next4; continue;
                                     }
-                                    i = (size_t)next; continue;
                                 }
                             }
                         }
                     }
+                    j = saved_j; /* restore if blocks didn't match perfectly */
                 }
             }
         }
@@ -1671,7 +1639,7 @@ static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sy
                     } else break;
                 }
                 RegisteredCommand *cmd = &ctx->commands[found];
-                char *res = cmd->handler(ctx, vargc, vargv, vargl, cmd->userdata);
+                char *res = cmd->handler(ctx, cmd->name, vargc, vargv, vargl, cmd->userdata);
                 if (res) { sb_append_n(&out, res, strlen(res)); free(res); }
                 i = j; continue;
             } else if (klen == 8 && memcmp(src + ks, "document", 8) == 0) {

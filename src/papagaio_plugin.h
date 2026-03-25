@@ -24,7 +24,13 @@ typedef struct Papagaio Papagaio;
  * Retorna malloc'd string que substitui $nome{conteudo} no output.
  * Retornar NULL equivale a remover o bloco do output.
  * ----------------------------------------------------------------------- */
-typedef char *(*PapCommandHandler)(Papagaio *ctx, int argc, const char **argv, const size_t *argl, void *userdata);
+typedef char *(*PapCommandHandler)(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *userdata);
+
+typedef struct {
+    char              *name;
+    PapCommandHandler  handler;
+    void              *userdata;
+} RegisteredCommand;
 
 /* -----------------------------------------------------------------------
  * PapModifierHandler
@@ -37,6 +43,12 @@ typedef char *(*PapModifierHandler)(const char *match,
                                     const char *modifier_arg, /* conteúdo de {arg} se houver */
                                     size_t      arg_len,
                                     void       *userdata);
+
+typedef struct {
+    char               *name;
+    PapModifierHandler  handler;
+    void               *userdata;
+} RegisteredModifier;
 
 /* -----------------------------------------------------------------------
  * PapFinalizer — chamado quando o contexto é fechado

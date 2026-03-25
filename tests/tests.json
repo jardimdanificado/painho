@@ -261,13 +261,13 @@
     {
       "id": 44,
       "name": "Aliases modifier",
-      "code": "$pattern {$a$aliases{cat,dog}} {PET[$a]}\ndog and cat and fish",
+      "code": "$pattern {$a$aliases{cat}{dog}} {PET[$a]}\ndog and cat and fish",
       "expected": "PET[dog] andPET[cat] and fish"
     },
     {
       "id": 45,
       "name": "Changequote",
-      "code": "$changequote{@}{<}{>}@pattern <[@n]> <N:@n> [x] [y]",
+      "code": "$changesymbols{@}{<}{>}{?}@pattern <[@n]> <N:@n> [x] [y]",
       "expected": " N:x N:y"
     },
     {
@@ -309,19 +309,19 @@
     {
       "id": 52,
       "name": "Nested: int modifier inside aliases",
-      "code": "$pattern {$n$aliases{$x$int,abc,hello}} {MATCH[$n]}\n42\nabc\nhello\nxyz",
+      "code": "$pattern {$n$aliases{$x$int}{abc}{hello}} {MATCH[$n]}\n42\nabc\nhello\nxyz",
       "expected": "MATCH[42]\nMATCH[abc]\nMATCH[hello]\nxyz"
     },
     {
       "id": 53,
       "name": "Nested: aliases inside optional with anchor",
-      "code": "$pattern {say $x$optional{$y$aliases{hello,hi}}} {SAID[$x]}\nsay hello\nsay hi\nsay\nnothing",
+      "code": "$pattern {say $x$optional{$y$aliases{hello}{hi}}} {SAID[$x]}\nsay hello\nsay hi\nsay\nnothing",
       "expected": "SAID[hello]\nSAID[hi]\nSAID[]nothing"
     },
     {
       "id": 54,
       "name": "Nested: includes with nested aliases",
-      "code": "$pattern {$w$includes{$x$aliases{cat,dog}}} {HAS_PET[$w]}\nbigcatfoo\nhelldogend\nnothing",
+      "code": "$pattern {$w$includes{$x$aliases{cat}{dog}}} {HAS_PET[$w]}\nbigcatfoo\nhelldogend\nnothing",
       "expected": "HAS_PET[bigcatfoo]\nHAS_PET[helldogend]\nnothing"
     },
     {
@@ -341,6 +341,24 @@
       "name": "Multi-argument plugins",
       "code": "$lua{return params[2]}{HELLO}",
       "expected": "HELLO"
+    },
+    {
+      "id": 58,
+      "name": "Multi-block aliases (recursive)",
+      "code": "$pattern {$x$aliases{foo}{bar}} {M[$x]}\nfoo and bar",
+      "expected": "M[foo] andM[bar]"
+    },
+    {
+      "id": 59,
+      "name": "Changeoptional",
+      "code": "$changesymbols{$}{[}{]}{!} $pattern [a!b] [MATCH]\nab and b",
+      "expected": " MATCH and MATCH"
+    },
+    {
+      "id": 60,
+      "name": "Changequote (2 args)",
+      "code": "$changesymbols{$}{<<}{>>}{?}$pattern <<x>> <<y>>\nx",
+      "expected": "y"
     }
   ]
 }

@@ -7,3 +7,5 @@ test
 *.so
 *.a
 /papagaio
+test_arg.txt
+tests/test_bin

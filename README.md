@@ -1,183 +1,153 @@
-Papagaio
-========
+# Papagaio
 
-Papagaio is a C-first, embeddable text processing and pattern-matching preprocessor. It exposes a small, well-documented C API, a native Lua module, a command-line executable, and a JavaScript/WASM wrapper for browser and Node.js usage. 
+Papagaio is a C-first, embeddable text processing and pattern-matching preprocessor. It provides a highly flexible pattern and replacement engine designed for rapid source preprocessing, code generation, and templating.
 
-By embedding a Lua VM (compatible with Lua 5.1-5.4 and LuaJIT), Papagaio allows you to run dynamic evaluation blocks in-process. It provides highly flexible pattern and replacement APIs designed for rapid, scriptable source preprocessing and code generation.
+Papagaio is highly modular, supporting dynamic script-based extensions via Lua and WebAssembly/JavaScript.
 
-What Papagaio Does
-------------------
+## Key Features
 
-At its core, Papagaio is a preprocessor engine. It scans input text and performs pattern-based substitutions alongside scripted evaluations. You can use it to build macros, pattern-driven code generators, template engines, or any text-processing pipeline where embedding a tiny, efficient scripting VM is advantageous.
+- **Pattern-Matching Engine**: Powerful capture system with built-in and custom modifiers.
+- **Modular Plugins**: Extend the language with custom commands and scripts.
+- **Variadic Scripting**: Execute complex logic in-process via `$lua` (or other script plugins) with multi-block arguments.
+- **Highly Configurable**: Redefine the entire syntax (sigils, delimiters, markers) at runtime.
+- **Cross-Platform**: Seamless usage in C, Lua, and Node.js/WebAssembly.
 
-Quick Start
------------
+## Quick Start
 
-Command Line Interface (CLI):
+### Command Line Interface (CLI)
 ```sh
-papagaio input.txt > output.txt
+# Process with patterns defined in the file or passed via -p
+papagaio -e '$pattern {hello $w} {Hi $w}' input.txt
 ```
 
-C API:
+### C API
 ```c
 Papagaio *ctx = papagaio_open();
-char *out = papagaio_process(ctx, "pattern", "replacement", NULL);
+// Load optional plugins
+papagaio_load_plugin(ctx, "plugins/lua.so"); 
+
+char *out = papagaio_process_text(ctx, input_text, strlen(input_text));
 printf("%s", out);
 free(out);
 papagaio_close(ctx);
 ```
 
-JavaScript / WASM (Node.js or Browser):
+### JavaScript / WASM (Node.js)
 ```javascript
 import Papagaio from './papagaio.js';
 
 const p = new Papagaio();
 await p.init();
-console.log(p.process('your text here'));
+p.registerCommand("mycmd", (name, ...args) => `Result: ${args[0]}`);
+
+console.log(p.process('$mycmd{Hello}')); // Output: Result: Hello
 ```
 
-Pattern Syntax
---------------
+---
 
-Patterns are composed of whitespace-separated tokens. The syntax places the variable name first, followed by an optional modifier.
+## Pattern Syntax
 
-- Literal: Matches exactly the provided text.
-- Variable: `$name` (captures one token sequence).
-- Optional capture: `$name?` (capture is optional).
+Patterns are composed of whitespace-separated tokens. The engine uses a "flex-matching" strategy that automatically skips horizontal whitespace between variables.
 
-Modifiers allow you to specify the exact type of match you want:
-- Numbers: `$var$int`, `$var$float`, `$var$number`
-- Casing: `$var$upper`, `$var$lower`, `$var$capitalized`
-- Special formats: `$var$word`, `$var$identifier`, `$var$hex`, `$var$path`, `$var$binary`, `$var$percent`
-- Regex: `$id$regex{[0-9]+}` (captures matching a custom regular expression)
-- Block: `$item$block{[}{]}` (captures everything inside the specified delimiters)
-- Aliases: `$kind$aliases{cat,dog}` (matches one of the listed exact words)
-- Fixed matches: `$var$optional{literal}`, `$var$starts{literal}`, `$var$ends{literal}`
-- Advanced Substrings:
-  - `$var$prefix{literal}`: Matches if the literal is at the beginning (and more characters follow).
-  - `$var$suffix{literal}`: Matches if the literal is at the end (and characters precede it).
-  - `$var$infix{literal}`: Matches if the literal is in the middle (not at start or end).
-  - `$var$includes{literal}`: Matches if the literal is anywhere within the capture.
-- Nested patterns: All modifiers that accept `{...}` arguments support full recursive nesting. You can place any pattern feature inside another:
-  - `$kind$aliases{$x$int,abc}`: Aliases where one alternative is a typed capture.
-  - `$x$optional{$y$aliases{hello,hi}}`: Optional match that contains an aliases sub-pattern.
-  - `$w$includes{$x$aliases{cat,dog}}`: Includes check using an aliases sub-pattern.
-  - Nesting is recursive — you can nest `$optional{}` inside `$aliases{}` inside `$starts{}`, etc.
+- **Literal**: Matches exact text.
+- **Variable**: `$name` (captures a sequence up to the next pattern match).
+- **Optional**: `$name?` or `literal?` (marker is configurable via `$changesymbols`).
+- **Escaping**: Use `$$` to match a literal `$`.
 
-Replacement Syntax
-------------------
+### Modifiers
+Modifiers specify the data type or constraints of a match:
+- **Numbers**: `$var$int`, `$var$float`, `$var$number`
+- **Casing**: `$var$upper`, `$var$lower`, `$var$capitalized`
+- **Formats**: `$var$word`, `$var$identifier`, `$var$hex`, `$var$path`, `$var$binary`, `$var$percent`
+- **Regex**: `$id$regex{[0-9]+}`
+- **Block**: `$item$block{[}{]}` (captures everything between delimiters)
+- **Aliases**: `$kind$aliases{cat}{dog}{bird}` (multi-block syntax).
+- **Substrings**: `$var$starts{foo}`, `$var$ends{bar}`, `$var$prefix{p}`, `$var$suffix{s}`, `$var$infix{i}`, `$var$includes{x}`
 
-- Variables: Use `$name` to insert a captured token.
-- Evaluation Blocks: Use `$eval{ ... }` to run Lua code on the fly and insert its returned result. 
-
-Inside an `$eval{}` block, you have access to the full match string via the `match` variable, and any captured variables in your pattern are automatically expanded inside the string prior to Lua execution, making it trivial to process matched inputs sequentially.
-
-Examples
---------
-
-1. Basic Data Extraction
+### Nesting
+Modifiers support full recursive nesting:
 ```text
-Pattern:      $name $age$int
-Replacement:  Name: $name, Age: $age
-Input:        Alice 42
-Output:       Name: Alice, Age: 42
+$pattern {$n$aliases{$x$int}{abc}} {VALUE: $n}
 ```
 
-2. Mathematical Evaluation
+---
+
+## Replacement & Scripting
+
+### Variable Interpolation
+Use `$name` in the replacement string to insert captured content.
+
+### Scripting Blocks (`$lua`)
+Papagaio uses script plugins for dynamic transformations. The `$lua` command (if the Lua plugin is loaded) supports multiple blocks:
 ```text
-Pattern:      calc $x
-Replacement:  $eval{return $x * 2}
-Input:        calc 3
-Output:       6
+$lua{ return params[1] .. params[2] }{HELLO}{WORLD}
 ```
+- **Arguments**: Script blocks are passed to the `params` table (1-indexed in Lua). 
+- **Isolation**: Scripts operate in a clean environment without automatic shared state (like legacy `match` or `content` variables).
 
-3. Block Matching
+### Built-in Operators
+- **$document**: Injects the current state of the preprocessed document into the output.
+
+---
+
+## Dynamic Customization
+
+You can redefine the engine's syntax symbols at runtime using the atomic **`$changesymbols`** directive.
+
+### `$changesymbols{sigil}{open}{close}{optional}`
+Default: `$changesymbols{$}{{} }{}}{?}`
+
+Example:
 ```text
-Pattern:      $item$block{[}{]}
-Replacement:  Item: $item
-Input:        [a] [b]
-Output:       Item: a Item: b
+$changesymbols{@}{<}{>}{!} @pattern <@n!> <ID: @n> [x] [y]
 ```
+This changes the sigil to `@`, delimiters to `< >`, and the optional marker to `!`. Preprocessor directives (like `$changesymbols` itself) always use the stable `$` and `{}` to remain functional.
 
-4. Aliases and Optional Captures
-```text
-Pattern:      $kind$aliases{cat,dog} $name?
-Replacement:  Kind: $kind, Name: $name
-Input:        dog Rover
-Output:       Kind: dog, Name: Rover
+---
 
-Input:        cat
-Output:       Kind: cat, Name: 
+## Plugin Development
+
+### Custom Registry (Lua)
+You can extend Papagaio directly from script-land:
+```lua
+-- In a script loaded via $import or $lua
+papagaio.register("square", function(x)
+  local n = tonumber(x)
+  return tostring(n * n)
+end)
 ```
+Usage: `$square{4}` -> `16`.
 
-5. Nested Patterns (int inside aliases)
-```text
-Pattern:      $n$aliases{$x$int,abc}
-Replacement:  MATCH[$n]
-Input:        42
-Output:       MATCH[42]
-
-Input:        abc
-Output:       MATCH[abc]
-
-Input:        xyz
-Output:       xyz
-```
-
-Customization
--------------
-
-You can change the control sigil and delimiters dynamically during processing:
-
-```text
-$changequote{@}{<}{>} @eval<return 1+1>
-```
-
-This outputs `2`. You can also configure identical behaviors from the C extended processing API:
+### C Plugin Interface
+Plugins export a standard entry point:
 ```c
-papagaio_process_ex(ctx, "@", "<", ">", "@name", "Hello <@name>", NULL);
+int papagaio_plugin_init(PapPlugin *plugin, Papagaio *ctx);
+```
+Handlers receive the command name and a variadic list of arguments:
+```c
+typedef char *(*PapCommandHandler)(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
 ```
 
-Public Interfaces
------------------
+---
 
-C API Highlights (Header: src/papagaio.h):
-- papagaio_open: Creates a new context and initializes a fresh Lua state.
-- papagaio_close: Destroys a context and frees all resources.
-- papagaio_set_args: Passes program arguments into the internal Lua state.
-- papagaio_process: Convenience varargs API for generic processing.
-- papagaio_process_pairs: Explicit explicit-context API handling raw arrays of patterns and replacements.
-
-Note: Memory safety is heavily prioritized. C string results allocated during processing must be explicitly freed using `free()` by the caller avoiding leaks within embedded contexts.
-
-Building from Source
---------------------
-
-A C compiler (GCC or Clang) and CMake (>= 3.10) are required. A Lua development environment is optional; the library natively embeds its own VM bindings when building.
+## Building
 
 ```sh
-mkdir build && cd build
-cmake ..
-make
-sudo make install
+make        # Core & Plugins
+make wasm   # WebAssembly build
+make test   # Run comprehensive test suite (60 tests)
 ```
 
-This generates `libpapagaio.a`, `papagaio.so`, and the `papagaio` CLI binary. 
+## References
 
-For the WASM build:
-```sh
-make wasm
-```
+- [libregexp](https://bellard.org/quickjs/)
+- [QuickJS](https://bellard.org/quickjs/)
+- [TCC](https://bellard.org/tcc/)
+- [minilua](https://github.com/edubart/minilua)
+- [Lua](https://www.lua.org/)
+- [CPP](https://en.wikipedia.org/wiki/C_preprocessor)
+- [m4](https://www.gnu.org/software/m4/)
+- [Terra](http://terralang.org/)
 
-Design & Architecture Notes
----------------------------
-
-- Small Surface Area: Papagaio favors a strictly minimal public API making it straightforward to link and distribute.
-- Seamless Regex: Native Unicode-aware regular expression support is provided internally via a libregexp subcomponent.
-- Lua Integration: The inclusion of an internal VM avoids massive abstraction overheads allowing lightweight but incredibly powerful on-the-fly transformations.
-- Stateless Defaults: Calling convenience API methods without passing an explicitly initialized context uses a lazy, internal global VM instance. This behavior is ideal for one-shot operations, though standard explicitly-managed contexts are heavily recommended for complex, multi-threaded application pipelines.
-
-License
--------
-
-Please refer to the upstream repository for specific licensing information before adopting Papagaio for restricted commercial distributions.
+---
+*Papagaio: Efficient, scriptable text processing.*
