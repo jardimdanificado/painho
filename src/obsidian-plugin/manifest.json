@@ -1,9 +1,0 @@
-{
-  "id": "papagaio",
-  "name": "papagaio.md",
-  "version": "0.16.1",
-  "minAppVersion": "1.0.0",
-  "description": "papagaio text processor plugin for obsidian.",
-  "author": "jardimdanificado",
-  "isDesktopOnly": false
-}

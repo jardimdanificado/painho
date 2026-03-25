@@ -22,45 +22,7 @@ permissions:
   contents: write
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # Job 1: Build Obsidian Plugin
-  # ---------------------------------------------------------------------------
-  obsidian:
-    name: Build Obsidian plugin
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: latest
-
-      - name: Install dependencies and build plugin
-        run: |
-          sed -i 's/"version": ".*"/"version": "${{ inputs.version }}"/' src/obsidian-plugin/manifest.json
-          sed -i 's/"version": ".*"/"version": "${{ inputs.version }}"/' src/obsidian-plugin/package.json
-          make obsidian
-
-      - name: Package plugin artifact
-        run: |
-          mkdir -p pkg/papagaio
-          cp src/obsidian-plugin/dist/main.js pkg/papagaio/
-          cp src/obsidian-plugin/manifest.json pkg/papagaio/
-          cp src/obsidian-plugin/styles.css pkg/papagaio/
-          tar -czf "papagaio-v${{ inputs.version }}-obsidian.tar.gz" -C pkg papagaio
-
-      - name: Upload plugin artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: papagaio-obsidian
-          path: papagaio-v${{ inputs.version }}-obsidian.tar.gz
 
   # ---------------------------------------------------------------------------
   # Job 2: Build CLI Binaries (Matrix)
@@ -246,8 +208,8 @@ jobs:
   release:
     name: Publish release
     runs-on: ubuntu-latest
-    needs: [build, obsidian]
-    if: ${{ !cancelled() && needs.obsidian.result == 'success' }}
+    needs: [build]
+    if: ${{ !cancelled() }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
