@@ -50,7 +50,7 @@ Patterns are composed of whitespace-separated tokens. The engine uses a "flex-ma
 
 - **Literal**: Matches exact text.
 - **Variable**: `$name` (captures a sequence up to the next pattern match).
-- **Optional**: `$name?` or `literal?` (marker is configurable via `$changesymbols`).
+- **Optional**: `$name?` or `literal?` (marker is configurable, e.g., `MAYBE`, via `$changesymbols`).
 - **Escaping**: Use `$$` to match a literal `$`.
 
 ### Modifiers
@@ -62,6 +62,8 @@ Modifiers specify the data type or constraints of a match:
 - **Block**: `$item$block{[}{]}` (captures everything between delimiters)
 - **Aliases**: `$kind$aliases{cat}{dog}{bird}` (multi-block syntax).
 - **Substrings**: `$var$starts{foo}`, `$var$ends{bar}`, `$var$prefix{p}`, `$var$suffix{s}`, `$var$infix{i}`, `$var$includes{x}`
+- **Grouping**: `$item$group{subpattern}` (recursive grouping, matches as one unit)
+- **Optionality**: any token (literal, variable, or group) can be made optional by adding `?` (or a custom marker like `MAYBE`).
 
 ### Nesting
 Modifiers support full recursive nesting:
@@ -156,6 +158,34 @@ For maximum performance or system integration, use C plugins.
     cc -shared -fPIC -I./src -o hello.so hello.c
     ```
     Usage: `$import{./hello.so} $chello{}`
+
+### Handling Multiple Arguments
+Handlers receive raw blocks of data. Since these are not guaranteed to be null-terminated (to support binary data), always use `argl`:
+
+```c
+static char *repeat_handler(Papagaio *ctx, const char *name, int argc, 
+                            const char **argv, const size_t *argl, void *ud) {
+    if (argc < 2) return strdup("");
+    
+    // Convert first argument (count)
+    int count = atoi(argv[1]); // argv pointers are safe within their block size
+    if (count <= 0) return strdup("");
+
+    // Create result buffer
+    size_t char_len = argl[0];
+    char *res = malloc(char_len * count + 1);
+    for (int i = 0; i < count; i++) {
+        memcpy(res + (i * char_len), argv[0], char_len);
+    }
+    res[char_len * count] = '\0';
+    return res;
+}
+```
+*   `argc`: Number of blocks passed (ex: `$cmd{a}{b}` has `argc = 2`).
+*   `argv`: Array of pointers to the start of each block.
+*   `argl`: Array of lengths for each block.
+*   **Safety**: If you need a C-string, you MUST copy `argv[i]` and null-terminate it yourself.
+*   **Memory**: Always return a `malloc`'d string (or `strdup`). The engine calls `free()`.
 
 ### Lua Plugin Functions
 An easier way to add new commands is using `papagaio.register` within a script in the lua plugin.

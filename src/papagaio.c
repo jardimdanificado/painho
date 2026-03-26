@@ -37,7 +37,7 @@ typedef struct { char *data; size_t len; size_t cap; } StrBuf;
 
 typedef enum {
     TOK_LITERAL, TOK_VAR, TOK_REGEX, TOK_BLOCK, TOK_WS,
-    TOK_OPTIONS, TOK_OPTIONAL_LIT
+    TOK_OPTIONS_OBSOLETE, TOK_OPTIONAL_LIT
 } PapTokenType;
 
 typedef enum {
@@ -45,7 +45,7 @@ typedef enum {
     MOD_UPPER, MOD_LOWER, MOD_CAPITALIZED,
     MOD_WORD, MOD_IDENTIFIER, MOD_HEX, MOD_PATH,
     MOD_BINARY, MOD_PERCENT, MOD_ALIASES,
-    MOD_OPTIONAL, MOD_STARTS, MOD_ENDS,
+    MOD_GROUP, MOD_STARTS, MOD_ENDS,
     MOD_PREFIX, MOD_SUFFIX, MOD_INFIX,
     MOD_INCLUDES
 } VarModifier;
@@ -78,7 +78,7 @@ typedef struct {
     char sigil[16];
     char open[16];
     char close[16];
-    char optional_char; 
+    char optional[16]; 
     const char *pattern, *regex, *block, *changequote;
 } Symbols;
 
@@ -197,7 +197,7 @@ static Symbols make_symbols(const char *sigil, const char *open, const char *clo
     if (sigil) { strncpy(s.sigil, sigil, 15); s.sigil[15] = '\0'; }
     if (open)  { strncpy(s.open,  open,  15); s.open[15]  = '\0'; }
     if (close) { strncpy(s.close, close, 15); s.close[15] = '\0'; }
-    s.optional_char = '?';
+    strcpy(s.optional, "?");
     s.pattern  = PAP_PATTERN; s.regex   = PAP_REGEX;
     s.block    = PAP_BLOCK;
     s.changequote = PAP_CHANGEQUOTE;
@@ -216,10 +216,23 @@ static int sv_eq(StrView a, StrView b)
 { return a.len == b.len && memcmp(a.ptr, b.ptr, a.len) == 0; }
 
 static int sv_pfx(const char *s, StrView v)
-{ return memcmp(s, v.ptr, v.len) == 0; }
+{
+    if (v.len == 0) return 0;
+    for (size_t i = 0; i < v.len; i++) {
+        if (s[i] == '\0' || s[i] != v.ptr[i]) return 0;
+    }
+    return 1;
+}
 
 static int str_pfx(const char *s, const char *p)
-{ return memcmp(s, p, strlen(p)) == 0; }
+{
+    if (!p || *p == '\0') return 0;
+    while (*p) {
+        if (*s == '\0' || *s != *p) return 0;
+        s++; p++;
+    }
+    return 1;
+}
 
 static void skip_ws(const char *s, int *p)
 { while (isspace((unsigned char)s[*p])) (*p)++; }
@@ -576,20 +589,31 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                         } else break;
                     }
                 }
-                else if (sv_eq(mod, (StrView){"optional", 8}) ||
-                         sv_eq(mod, (StrView){"starts",   6}) ||
-                         sv_eq(mod, (StrView){"ends",     4}) ||
-                         sv_eq(mod, (StrView){"prefix",   6}) ||
-                         sv_eq(mod, (StrView){"suffix",   6}) ||
-                         sv_eq(mod, (StrView){"infix",    5}) ||
-                         sv_eq(mod, (StrView){"includes", 8})) {
-                    if      (sv_eq(mod, (StrView){"optional", 8})) t->modifier = MOD_OPTIONAL;
-                    else if (sv_eq(mod, (StrView){"starts",   6})) t->modifier = MOD_STARTS;
-                    else if (sv_eq(mod, (StrView){"ends",     4})) t->modifier = MOD_ENDS;
-                    else if (sv_eq(mod, (StrView){"prefix",   6})) t->modifier = MOD_PREFIX;
-                    else if (sv_eq(mod, (StrView){"suffix",   6})) t->modifier = MOD_SUFFIX;
-                    else if (sv_eq(mod, (StrView){"infix",    5})) t->modifier = MOD_INFIX;
-                    else                                            t->modifier = MOD_INCLUDES;
+                else if (sv_eq(mod, (StrView){"group",        5 }) ||
+                         sv_eq(mod, (StrView){"optional",     8 }) ||
+                         sv_eq(mod, (StrView){"starts",       6 }) ||
+                         sv_eq(mod, (StrView){"ends",         4 }) ||
+                         sv_eq(mod, (StrView){"prefix",       6 }) ||
+                         sv_eq(mod, (StrView){"suffix",       6 }) ||
+                         sv_eq(mod, (StrView){"infix",        5 }) ||
+                         sv_eq(mod, (StrView){"includes",     8 })) {
+                    if (sv_eq(mod, (StrView){"group", 5}) || 
+                        sv_eq(mod, (StrView){"optional", 8})) {
+                        t->modifier = MOD_GROUP;
+                    } else if (sv_eq(mod, (StrView){"starts", 6})) {
+                        t->modifier = MOD_STARTS;
+                    } else if (sv_eq(mod, (StrView){"ends", 4})) {
+                        t->modifier = MOD_ENDS;
+                    } else if (sv_eq(mod, (StrView){"prefix", 6})) {
+                        t->modifier = MOD_PREFIX;
+                    } else if (sv_eq(mod, (StrView){"suffix", 6})) {
+                        t->modifier = MOD_SUFFIX;
+                    } else if (sv_eq(mod, (StrView){"infix", 5})) {
+                        t->modifier = MOD_INFIX;
+                    } else {
+                        t->modifier = MOD_INCLUDES;
+                    }
+
                     while (i < n && isspace((unsigned char)pat[i])) i++;
                     if (i < n && str_pfx(pat + i, sym->open)) {
                         StrView blk;
@@ -623,7 +647,7 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                 }
             }
 
-            if (i < n && pat[i] == sym->optional_char) { t->optional = 1; i++; }
+            if (i < n && str_pfx(pat + i, sym->optional)) { t->optional = 1; i += strlen(sym->optional); }
             if (t->type != TOK_REGEX && t->type != TOK_BLOCK) {
                 t->type = TOK_VAR;
             }
@@ -632,11 +656,11 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
 
         /* literal */
         int l = i;
-        while (i < n && !isspace((unsigned char)pat[i]) && !str_pfx(pat + i, sym->sigil) && pat[i] != sym->optional_char) i++;
+        while (i < n && !isspace((unsigned char)pat[i]) && !str_pfx(pat + i, sym->sigil) && !str_pfx(pat + i, sym->optional)) i++;
         t->type  = TOK_LITERAL;
         t->value = (StrView){ pat + l, (size_t)(i - l) };
         p->count++;
-        if (i < n && pat[i] == sym->optional_char) { p->t[p->count-1].optional = 1; i++; }
+        if (i < n && str_pfx(pat + i, sym->optional)) { p->t[p->count-1].optional = 1; i += strlen(sym->optional); }
     }
 
     /* next_sig + all_opt */
@@ -688,7 +712,8 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
    Returns the end position of the match, or -1 if no match. */
 static int sub_pattern_matches_at(const char *src, int src_len, Pattern *sp, int at)
 {
-    Match sub_m;
+    Match sub_m; memset(&sub_m, 0, sizeof(sub_m));
+    memset(&sub_m, 0, sizeof(sub_m));
     if (match_pattern(src, src_len, sp, at, &sub_m)) {
         int end = sub_m.end;
         free_match(&sub_m);
@@ -753,7 +778,8 @@ static int match_pattern(const char *src, int src_len,
                 if (!hit) {
                     for (int ai = 0; ai < t->alt_pattern_count; ai++) {
                         if (!t->alt_patterns[ai]) continue;
-                        Match sub_m;
+                        Match sub_m; memset(&sub_m, 0, sizeof(sub_m));
+                        memset(&sub_m, 0, sizeof(sub_m));
                         if (match_pattern(src, src_len, t->alt_patterns[ai], pos, &sub_m)) {
                             /* Merge sub-captures into parent match */
                             for (int ci = 0; ci < sub_m.count; ci++) {
@@ -779,24 +805,26 @@ static int match_pattern(const char *src, int src_len,
                 }
                 continue;
             }
-            if (t->modifier == MOD_OPTIONAL) {
+            if (t->modifier == MOD_GROUP) {
                 if (t->sub_pattern) {
-                    /* Recursive: try matching the sub-pattern */
-                    Match sub_m;
-                    if (match_pattern(src, src_len, t->sub_pattern, pos, &sub_m)) {
-                        /* Merge sub-captures */
-                        for (int ci = 0; ci < sub_m.count; ci++) {
-                            ensure_cap(m);
-                            m->cap[m->count++] = sub_m.cap[ci];
-                        }
-                        pos = sub_m.end;
-                        free(sub_m.cap);
-                        if (sub_m.regex.capture) free((void *)sub_m.regex.capture);
+                    Match sub_m; memset(&sub_m, 0, sizeof(sub_m));
+                    if (!match_pattern(src, src_len, t->sub_pattern, pos, &sub_m)) {
+                        if (!t->optional) goto fail;
+                        ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL };
+                        continue;
                     }
+                    for (int ci = 0; ci < sub_m.count; ci++) {
+                        ensure_cap(m);
+                        m->cap[m->count++] = sub_m.cap[ci];
+                    }
+                    pos = sub_m.end;
+                    free(sub_m.cap);
+                    if (sub_m.regex.capture) free((void *)sub_m.regex.capture);
                 } else {
                     if ((size_t)(src_len-pos) >= t->value.len && t->value.len > 0 &&
                         memcmp(src+pos, t->value.ptr, t->value.len) == 0)
                         pos += (int)t->value.len;
+                    else if (!t->optional) goto fail;
                 }
                 ensure_cap(m);
                 m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(pos-s) }, NULL };
@@ -804,20 +832,18 @@ static int match_pattern(const char *src, int src_len,
             }
             if (t->modifier == MOD_STARTS || t->modifier == MOD_PREFIX) {
                 if (t->sub_pattern) {
-                    Match sub_m;
+                    Match sub_m; memset(&sub_m, 0, sizeof(sub_m));
                     if (!match_pattern(src, src_len, t->sub_pattern, pos, &sub_m)) {
                         if (!t->optional) goto fail;
                         ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL };
                         continue;
                     }
-                    /* Merge sub-captures */
                     for (int ci = 0; ci < sub_m.count; ci++) {
                         ensure_cap(m);
                         m->cap[m->count++] = sub_m.cap[ci];
                     }
                     free(sub_m.cap);
                     if (sub_m.regex.capture) free((void *)sub_m.regex.capture);
-                    /* Don't advance pos yet — starts/prefix still need to consume more chars */
                 } else {
                     if ((size_t)(src_len-pos) < t->value.len ||
                         memcmp(src+pos, t->value.ptr, t->value.len) != 0) {
@@ -828,23 +854,13 @@ static int match_pattern(const char *src, int src_len,
                 }
             }
 
-            if (nx && (nx->type == TOK_LITERAL || nx->type == TOK_BLOCK ||
-                       nx->type == TOK_OPTIONS)) {
+            if (nx && (nx->type == TOK_LITERAL || nx->type == TOK_BLOCK)) {
                 while (src[pos]) {
                     if (src[pos] == '\n') break;
                     if (nx->type == TOK_LITERAL && sv_pfx(src+pos, nx->value)) break;
                     if (nx->type == TOK_BLOCK &&
                         sv_pfx(src+pos, nx->open)) break;
                     if (!CHAR_VALID(src[pos], pos, s)) break;
-                    if (nx->type == TOK_OPTIONS) {
-                        int fa = 0;
-                        for (int ai = 0; ai < nx->alt_count; ai++) {
-                            size_t al = strlen(nx->alts[ai]);
-                            if ((size_t)(src_len-pos) >= al &&
-                                memcmp(src+pos, nx->alts[ai], al) == 0) { fa = 1; break; }
-                        }
-                        if (fa) break;
-                    }
                     pos++;
                     if ((t->modifier == MOD_ENDS || t->modifier == MOD_SUFFIX) && !t->sub_pattern &&
                         t->value.len > 0 && (size_t)(pos-s) >= t->value.len &&
@@ -1126,32 +1142,12 @@ static int match_pattern(const char *src, int src_len,
             continue;
         }
 
-        if (t->type == TOK_OPTIONS) {
-            int hit = 0;
-            for (int ai = 0; ai < t->alt_count; ai++) {
-                size_t al = strlen(t->alts[ai]);
-                if ((size_t)(src_len-pos) >= al &&
-                    memcmp(src+pos, t->alts[ai], al) == 0) {
-                    pos += (int)al; hit = 1; break;
-                }
-            }
-            if (!hit && !t->optional) goto fail;
-            continue;
-        }
-
-        if (t->type == TOK_OPTIONAL_LIT) {
-            if ((size_t)(src_len-pos) >= t->value.len && t->value.len > 0 &&
-                memcmp(src+pos, t->value.ptr, t->value.len) == 0)
-                pos += (int)t->value.len;
-            continue;
-        }
     }
 
     m->end = pos; return 1;
 
 fail:
-    free(m->cap); m->cap = NULL;
-    if (m->regex.capture) { free((void *)m->regex.capture); m->regex.capture = NULL; }
+    free_match(m);
     return 0;
 }
 
@@ -1548,7 +1544,10 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                                             memcpy(sym->open,  t2.ptr, t2.len); sym->open[t2.len]  = '\0';
                                             memcpy(sym->close, t3.ptr, t3.len); sym->close[t3.len] = '\0';
                                         }
-                                        if (t4.len > 0) sym->optional_char = *t4.ptr;
+                                        if (t4.len > 0 && t4.len < 16) {
+                                            memcpy(sym->optional, t4.ptr, t4.len);
+                                            sym->optional[t4.len] = '\0';
+                                        }
                                         i = (size_t)next4; continue;
                                     }
                                 }

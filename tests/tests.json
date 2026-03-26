@@ -81,7 +81,7 @@
     {
       "id": 14,
       "name": "Optional whitespace with $ optional",
-      "code": "$pattern {hello $world$optional{optional}} {HI}\nhello optional",
+      "code": "$pattern {hello $world$group{optional}?} {HI}\nhello optional",
       "expected": "HI"
     },
     {
@@ -315,7 +315,7 @@
     {
       "id": 53,
       "name": "Nested: aliases inside optional with anchor",
-      "code": "$pattern {say $x$optional{$y$aliases{hello}{hi}}} {SAID[$x]}\nsay hello\nsay hi\nsay\nnothing",
+      "code": "$pattern {say $x$group{$y$aliases{hello}{hi}}?} {SAID[$x]}\nsay hello\nsay hi\nsay\nnothing",
       "expected": "SAID[hello]\nSAID[hi]\nSAID[]nothing"
     },
     {
@@ -359,6 +359,18 @@
       "name": "Changequote (2 args)",
       "code": "$changesymbols{$}{<<}{>>}{?}$pattern <<x>> <<y>>\nx",
       "expected": "y"
+    },
+    {
+      "id": 61,
+      "name": "Multi-char optional marker",
+      "code": "$changesymbols{#}{[}{]}{MAYBE} #pattern[#fooMAYBE][MATCH]\nfoo",
+      "expected": " MATCH"
+    },
+    {
+      "id": 62,
+      "name": "Trivial Group",
+      "code": "$pattern {$x$group{abc}} {OK-$x}\nabc",
+      "expected": " OK-abc"
     }
   ]
 }

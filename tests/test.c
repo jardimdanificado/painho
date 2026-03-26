@@ -48,6 +48,18 @@ int main(void)
     printf("Test 18 - %s (esperado: X)\n", o);
     free(o);
 
+    /* Test multi-char optional marker */
+    const char *in20 = "$changesymbols{$}{[}{]}{MAYBE} $pattern{[fooMAYBE]}{[MATCH]}\nfoo";
+    o = papagaio_process_text(ctx, in20, strlen(in20));
+    printf("Test 20 - %s (esperado:  MATCH)\n", o);
+    free(o);
+
+    /* Test group with named capture */
+    const char *in21 = "$pattern {{$meta$group{ID: $id$int}?}} {ID=$id}\nID: 42";
+    o = papagaio_process_text(ctx, in21, strlen(in21));
+    printf("Test 21 - %s (esperado: ID=42)\n", o);
+    free(o);
+
     printf("=== All C Tests Finished ===\n");
     papagaio_close(ctx);
     return 0;
