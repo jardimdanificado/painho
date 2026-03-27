@@ -73,11 +73,16 @@ $(TARGET_BIN): src/main.c $(TARGET_A)
 
 plugins:
 	$(MAKE) -C plugins/lua
+	$(MAKE) -C plugins/mquickjs
 	$(MAKE) -C plugins/quickjs
 
 static: $(TARGET_A)
 
-test: test_c test_node
+test: test_c test_node test_plugins
+
+test_plugins: $(TARGET_BIN) plugins
+	@echo "=== Starting Papagaio Plugin Coexistence Tests ==="
+	./$(TARGET_BIN) test_dual.txt
 
 test_c: $(TARGET_A) plugins
 	$(CC) $(CFLAGS) -o tests/test_bin tests/test.c $(TARGET_A) $(LDFLAGS) -lm
@@ -106,6 +111,7 @@ install: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 clean:
 	rm -f $(TARGET_SO) $(TARGET_A) $(TARGET_BIN) $(OBJ)
 	$(MAKE) -C plugins/lua clean
+	$(MAKE) -C plugins/mquickjs clean
 	$(MAKE) -C plugins/quickjs clean
 	rm -rf dist/
 

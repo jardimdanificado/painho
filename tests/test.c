@@ -43,6 +43,14 @@ int main(void)
     printf("Test 19 - %s (esperado: 2)\n", o);
     free(o);
 
+    o = papagaio_process("$import{plugins/mquickjs/mjs.so}$mqjs{3+3}", NULL);
+    printf("Test MQJS - %s (esperado: 6)\n", o);
+    free(o);
+
+    o = papagaio_process("$import{plugins/quickjs/qjs.so}$qjs{4+4}", NULL);
+    printf("Test QJS - %s (esperado: 8)\n", o);
+    free(o);
+
     /* Test that $lua{} works from local ctx */
     o = papagaio_process_text(ctx, "$lua{return 'X'}", 16);
     printf("Test 18 - %s (esperado: X)\n", o);
