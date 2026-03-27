@@ -1377,7 +1377,7 @@ int papagaio_load_plugin(Papagaio *ctx, const char *path)
 #ifdef _WIN32
     void *handle = LoadLibraryA(path);
 #else
-    void *handle = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
+    void *handle = dlopen(path, RTLD_NOW);
 #endif
     if (!handle) {
         /* try .so or .dll if not provided? for now, use literal path */
