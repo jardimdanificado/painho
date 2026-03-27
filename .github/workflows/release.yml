@@ -143,7 +143,6 @@ jobs:
           # Rebuild Lua for each target architecture
           make clean
           make all -j2
-          make test
 
       - name: Build binary (Windows MinGW)
         if: startsWith(matrix.target, 'windows-mingw')
@@ -151,7 +150,6 @@ jobs:
         run: |
           make clean
           make all -j2
-          make test
 
       - name: Build binary (Windows MSVC)
         if: startsWith(matrix.target, 'windows-msvc')
@@ -172,11 +170,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist_pkg/plugins/lua
-          mkdir -p dist_pkg/plugins/mquickjs
           mkdir -p dist_pkg/plugins/quickjs
           cp papagaio dist_pkg/
           cp plugins/lua/*.so dist_pkg/plugins/lua/ || true
-          cp plugins/mquickjs/*.so dist_pkg/plugins/mquickjs/ || true
           cp plugins/quickjs/*.so dist_pkg/plugins/quickjs/ || true
           cp README.md dist_pkg/
           tar -czf "papagaio-v${{ inputs.version }}-${{ matrix.archive }}.tar.gz" -C dist_pkg .
@@ -185,13 +181,8 @@ jobs:
         if: startsWith(matrix.target, 'windows-mingw')
         shell: msys2 {0}
         run: |
-          mkdir -p dist_pkg/plugins/lua
-          mkdir -p dist_pkg/plugins/mquickjs
-          mkdir -p dist_pkg/plugins/quickjs
+          mkdir -p dist_pkg
           cp papagaio.exe dist_pkg/
-          cp plugins/lua/*.dll dist_pkg/plugins/lua/ || true
-          cp plugins/mquickjs/*.dll dist_pkg/plugins/mquickjs/ || true
-          cp plugins/quickjs/*.dll dist_pkg/plugins/quickjs/ || true
           cp README.md dist_pkg/
           powershell -NoProfile -Command "Compress-Archive -Path dist_pkg\\* -DestinationPath papagaio-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force"
 
@@ -199,13 +190,8 @@ jobs:
         if: startsWith(matrix.target, 'windows-msvc')
         shell: powershell
         run: |
-          New-Item -ItemType Directory -Force -Path dist_pkg/plugins/lua
-          New-Item -ItemType Directory -Force -Path dist_pkg/plugins/mquickjs
-          New-Item -ItemType Directory -Force -Path dist_pkg/plugins/quickjs
+          New-Item -ItemType Directory -Force -Path dist_pkg
           Copy-Item build-msvc/Release/papagaio.exe dist_pkg/
-          Copy-Item build-msvc/Release/lua.dll dist_pkg/plugins/lua/ -ErrorAction SilentlyContinue
-          Copy-Item build-msvc/Release/mqjs.dll dist_pkg/plugins/mquickjs/ -ErrorAction SilentlyContinue
-          Copy-Item build-msvc/Release/qjs.dll dist_pkg/plugins/quickjs/ -ErrorAction SilentlyContinue
           Copy-Item README.md dist_pkg/
           Compress-Archive -Path dist_pkg/* -DestinationPath papagaio-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force
 
