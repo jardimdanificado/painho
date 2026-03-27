@@ -5,8 +5,9 @@
 #include "mquickjs/mquickjs_build.h"
 
 /* Prototypes for plugin-side functions */
-static JSValue js_print(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
-static JSValue js_pap_register(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue js_print(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue js_pap_register(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue js_gc(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
 
 /* Define papagaio object */
 static const JSPropDef js_papagaio[] = {
