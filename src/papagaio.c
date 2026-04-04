@@ -1657,11 +1657,62 @@ static char *wasm_bytes_handler(Papagaio *ctx, const char *name, int argc, const
 
 static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
 {
-    (void)ctx; (void)sym;
-    return strdup(src);
+    StrBuf out; sb_init(&out);
+    size_t i = 0, len = strlen(src);
+
+    while (i < len) {
+        if (src[i] == '$') { /* FIXED SIGIL for preprocessor */
+            size_t j = i + 1;
+            size_t ks = j;
+            while (j < len && (isalnum((unsigned char)src[j]) || src[j] == '_')) j++;
+            size_t klen = j - ks;
+
+            if (klen > 0) {
+                int is_sym = (klen == 13 && memcmp(src + ks, "changesymbols", 13) == 0);
+                
+                if (is_sym) {
+                    size_t saved_j = j;
+                    while (j < len && isspace((unsigned char)src[j])) j++;
+                    if (j < len && src[j] == '{') {
+                        StrView b1, b2, b3, b4;
+                        if (is_sym) {
+                            int next1 = extract_block(src, (int)j, (StrView){"{",1}, (StrView){"}",1}, &b1);
+                            size_t j2 = (size_t)next1; while (j2 < len && isspace((unsigned char)src[j2])) j2++;
+                            if (j2 < len && src[j2] == '{') {
+                                int next2 = extract_block(src, (int)j2, (StrView){"{",1}, (StrView){"}",1}, &b2);
+                                size_t j3 = (size_t)next2; while (j3 < len && isspace((unsigned char)src[j3])) j3++;
+                                if (j3 < len && src[j3] == '{') {
+                                    int next3 = extract_block(src, (int)j3, (StrView){"{",1}, (StrView){"}",1}, &b3);
+                                    size_t j4 = (size_t)next3; while (j4 < len && isspace((unsigned char)src[j4])) j4++;
+                                    if (j4 < len && src[j4] == '{') {
+                                        int next4 = extract_block(src, (int)j4, (StrView){"{",1}, (StrView){"}",1}, &b4);
+                                        StrView t1 = trim_sv(b1), t2 = trim_sv(b2), t3 = trim_sv(b3), t4 = trim_sv(b4);
+                                        
+                                        if (t1.len > 0 && t1.len < 16) {
+                                            memcpy(sym->sigil, t1.ptr, t1.len); sym->sigil[t1.len] = '\0';
+                                        }
+                                        if (t2.len > 0 && t2.len < 16 && t3.len > 0 && t3.len < 16) {
+                                            memcpy(sym->open,  t2.ptr, t2.len); sym->open[t2.len]  = '\0';
+                                            memcpy(sym->close, t3.ptr, t3.len); sym->close[t3.len] = '\0';
+                                        }
+                                        if (t4.len > 0 && t4.len < 16) {
+                                            memcpy(sym->optional, t4.ptr, t4.len);
+                                            sym->optional[t4.len] = '\0';
+                                        }
+                                        i = (size_t)next4; continue;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    j = saved_j; /* restore if blocks didn't match perfectly */
+                }
+            }
+        }
+        sb_append_char(&out, src[i++]);
+    }
+    return out.data;
 }
-
-
 
 static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sym)
 {
@@ -1705,6 +1756,10 @@ static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sy
                     if (res) { sb_append_n(&out, res, strlen(res)); free(res); }
                     for (int ci = 0; ci < vargc; ci++) if (vargv[ci]) free(vargv[ci]);
                     i = j; continue;
+                } else if (klen == 8 && memcmp(src + ks, "document", 8) == 0) {
+                    /* Special built-in $document operator */
+                    sb_append_n(&out, src, len);
+                    i = j; continue;
                 }
             }
         }
@@ -1724,9 +1779,40 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
 
     char *preprocessed = resolve_preprocessor(ctx, buf, &sym); free(buf);
     if (!preprocessed) return NULL;
-
-    char *final = dispatch_commands(ctx, preprocessed, &sym);
+    
+    /* A. Resolve Patterns */
+    PatternPair *pairs = NULL; int pc = 0;
+    char *text_no_patterns = extract_nested(preprocessed, &sym, &pairs, &pc);
     free(preprocessed);
+    if (!text_no_patterns) { free_pairs(pairs, pc); return NULL; }
+    
+    char *cur = text_no_patterns;
+    for (int i = 0; i < pc; i++) {
+        StrBuf out; sb_init(&out);
+        size_t clen = strlen(cur), pos = 0;
+        Pattern pat;
+        parse_pattern_ex(pairs[i].m, &pat, &sym);
+        
+        while (pos < clen) {
+            Match m;
+            if (match_pattern(cur, (int)clen, &pat, (int)pos, &m)) {
+                char *r = apply_replacement_ex(pairs[i].r, &m, &sym);
+                sb_append_n(&out, r, strlen(r));
+                free(r);
+                pos = (size_t)m.end;
+                free_match(&m);
+            } else {
+                sb_append_char(&out, cur[pos++]);
+            }
+        }
+        free_pattern(&pat);
+        free(cur);
+        cur = out.data;
+    }
+    free_pairs(pairs, pc);
+
+    char *final = dispatch_commands(ctx, cur, &sym);
+    free(cur);
     
     return final;
 }

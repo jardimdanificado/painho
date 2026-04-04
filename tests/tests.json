@@ -371,6 +371,12 @@
       "name": "Trivial Group",
       "code": "$pattern {$x$group{abc}} {OK-$x}\nabc",
       "expected": " OK-abc"
+    },
+    {
+      "id": 63,
+      "name": "Wasmfile fallback parsing (nonexistent file)",
+      "code": "$wasmfile{phantom.wasm} $test{123}",
+      "expected": " $test{123}"
     }
   ]
 }
