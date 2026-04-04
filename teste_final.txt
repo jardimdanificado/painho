@@ -1,1 +1,0 @@
-$wasmfile{tests/plugin.wasm} $repetir{Sucesso}{3}
