@@ -36,9 +36,11 @@ void       papagaio_close(Papagaio *ctx);
 void       papagaio_set_args(Papagaio *ctx, int argc, char **argv);
 void       papagaio_get_args(Papagaio *ctx, int *argc, char ***argv);
 
-/* Plugin System */
-#include "papagaio_plugin.h"
-int   papagaio_load_plugin(Papagaio *ctx, const char *path);
+/* Extensibility Definitions */
+typedef char *(*PapCommandHandler)(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *userdata);
+typedef char *(*PapModifierHandler)(const char *match, const char *modifier, size_t match_len, size_t mod_len, void *userdata);
+typedef void (*PapFinalizer)(void *userdata);
+
 int   papagaio_has_command(Papagaio *ctx, const char *name);
 int   papagaio_register_command(Papagaio *ctx, const char *name, PapCommandHandler handler, void *ud);
 int   papagaio_register_modifier(Papagaio *ctx, const char *name, PapModifierHandler handler, void *ud);

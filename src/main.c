@@ -24,9 +24,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Uso: papagaio <arquivo.txt>\n");
         return 1;
     }
+
     Papagaio *ctx = papagaio_open();
     papagaio_set_args(ctx, argc, argv);
-
 
     size_t len = 0;
     char *input = read_file(argv[1], &len);
@@ -36,7 +36,6 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    /* Processa o texto usando a nova API C-First com explicit context */
     char *output = papagaio_process_text(ctx, input, len);
     
     if (output) {

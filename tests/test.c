@@ -8,7 +8,6 @@ int main(void)
     char *o;
     Papagaio *ctx = papagaio_open();
     if (!ctx) { fprintf(stderr, "Failed to open papagaio\n"); return 1; }
-    papagaio_load_plugin(ctx, "plugins/lua/lua.so");
 
     printf("=== Starting Papagaio C Tests ===\n");
 
@@ -38,23 +37,6 @@ int main(void)
     printf("Test 17 - %s (esperado: Number: 42 days)\n", o);
     free(o);
 
-    /* Test plugins via $import in variadic API (uses lazy ctx) */
-    o = papagaio_process("$import{plugins/lua/lua.so}$changequote{@}{<}{>}@lua<return 1+1>", NULL);
-    printf("Test 19 - %s (esperado: 2)\n", o);
-    free(o);
-
-    o = papagaio_process("$import{plugins/mquickjs/mjs.so}$mqjs{3+3}", NULL);
-    printf("Test MQJS - %s (esperado: 6)\n", o);
-    free(o);
-
-    o = papagaio_process("$import{plugins/quickjs/qjs.so}$qjs{4+4}", NULL);
-    printf("Test QJS - %s (esperado: 8)\n", o);
-    free(o);
-
-    /* Test that $lua{} works from local ctx */
-    o = papagaio_process_text(ctx, "$lua{return 'X'}", 16);
-    printf("Test 18 - %s (esperado: X)\n", o);
-    free(o);
 
     /* Test multi-char optional marker */
     const char *in20 = "$changesymbols{$}{[}{]}{MAYBE} $pattern{[fooMAYBE]}{[MATCH]}\nfoo";
@@ -68,7 +50,28 @@ int main(void)
     printf("Test 21 - %s (esperado: ID=42)\n", o);
     free(o);
 
-    printf("=== All C Tests Finished ===\n");
+    printf("\n=== Compiling Bare Metal Wasm Test Plugin ===\n");
+    int rc = system("./papagaio tests/test_wasm.c.pap > tests/test_wasm.c && "
+                    "clang --target=wasm32 -O3 -nostdlib -Wl,--no-entry -Wl,--export-all -o tests/test_plugin.wasm tests/test_wasm.c 2>/dev/null");
+    
+    if (rc == 0) {
+        printf("--- Wasm Plugin Compiled. Testing Execution...\n");
+        const char *in22 = "$wasmfile{tests/test_plugin.wasm} $test_mul{7}{6}";
+        o = papagaio_process_text(ctx, in22, strlen(in22));
+        printf("Test 22 [Wasm] - %s (esperado: 42)\n", o);
+        free(o);
+        
+        const char *in23 = "$test_mul{-5}{4}";
+        o = papagaio_process_text(ctx, in23, strlen(in23));
+        printf("Test 23 [Wasm Memory Isolation] - %s (esperado: -20)\n", o);
+        free(o);
+        
+        system("rm -f tests/test_wasm.c tests/test_plugin.wasm"); // Cleanup
+    } else {
+        printf("Test 22 [Wasm] - SKIPPED (clang wasm32 backend not available)\n");
+    }
+
+    printf("\n=== All C Tests Finished ===\n");
     papagaio_close(ctx);
     return 0;
 }

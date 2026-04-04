@@ -43,7 +43,8 @@ LDFLAGS += -lm
 TARGET_SO = papagaio$(SO_EXT)
 TARGET_A  = libpapagaio.a
 TARGET_BIN = papagaio$(EXE_EXT)
-SRC       = src/papagaio.c lib/libregexp/libregexp.c lib/libregexp/cutils.c lib/libregexp/libunicode.c
+WASM3_SRC = $(wildcard lib/wasm3/*.c)
+SRC       = src/papagaio.c lib/libregexp/libregexp.c lib/libregexp/cutils.c lib/libregexp/libunicode.c $(WASM3_SRC)
 OBJ       = $(SRC:.c=.o)
 
 LUA_BIN    ?= lua
@@ -54,9 +55,9 @@ LIBDIR     ?= $(PREFIX)/lib
 INCDIR     ?= $(PREFIX)/include
 
 # ── Targets ─────────────────────────────────────────────────────────────
-.PHONY: all clean test install static plugins
+.PHONY: all clean test install static
 
-all: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN) plugins
+all: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 
 %.o: %.c
 	$(CC) -c $(CFLAGS) -fPIC -o $@ $<
@@ -71,20 +72,11 @@ $(TARGET_A): $(OBJ)
 $(TARGET_BIN): src/main.c $(TARGET_A)
 	$(CC) $(CFLAGS) -o $@ src/main.c $(TARGET_A) $(LDFLAGS) -lm
 
-plugins:
-	$(MAKE) -C plugins/lua
-	$(MAKE) -C plugins/mquickjs
-	$(MAKE) -C plugins/quickjs
-
 static: $(TARGET_A)
 
-test: test_c test_node test_plugins
+test: test_c test_node
 
-test_plugins: $(TARGET_BIN) plugins
-	@echo "=== Starting Papagaio Plugin Coexistence Tests ==="
-	./$(TARGET_BIN) test_dual.txt
-
-test_c: $(TARGET_A) plugins
+test_c: $(TARGET_A)
 	$(CC) $(CFLAGS) -o tests/test_bin tests/test.c $(TARGET_A) $(LDFLAGS) -lm
 	@echo "=== Starting Papagaio C Tests ==="
 	./tests/test_bin
@@ -110,14 +102,11 @@ install: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 
 clean:
 	rm -f $(TARGET_SO) $(TARGET_A) $(TARGET_BIN) $(OBJ)
-	$(MAKE) -C plugins/lua clean
-	$(MAKE) -C plugins/mquickjs clean
-	$(MAKE) -C plugins/quickjs clean
 	rm -rf dist/
 
 wasm: src/papagaio.c src/papagaio.h
 	mkdir -p dist/wasm
-	emcc -O3 $(CFLAGS) src/papagaio.c lib/libregexp/libregexp.c lib/libregexp/cutils.c lib/libregexp/libunicode.c -o dist/wasm/papagaio_wasm.js \
+	emcc -O3 $(CFLAGS) $(SRC) -o dist/wasm/papagaio_wasm.js \
 		-s WASM=1 \
 		-s MODULARIZE=1 \
 		-s EXPORT_ES6=1 \

@@ -1,15 +1,14 @@
 # Papagaio
 
-Papagaio is a C-first, embeddable text processing engine. It is designed to be highly modular and **script-agnostic**, allowing core pattern matching to be used alone or extended via third-party plugins (e.g., Lua).
+Papagaio is a C-first, embeddable text processing engine. It is designed to be highly modular and **script-agnostic**, allowing core pattern matching to be used alone or extended via WebAssembly (Wasm) plugins.
 
 ## Key Features
 
 - **Lightweight Core**: Efficient C engine for pattern matching and transformation.
 - **Pattern-Matching**: Powerful capture system with built-in and custom modifiers.
-- **Modular Plugins**: Extend the language with custom commands.
-- **Optional Scripting**: High-level logic via `$lua` (or other script plugins) with multi-block arguments.
+- **WebAssembly Plugins**: Highly secure, zero-dependency plugin architecture via an embedded `wasm3` runtime.
 - **Configurable Delimiters**: Redefine sigils, delimiters, and markers at runtime.
-- **Language Bindings**: Native usage in C, Lua (as a library), and Node.js/WebAssembly.
+- **Language Bindings**: Native usage in C and Node.js/WebAssembly.
 
 ## Quick Start
 
@@ -22,8 +21,6 @@ papagaio -e '$pattern {hello $w} {Hi $w}' input.txt
 ### C API
 ```c
 Papagaio *ctx = papagaio_open();
-// Load optional plugins
-papagaio_load_plugin(ctx, "plugins/lua.so"); 
 
 char *out = papagaio_process_text(ctx, input_text, strlen(input_text));
 printf("%s", out);
@@ -73,21 +70,13 @@ $pattern {$n$aliases{$x$int}{abc}} {VALUE: $n}
 
 ---
 
-## Scripting & Extensibility
+## Extensibility (Wasm Plugins)
 
-Papagaio follows a plugin-first architecture. Core features are limited to pattern matching and transformation, while scripting capabilities like Lua are provided by modular plugins.
-
-### Scripting Blocks (`$lua`)
-The `$lua` command is provided by the **Lua Plugin**. It allows executing logic via multi-block arguments:
-```text
-$lua{ return params[1] .. params[2] }{HELLO}{WORLD}
-```
-- **Isolation**: Scripts operate in a clean environment; no automatic shared state (like legacy `match`/`content` variables).
-- **Arguments**: Script blocks are passed to the `params` table (1-indexed in Lua). 
+Papagaio follows a Wasm-first plugin architecture. Core features are limited to pattern matching and transformation, while custom text processing capabilities are provided by WebAssembly plugins.
 
 ### Built-in Operators
 - **$document**: Injects the current state of the document.
-- **$import{path}**: Loads a plugin (`.so`) or a script (`.lua`) into the current context.
+- **$wasmfile{path}**: Loads a WebAssembly plugin into the current context. All exported functions prefixed with `pap_cmd_` are automatically registered as commands.
 
 ---
 
@@ -108,121 +97,60 @@ This changes the sigil to `@`, delimiters to `< >`, and the optional marker to `
 
 ## Plugin Development
 
-### Custom Registry (Lua)
-You can extend Papagaio directly from script-land:
-```lua
--- In a script loaded via $import or $lua
-papagaio.register("square", function(x)
-  local n = tonumber(x)
-  return tostring(n * n)
-end)
-```
-Usage: `$square{4}` -> `16`.
+Papagaio includes an embedded `wasm3` runtime for highly secure, zero-dependency plugins (Bare Metal Wasm). Wasm plugins are dynamically loaded and executed in pure isolation, communicating with the host entirely through memory serialization.
 
-### C Plugin Interface
-Plugins export a standard entry point:
-```c
-int papagaio_plugin_init(PapPlugin *plugin, Papagaio *ctx);
-```
-Handlers receive the command name and a variadic list of arguments:
-```c
-typedef char *(*PapCommandHandler)(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
-```
-
----
-
-## Creating Plugins
-
-Papagaio can be extended native C plugins.
-
-### Native Plugins
-For maximum performance or system integration, use C plugins.
-
-1.  **Implement the handler** (`hello.c`):
+1. **Write the plugin using the generator**:
+    Save this as `my_plugin.c.pap`:
     ```c
-    #include "papagaio_plugin.h"
-    #include <string.h>
-
-    static char *hello_handler(Papagaio *ctx, const char *name, int argc, 
-                              const char **argv, const size_t *argl, void *ud) {
-        return strdup("Hello from native C!");
-    }
-
-    int papagaio_plugin_init(PapPlugin *p, Papagaio *ctx) {
-        p->register_command(p, "chello", hello_handler, NULL);
-        return 0;
+    $wasm_plugin{greet}{
+        if (argc < 1) return "";
+        const char *name = argv[0];
+        
+        size_t sz = strlen(name) + 8;
+        char *res = (char*)malloc(sz);
+        res[0] = '\0';
+        strcat(res, "Hello, ");
+        strcat(res, name);
+        return res;
     }
     ```
-2.  **Compile and load**:
+
+2. **Generate the C code**:
     ```sh
-    cc -shared -fPIC -I./src -o hello.so hello.c
+    ./papagaio my_plugin.c.pap > plugin.c
     ```
-    Usage: `$import{./hello.so} $chello{}`
 
-### Handling Multiple Arguments
-Handlers receive raw blocks of data. Since these are not guaranteed to be null-terminated (to support binary data), always use `argl`:
-
-```c
-static char *repeat_handler(Papagaio *ctx, const char *name, int argc, 
-                            const char **argv, const size_t *argl, void *ud) {
-    if (argc < 2) return strdup("");
-    
-    // Convert first argument (count)
-    int count = atoi(argv[1]); // argv pointers are safe within their block size
-    if (count <= 0) return strdup("");
-
-    // Create result buffer
-    size_t char_len = argl[0];
-    char *res = malloc(char_len * count + 1);
-    for (int i = 0; i < count; i++) {
-        memcpy(res + (i * char_len), argv[0], char_len);
-    }
-    res[char_len * count] = '\0';
-    return res;
-}
-```
-*   `argc`: Number of blocks passed (ex: `$cmd{a}{b}` has `argc = 2`).
-*   `argv`: Array of pointers to the start of each block.
-*   `argl`: Array of lengths for each block.
-*   **Safety**: If you need a C-string, you MUST copy `argv[i]` and null-terminate it yourself.
-*   **Memory**: Always return a `malloc`'d string (or `strdup`). The engine calls `free()`.
-
-### Lua Plugin Functions
-An easier way to add new commands is using `papagaio.register` within a script in the lua plugin.
-
-1.  **Create your plugin** (`greet.lua`):
-    ```lua
-    papagaio.register("hello", function(name)
-      return "Hello, " .. (name or "stranger") .. "!"
-    end)
+3. **Compile the Bare Metal Wasm module**:
+    No standard library or runtime imports are needed. Use standard `clang` targeting `wasm32`:
+    ```sh
+    clang --target=wasm32 -O3 -nostdlib -Wl,--no-entry -Wl,--export-all -o plugin.wasm plugin.c
     ```
-2.  **Load and use it**:
+
+4. **Load and Use in Papagaio**:
+    Loading the Wasm file automatically registers exported commands starting with `pap_cmd_`.
     ```text
-    $import{greet.lua} $hello{Papagaio}
+    $wasmfile{plugin.wasm} $greet{World}
     ```
-    *Output: Hello, Papagaio!*
-
+    *Output: Hello, World*
 
 ---
 
 ## Building
 
 ```sh
-make        # Core & Plugins
+make        # Core & CLI
 make wasm   # WebAssembly build
-make test   # Run comprehensive test suite (60 tests)
+make test   # Run comprehensive test suite
 ```
 
 ## References
 
+- [CPP](https://en.wikipedia.org/wiki/C_preprocessor)
+- [m4](https://www.gnu.org/software/m4/)
 - [libregexp](https://bellard.org/quickjs/)
 - [QuickJS](https://bellard.org/quickjs/)
 - [TCC](https://bellard.org/tcc/)
+- [Wasm3](https://github.com/wasm3/wasm3)
 - [minilua](https://github.com/edubart/minilua)
 - [Lua](https://www.lua.org/)
-- [CPP](https://en.wikipedia.org/wiki/C_preprocessor)
-- [m4](https://www.gnu.org/software/m4/)
 - [Terra](http://terralang.org/)
-
----
-*Papagaio: Efficient, scriptable text processing.*
