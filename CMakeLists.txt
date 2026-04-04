@@ -5,12 +5,15 @@ set(CMAKE_C_STANDARD 99)
 
 include_directories(.)
 
+file(GLOB WASM3_SRC "lib/wasm3/*.c")
+
 # Main library (static)
 add_library(libpapagaio STATIC
   src/papagaio.c
   lib/libregexp/libregexp.c
   lib/libregexp/cutils.c
   lib/libregexp/libunicode.c
+  ${WASM3_SRC}
 )
 if (NOT MSVC)
   target_link_libraries(libpapagaio m)
