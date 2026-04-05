@@ -76,7 +76,8 @@ Papagaio follows a Wasm-first plugin architecture. Core features are limited to 
 
 ### Built-in Operators
 - **$document**: Injects the current state of the document.
-- **$wasmfile{path}**: Loads a WebAssembly plugin into the current context. All exported functions prefixed with `pap_cmd_` are automatically registered as commands.
+- **$wasmfile{path}**: Loads a WebAssembly plugin from the file system.
+- **$wasm{base64_data}**: Loads a WebAssembly plugin directly from a Base64-encoded string. Useful for self-contained scripts or environments without a file system.
 
 ---
 
@@ -128,8 +129,13 @@ Papagaio includes an embedded `wasm3` runtime for highly secure, zero-dependency
 
 4. **Load and Use in Papagaio**:
     Loading the Wasm file automatically registers exported commands starting with `pap_cmd_`.
+
     ```text
     $wasmfile{plugin.wasm} $greet{World}
+    ```
+    Alternatively, embed the plugin directly via Base64:
+    ```text
+    $wasm{AGFzbQEAAAABBgFgAX8Bf...} $greet{EmbeddedWorld}
     ```
     *Output: Hello, World*
 
@@ -151,6 +157,3 @@ make test   # Run comprehensive test suite
 - [QuickJS](https://bellard.org/quickjs/)
 - [TCC](https://bellard.org/tcc/)
 - [Wasm3](https://github.com/wasm3/wasm3)
-- [minilua](https://github.com/edubart/minilua)
-- [Lua](https://www.lua.org/)
-- [Terra](http://terralang.org/)
