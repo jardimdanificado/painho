@@ -65,8 +65,30 @@ int main(void)
         o = papagaio_process_text(ctx, in23, strlen(in23));
         printf("Test 23 [Wasm Memory Isolation] - %s (esperado: -20)\n", o);
         free(o);
+
+        /* Test 24: Wasm via Base64 command */
+        system("base64 -w 0 tests/test_plugin.wasm > tests/test_plugin.b64");
+        FILE *f = fopen("tests/test_plugin.b64", "r");
+        if (f) {
+            fseek(f, 0, SEEK_END);
+            long fsize = ftell(f);
+            fseek(f, 0, SEEK_SET);
+            char *b64 = malloc(fsize + 1);
+            fread(b64, 1, fsize, f);
+            b64[fsize] = '\0';
+            fclose(f);
+
+            char *in24 = malloc(fsize + 128);
+            sprintf(in24, "$wasm{%s} $test_mul{10}{20}", b64);
+            o = papagaio_process_text(ctx, in24, strlen(in24));
+            printf("Test 24 [Wasm Base64] - %s (esperado: 200)\n", o);
+            
+            free(o);
+            free(b64);
+            free(in24);
+        }
         
-        system("rm -f tests/test_wasm.c tests/test_plugin.wasm"); // Cleanup
+        system("rm -f tests/test_wasm.c tests/test_plugin.wasm tests/test_plugin.b64"); // Cleanup
     } else {
         printf("Test 22 [Wasm] - SKIPPED (clang wasm32 backend not available)\n");
     }

@@ -1506,26 +1506,33 @@ static void init_b64(void) {
 }
 static uint8_t *decode_b64(const char *src, size_t len, size_t *out_len) {
     init_b64();
-    uint8_t *out = malloc(len);
-    if(!out) return NULL;
+    uint8_t *out = (uint8_t *)malloc(len);
+    if (!out) return NULL;
     size_t i = 0, j = 0;
-    while(i < len) {
-        while (i < len && (src[i] == ' ' || src[i] == '\n' || src[i] == '\r' || src[i] == '\t')) i++;
-        if (i >= len) break;
-        uint32_t a = base64_table[(int)src[i++]];
-        
-        while (i < len && (src[i] == ' ' || src[i] == '\n' || src[i] == '\r' || src[i] == '\t')) i++;
-        uint32_t b = (i < len) ? base64_table[(int)src[i++]] : 0;
-        
-        while (i < len && (src[i] == ' ' || src[i] == '\n' || src[i] == '\r' || src[i] == '\t')) i++;
-        uint32_t c = (i < len && src[i] != '=') ? base64_table[(int)src[i++]] : 0;
-        
-        while (i < len && (src[i] == ' ' || src[i] == '\n' || src[i] == '\r' || src[i] == '\t')) i++;
-        uint32_t d = (i < len && src[i] != '=') ? base64_table[(int)src[i++]] : 0;
-        
-        out[j++] = (a << 2) | (b >> 4);
-        if (i <= len && src[i-2] != '=') out[j++] = (b << 4) | (c >> 2);
-        if (i <= len && src[i-1] != '=') out[j++] = (c << 6) | d;
+    while (i < len) {
+        uint32_t v = 0;
+        int cnt = 0;
+        int pad = 0;
+        while (cnt < 4 && i < len) {
+            char c = src[i++];
+            if (c == ' ' || c == '\n' || c == '\r' || c == '\t') continue;
+            if (c == '=') { pad++; v <<= 6; cnt++; continue; }
+            if (pad > 0) continue; /* Ignore everything after first padding char in quartet */
+            v = (v << 6) | (base64_table[(int)c] & 0x3F);
+            cnt++;
+        }
+        if (cnt < 4) {
+            if (cnt > 0) { /* Partial block at end of string */
+                 v <<= (6 * (4 - cnt));
+                 if (cnt >= 2) out[j++] = (uint8_t)((v >> 16) & 0xFF);
+                 if (cnt >= 3) out[j++] = (uint8_t)((v >> 8) & 0xFF);
+            }
+            break;
+        }
+        out[j++] = (uint8_t)((v >> 16) & 0xFF);
+        if (pad < 2) out[j++] = (uint8_t)((v >> 8) & 0xFF);
+        if (pad < 1) out[j++] = (uint8_t)(v & 0xFF);
+        if (pad > 0) break; /* End of stream on padding */
     }
     *out_len = j;
     return out;
