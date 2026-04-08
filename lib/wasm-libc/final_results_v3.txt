@@ -1,0 +1,248 @@
+wasm-libc test suite v3
+=======================
+
+[string]
+  OK   strlen("hello") == 5u
+  OK   strlen("") == 0u
+  OK   strnlen("hello", 3) == 3u
+  OK   buf[0] == (char)0xAA && buf[15] == (char)0xAA
+  OK   memcmp(buf, "Hello, WASM!", 12) == 0
+  OK   memcmp(ov + 2, "ABCDEF", 6) == 0
+  OK   memcmp(ov2, "CDEFGH", 6) == 0
+  OK   memchr("abcde", 'c', 5) != NULL
+  OK   memchr("abcde", 'z', 5) == NULL
+  OK   s == ""foobar""
+  OK   s == ""foobarbaz""
+  OK   strcmp("abc","abc") == 0
+  OK   strcmp("abc","abd") < 0
+  OK   strncmp("abcXX","abcYY",3) == 0
+  OK   strchr("hello",'l') == (char*)"hello" + 2
+  OK   strrchr("hello",'l') == (char*)"hello" + 3
+  OK   strstr("hello world","world") != NULL
+  OK   strstr("hello world","xyz") == NULL
+  OK   strspn("abcxyz","abc") == 3u
+  OK   strcspn("abcxyz","xyz") == 3u
+  OK   t == ""um""
+  OK   t == ""dois""
+  OK   t == ""tres""
+  OK   t == NULL
+  OK   rev == ""3MSAW""
+  OK   strerror(0) == ""Success""
+  OK   strerror(ENOMEM) == ""Cannot allocate memory""
+  OK   strerror(9999) != NULL
+
+[ctype]
+  OK   isalpha('a') && isalpha('Z') && !isalpha('0') && !isalpha('!')
+  OK   isdigit('0') && isdigit('9') && !isdigit('a')
+  OK   isalnum('a') && isalnum('3') && !isalnum('!')
+  OK   isxdigit('f') && isxdigit('F') && !isxdigit('g')
+  OK   isspace(' ') && isspace('\t') && !isspace('a')
+  OK   ispunct('!') && !ispunct('a') && !ispunct(' ')
+  OK   iscntrl('\0') && !iscntrl('a')
+  OK   isupper('A') && !isupper('a')
+  OK   islower('a') && !islower('A')
+  OK   isprint(' ') && !isprint('\x01')
+  OK   toupper('a') == 'A'
+  OK   tolower('A') == 'a'
+  OK   toupper('3') == '3'
+  OK   !isalpha(-1)
+
+[malloc]
+  OK   p != NULL
+  OK   p[9] == 81
+  OK   all_zero
+  FAIL r && strcmp(r,"hello") == 0  (/home/jardel/repos/wasm-libc/test/test_main.c:134)
+  OK   q != NULL
+  OK   t2 == NULL
+  OK   1
+  OK   calloc((size_t)-1, 2) == NULL
+  OK   big != NULL
+
+[stdlib]
+  OK   atoi("42") == 42
+  OK   atoi("-1337") == -1337
+  OK   atoi("  99") == 99
+  OK   atoll("9876543210") == 9876543210LL
+  OK   strtol("0xff", NULL, 0) == 255
+  OK   strtol("010", NULL, 0) == 8
+  OK   strtol("1010", NULL, 2) == 10
+  OK   v == 123
+  OK   end == ""abc""
+  OK   buf == ""ff""
+  OK   buf == ""-42""
+  OK   buf == ""0""
+  OK   abs(-99) == 99
+  OK   labs(-1000) == 1000L
+  OK   llabs(-1LL) == 1LL
+  OK   d.quot == 3
+  OK   d.rem == 2
+  OK   rand() == r1
+  OK   rand() == r2
+  OK   r1 >= 0 && r1 <= RAND_MAX
+  OK   sorted
+  OK   nums[i] == i
+  OK   nums[i] == i
+  OK   nums[i] == i
+  OK   nums[i] == i
+  OK   nums[i] == i
+  OK   nums[i] == i
+  OK   nums[i] == i
+  OK   nums[i] == i
+  OK   nums[i] == i
+  OK   nums[i] == i
+  OK   words[0] == ""apple""
+  OK   words[3] == ""date""
+  OK   found && *found == 7
+  OK   bsearch(&missing, nums, 10, sizeof(int), icmp) == NULL
+
+[printf / snprintf]
+  OK   buf == ""42""
+  OK   buf == ""-1""
+  OK   buf == ""00042""
+  OK   buf == ""42    |""
+  OK   buf == ""+5 -5""
+  OK   buf == ""4294967295""
+  OK   buf == ""dead""
+  OK   buf == ""BEEF""
+  OK   buf == ""0xcafe""
+  OK   buf == ""10""
+  OK   buf == ""1010""
+  OK   buf == ""-9223372036854775807""
+  OK   buf == ""3.141""
+  OK   buf == ""    3.14""
+  OK   buf == ""hel""
+  OK   buf == ""      hi""
+  OK   buf == ""100%""
+  OK   buf == ""0x00001234""
+  OK   n == 11
+  OK   buf == ""hell""
+  OK   pos == 5
+  OK   buf == ""    42""
+
+[sscanf]
+  OK   sscanf("42", "%d",&i) == 1
+  OK   i == 42
+  OK   sscanf("-99", "%d",&i) == 1
+  OK   i == -99
+  OK   sscanf("255", "%u",&u) == 1
+  OK   u == 255u
+  OK   sscanf("ff", "%x",&u) == 1
+  OK   u == 255u
+  OK   sscanf("0xFF","%x",&u) == 1
+  OK   u == 255u
+  OK   sscanf("10", "%o",&u) == 1
+  OK   u == 8u
+  OK   sscanf("0x1A","%i",&i) == 1
+  OK   i == 26
+  OK   sscanf("3.14","%f",&f) == 1
+  OK   f ~= 3.14f
+  OK   sscanf("3.14","%lf",&d) == 1
+  OK   d ~= 3.14
+  OK   sscanf("1e2", "%lf",&d) == 1
+  OK   d ~= 100.0
+  OK   sscanf("hello world","%s",s) == 1
+  OK   s == ""hello""
+  OK   sscanf("A","%c",&c) == 1
+  OK   c == 'A'
+  OK   sscanf(" B","%c",&c) == 1
+  OK   c == ' '
+  OK   sscanf("10 20","%d %d",&a,&b) == 2
+  OK   a == 10
+  OK   b == 20
+  OK   sscanf("10 20 30","%d %*d %d",&a,&b) == 2
+  OK   a == 10
+  OK   b == 30
+  OK   sscanf("123456","%3d%3d",&a,&b) == 2
+  OK   a == 123
+  OK   b == 456
+  OK   sscanf("abc123","%[a-z]",s) == 1
+  OK   s == ""abc""
+  OK   sscanf("123abc","%[^a-z]",s) == 1
+  OK   s == ""123""
+  FAIL np == 5  (/home/jardel/repos/wasm-libc/test/test_main.c:281)
+  OK   sscanf("100%%","%d%%",&i) == 1
+  OK   i == 100
+  OK   sscanf("","  %d",&i) == -1
+  OK   sscanf("abc","%d",&i) == -1
+
+[math]
+  OK   isnan(NAN) && !isnan(1.0)
+  OK   isinf(INFINITY) && !isinf(1.0)
+  OK   isfinite(1.0) && !isfinite(INFINITY)
+  OK   fabs(-3.14) ~= 3.14
+  OK   floor(1.9) ~= 1.0
+  OK   floor(-1.1) ~= -2.0
+  OK   ceil(1.1) ~= 2.0
+  OK   round(1.5) ~= 2.0
+  OK   trunc(1.9) ~= 1.0
+  OK   fmod(10.0,3.0) ~= 1.0
+  OK   sqrt(4.0) ~= 2.0
+  OK   sqrt(2.0) ~= 1.41421356237
+  OK   isnan(sqrt(-1.0))
+  OK   cbrt(8.0) ~= 2.0
+  OK   cbrt(-27.0) ~= -3.0
+  OK   exp(0.0) ~= 1.0
+  OK   exp(1.0) ~= EE
+  OK   log(1.0) ~= 0.0
+  OK   log(EE) ~= 1.0
+  OK   log2(8.0) ~= 3.0
+  OK   log10(1000.0) ~= 3.0
+  OK   isinf(log(0.0)) && log(0.0) < 0
+  OK   isnan(log(-1.0))
+  OK   pow(2.0,10.0) ~= 1024.0
+  OK   pow(9.0, 0.5) ~= 3.0
+  OK   pow(2.0, 0.0) == 1.0
+  OK   sin(0.0) ~= 0.0
+  OK   sin(PI/2) ~= 1.0
+  OK   sin(-PI/2) ~= -1.0
+  OK   cos(0.0) ~= 1.0
+  OK   cos(PI) ~= -1.0
+  OK   tan(PI/4) ~= 1.0
+  OK   sin(ang)*sin(ang)+cos(ang)*cos(ang) ~= 1.0
+  OK   asin(1.0) ~= PI/2
+  OK   acos(1.0) ~= 0.0
+  FAIL atan(1.0) ~= PI/4  (/home/jardel/repos/wasm-libc/test/test_main.c:340)
+  OK   atan2(0.0,-1.0) ~= PI
+  OK   sinh(0.0) ~= 0.0
+  OK   cosh(0.0) ~= 1.0
+  OK   tanh(100.0) ~= 1.0
+  OK   cosh(x)*cosh(x)-sinh(x)*sinh(x) ~= 1.0
+  OK   hypot(3.0,4.0) ~= 5.0
+  OK   sinf(0.0f) ~= 0.0f
+  OK   sqrtf(4.0f) ~= 2.0f
+
+[locale]
+  OK   setlocale(LC_ALL,"C") == ""C""
+  OK   setlocale(LC_ALL,"POSIX") == ""C""
+  OK   setlocale(LC_ALL,NULL) != NULL
+  OK   setlocale(LC_ALL,"pt_BR") == NULL
+  OK   lc != NULL
+  OK   lc->decimal_point == "".""
+
+[time (calendário)]
+  OK   g->tm_year == 70
+  OK   g->tm_mday == 1
+  OK   g->tm_wday == 4
+  OK   g->tm_year == 124
+  OK   g->tm_mday == 15
+  OK   g->tm_hour == 12
+  OK   g->tm_min == 30
+  OK   g->tm_wday == 6
+  OK   g->tm_mday == 29
+  OK   g->tm_mon == 1
+  OK   difftime(100,60) ~= 40.0
+  OK   buf == ""2024-01-15""
+  OK   buf == ""09:05:03""
+  OK   buf == ""100%""
+
+[errno]
+  OK   errno == EINVAL
+  OK   strerror(EINVAL) == ""Invalid argument""
+
+[assert]
+  OK   1
+
+=======================
+resultado: 216/219 passaram  (3 FALHARAM)
+
+[host] main() retornou: 1

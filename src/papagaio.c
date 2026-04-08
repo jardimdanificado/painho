@@ -1378,9 +1378,31 @@ static char *wasm_plugin_handler(Papagaio *ctx, const char *cmd_name, int argc, 
  * ====================================================================== */
 static Papagaio *g_active_ctx = NULL;
 
+m3ApiRawFunction(host_write) {
+    m3ApiGetArgMem(const char *, buf);
+    m3ApiGetArg(int32_t, len);
+    if (buf) fwrite(buf, 1, (size_t)len, stdout);
+    m3ApiSuccess();
+}
+
+m3ApiRawFunction(host_write_err) {
+    m3ApiGetArgMem(const char *, buf);
+    m3ApiGetArg(int32_t, len);
+    if (buf) fwrite(buf, 1, (size_t)len, stderr);
+    m3ApiSuccess();
+}
+
+m3ApiRawFunction(host_abort) {
+    m3ApiGetArgMem(const char *, msg);
+    fprintf(stderr, "[WASM ABORT] %s\n", msg ? msg : "unknown error");
+    abort();
+}
+
 static void link_host_functions(Papagaio *ctx, IM3Module module) {
-    (void)ctx; (void)module;
-    /* No imports needed - args are passed via memory serialization */
+    (void)ctx;
+    m3_LinkRawFunction(module, "env", "__host_write",     "v(*i)", host_write);
+    m3_LinkRawFunction(module, "env", "__host_write_err", "v(*i)", host_write_err);
+    m3_LinkRawFunction(module, "env", "__host_abort",     "v(*)",  host_abort);
 }
 
 /* =========================================================================
