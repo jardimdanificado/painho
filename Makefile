@@ -97,8 +97,38 @@ install: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 	install -d $(LIBDIR)
 	install -m 644 $(TARGET_A) $(LIBDIR)/$(TARGET_A)
 	install -d $(INCDIR)
-	install -m 644 src/papagaio.h $(INCDIR)/src/papagaio.h
+	install -m 644 src/papagaio.h $(INCDIR)/papagaio.h
 	@echo "Installed papagaio to $(PREFIX)/"
+
+papagaiocc: $(TARGET_BIN)
+	@echo "▶ Generating papagaiocc (Standalone Compiler)..."
+	@./lib/wasm-libc/amalgamate.sh
+	@echo '#!/usr/bin/env bash' > papagaiocc
+	@echo 'set -euo pipefail' >> papagaiocc
+	@echo 'TMP_DIR=$$(mktemp -d /tmp/papagaiocc.XXXXXX)' >> papagaiocc
+	@echo 'trap "rm -rf $$TMP_DIR" EXIT' >> papagaiocc
+	@echo 'SDK_H="$$TMP_DIR/papagaio_wasm.h"' >> papagaiocc
+	@echo 'PRE_PAP="$$TMP_DIR/preprocessor.pap"' >> papagaiocc
+	@echo 'PAP_BIN="$$TMP_DIR/papagaio"' >> papagaiocc
+	@echo "cat <<'EOF' > \"\$$SDK_H\"" >> papagaiocc
+	@cat lib/wasm-libc/include/papagaio_wasm.h >> papagaiocc
+	@echo 'EOF' >> papagaiocc
+	@echo "cat <<'EOF' > \"\$$PRE_PAP\"" >> papagaiocc
+	@cat lib/wasm-libc/preprocessor.pap >> papagaiocc
+	@echo 'EOF' >> papagaiocc
+	@echo "base64 -d <<'EOF' > \"\$$PAP_BIN\"" >> papagaiocc
+	@base64 papagaio >> papagaiocc
+	@echo 'EOF' >> papagaiocc
+	@echo 'chmod +x "$$PAP_BIN"' >> papagaiocc
+	@echo 'ENTRY="$${1:-}"' >> papagaiocc
+	@echo 'OUTPUT="$${2:-}"' >> papagaiocc
+	@echo 'if [[ -z "$$ENTRY" ]]; then echo "Usage: papagaiocc <input.c> [output.wasm]"; exit 1; fi' >> papagaiocc
+	@echo 'if [[ -z "$$OUTPUT" ]]; then BASENAME=$$(basename "$$ENTRY"); OUTPUT="$${BASENAME%.*}.wasm"; fi' >> papagaiocc
+	@echo 'cat "$$PRE_PAP" "$$ENTRY" > "$$TMP_DIR/joined.pap"' >> papagaiocc
+	@echo '"$$PAP_BIN" "$$TMP_DIR/joined.pap" > "$$TMP_DIR/ready.c"' >> papagaiocc
+	@echo 'clang --target=wasm32-unknown-unknown -O2 -ffreestanding -fno-builtin -nostdlib -nostdinc -mno-bulk-memory -mno-sign-ext -Wl,--no-entry -Wl,--export-all -Wl,--allow-undefined -Wl,-z,stack-size=65536 "$$TMP_DIR/ready.c" -o "$$OUTPUT" -I "$$TMP_DIR"' >> papagaiocc
+	@chmod +x papagaiocc
+	@echo "✓ papagaiocc successfully generated."
 
 clean:
 	rm -f $(TARGET_SO) $(TARGET_A) $(TARGET_BIN) $(OBJ)

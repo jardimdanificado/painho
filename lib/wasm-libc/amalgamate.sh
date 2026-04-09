@@ -5,9 +5,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT="$ROOT/include/papagaio_wasm.h"
 
 HEADERS=(
+    stdarg.h
     stddef.h stdint.h stdbool.h limits.h
     string.h stdio.h stdlib.h ctype.h
     setjmp.h time.h errno.h math.h
+    locale.h assert.h
 )
 
 SOURCES=(
@@ -36,23 +38,6 @@ cat <<EOF > "$OUTPUT"
 #ifndef PAPAGAIO_WASM_H
 #define PAPAGAIO_WASM_H
 
-#include <stdarg.h>
-
-/* ── SDK Macros ──────────────────────────────────────────────────────────── */
-
-#define PAP_COMMAND(name) \\
-    static char *intern_cmd_##name(int argc, const char **argv); \\
-    __attribute__((export_name("pap_cmd_" #name))) \\
-    char* pap_bridge_##name(int argc, uint32_t argv_ptr) { \\
-        const char **argv = (const char **)malloc(argc * sizeof(const char *)); \\
-        if (!argv) return NULL; \\
-        uint32_t *table = (uint32_t *)argv_ptr; \\
-        for (int i = 0; i < argc; i++) argv[i] = (const char *)table[i]; \\
-        char *res = intern_cmd_##name(argc, argv); \\
-        free((void*)argv); \\
-        return res; \\
-    } \\
-    static char *intern_cmd_##name(int argc, const char **argv)
 
 /* ── Headers ─────────────────────────────────────────────────────────────── */
 EOF

@@ -1,0 +1,17 @@
+// Papagaio rules for C Plugin Preprocessing
+// This file is prepended to the C source before processing with Papagaio.
+
+// Import the embedded Wasm SDK
+$pattern {use "plibc";} {
+#define PAPAGAIO_WASM_IMPLEMENTATION
+#include "papagaio_wasm.h"
+}
+
+// Support 'export function as "exported_name";'
+$pattern {export $f$identifier as "$n"} {__attribute__((export_name("papagaio_$n"))) char *$f(int argc, const char **argv)}
+
+// Support 'export function as name;' (unquoted version, just in case)
+$pattern {export $f$identifier as $n$identifier} {__attribute__((export_name("papagaio_$n"))) char *$f(int argc, const char **argv)}
+
+// Support 'export function;'
+$pattern {export $f$identifier} {__attribute__((export_name("papagaio_$f"))) char *$f(int argc, const char **argv)}

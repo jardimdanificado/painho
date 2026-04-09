@@ -1,13 +1,13 @@
-#define PAPAGAIO_WASM_IMPLEMENTATION
-#include "papagaio_wasm.h"
+use "plibc";
 
 /* 
  * Plugin Ultra-Simplificado
- * Demonstra o uso do SDK Unificado e a macro PAP_COMMAND.
+ * Demonstra a sintaxe moderna de exportação.
  */
 
-/* Comando: $echo{texto} */
-PAP_COMMAND(echo) {
+// Comando: $echo{texto}
+export echo 
+{
     if (argc < 1) return "";
     
     printf("[WASM] Echoing back: %s\n", argv[0]);
@@ -18,8 +18,9 @@ PAP_COMMAND(echo) {
     return res;
 }
 
-/* Comando: $shout{texto} */
-PAP_COMMAND(shout) {
+// Comando: $shout{texto}
+export shout as "GRITAR"
+{
     if (argc < 1) return "";
     
     char *res = strdup(argv[0]);

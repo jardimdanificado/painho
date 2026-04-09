@@ -1342,7 +1342,7 @@ static char *wasm_plugin_handler(Papagaio *ctx, const char *cmd_name, int argc, 
         "%s\n"
         "}\n\n"
         "/* Bridge - called by host with (argc, argv_table_ptr) */\n"
-        "__attribute__((export_name(\"pap_cmd_%s\")))\n"
+        "__attribute__((export_name(\"papagaio_%s\")))\n"
         "char* pap_bridge_%s(int argc, uint32_t argv_ptr) {\n"
         "    const char **argv = (const char **)malloc(argc * sizeof(const char *));\n"
         "    for (int i = 0; i < argc; i++) argv[i] = _pap_get_arg(argv_ptr, i);\n"
@@ -1577,8 +1577,12 @@ static void papagaio_load_wasm_bytes(Papagaio *ctx, uint8_t *bytes, size_t size)
     /* Intelligent Auto-Registration: Scan module functions for exports */
     for (uint32_t i = 0; i < module->numFunctions; i++) {
         M3Function *f_info = &module->functions[i];
-        if (f_info->export_name && strncmp(f_info->export_name, "pap_cmd_", 8) == 0) {
-            const char *cmd_name = f_info->export_name + 8;
+        if (f_info->export_name) {
+            fprintf(stderr, "[DEBUG] Export found: '%s'\n", f_info->export_name);
+        }
+        if (f_info->export_name && strncmp(f_info->export_name, "papagaio_", 9) == 0) {
+            const char *cmd_name = f_info->export_name + 9;
+            fprintf(stderr, "[DEBUG] Registering command: '%s'\n", cmd_name);
             
             /* Must use m3_FindFunction AFTER compile to get JIT-ready handle */
             IM3Function f_ready = NULL;
@@ -1651,7 +1655,7 @@ static char *wasm_command_bridge(Papagaio *ctx, const char *name, int argc, cons
         cur += (uint32_t)(slen + 1 + 7) & ~7u; /* align 8 */
     }
 
-    /* Call: pap_cmd_X(argc: i32, argv_table: i32) -> i32 */
+    /* Call: papagaio_X(argc: i32, argv_table: i32) -> i32 */
     g_active_ctx = ctx;
     M3Result res = m3_CallV(f, (uint32_t)argc, (uint32_t)ARGS_BASE);
     g_active_ctx = NULL;
