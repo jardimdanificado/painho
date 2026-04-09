@@ -55,7 +55,7 @@ char* intern_cmd_test_mul(int argc, const char **argv) {
 }
 
 /* Bridge - called by host with (argc, argv_table_ptr) */
-__attribute__((export_name("pap_cmd_test_mul")))
+__attribute__((export_name("papagaio_test_mul")))
 char* pap_bridge_test_mul(int argc, uint32_t argv_ptr) {
     const char **argv = (const char **)malloc(argc * sizeof(const char *));
     for (int i = 0; i < argc; i++) argv[i] = _pap_get_arg(argv_ptr, i);

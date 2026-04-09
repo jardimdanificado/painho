@@ -98,55 +98,57 @@ This changes the sigil to `@`, delimiters to `< >`, and the optional marker to `
 
 ## Plugin Development
 
-Papagaio includes an embedded `wasm3` runtime for highly secure, zero-dependency plugins (Bare Metal Wasm). Wasm plugins are dynamically loaded and executed in pure isolation, communicating with the host entirely through memory serialization.
+Papagaio features a modern, frictionless Wasm plugin system. With the **`papagaiocc`** standalone compiler, you can write plugins in C using a high-level syntax and compile them into zero-dependency WebAssembly modules.
 
-1. **Write the plugin using the generator**:
-    Save this as `my_plugin.c.pap`:
-    ```c
-    $wasm_plugin{greet}{
-        if (argc < 1) return "";
-        const char *name = argv[0];
-        
-        size_t sz = strlen(name) + 8;
-        char *res = (char*)malloc(sz);
-        res[0] = '\0';
-        strcat(res, "Hello, ");
-        strcat(res, name);
-        return res;
-    }
-    ```
+### 1. Write your plugin
+Create a file named `greet.c`:
+```c
+use "plibc";
 
-2. **Generate the C code**:
-    ```sh
-    ./papagaio my_plugin.c.pap > plugin.c
-    ```
+// Export the function as a Papagaio command named "greet"
+export hello as "greet"
+{
+    if (argc < 1) return "Hello, Stranger!";
+    
+    // plibc provides standard C functions like malloc and sprintf
+    char *res = (char*)malloc(strlen(argv[0]) + 16);
+    sprintf(res, "Hello, %s!", argv[0]);
+    
+    return res;
+}
+```
 
-3. **Compile the Bare Metal Wasm module**:
-    No standard library or runtime imports are needed. Use standard `clang` targeting `wasm32`:
-    ```sh
-    clang --target=wasm32 -O3 -nostdlib -Wl,--no-entry -Wl,--export-all -o plugin.wasm plugin.c
-    ```
+### 2. Compile with `papagaiocc`
+The `papagaiocc` tool is a self-contained compiler driver that embeds its own SDK.
+```sh
+./papagaiocc greet.c
+```
+This generates `greet.wasm`.
 
-4. **Load and Use in Papagaio**:
-    Loading the Wasm file automatically registers exported commands starting with `pap_cmd_`.
+### 3. Use in Papagaio
+Loading the Wasm file automatically registers all exported commands.
+```text
+$wasmfile{greet.wasm}
+$greet{Papagaio}
+```
+*Output: Hello, Papagaio!*
 
-    ```text
-    $wasmfile{plugin.wasm} $greet{World}
-    ```
-    Alternatively, embed the plugin directly via Base64:
-    ```text
-    $wasm{AGFzbQEAAAABBgFgAX8Bf...} $greet{EmbeddedWorld}
-    ```
-    *Output: Hello, World*
+### Unified Wasm SDK (plibc)
+The `use "plibc";` directive provides a curated, zero-dependency C standard library for WebAssembly, including:
+- **Memory Management**: `malloc`, `free`, `realloc`
+- **String Processing**: `strlen`, `strcpy`, `sprintf`, `strrev`, etc.
+- **Formatted I/O**: `printf`, `snprintf`, `sscanf`
+- **Standard Math**: `sin`, `cos`, `pow`, etc.
 
 ---
 
 ## Building
 
 ```sh
-make        # Core & CLI
-make wasm   # WebAssembly build
-make test   # Run comprehensive test suite
+make            # Core & CLI
+make papagaiocc # Standalone plugin compiler
+make wasm       # WebAssembly build (Papagaio in the browser/node)
+make test       # Run comprehensive test suite
 ```
 
 ## References
