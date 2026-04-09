@@ -149,7 +149,7 @@ jobs:
         shell: msys2 {0}
         run: |
           make clean
-          make all -j2
+          make all papagaiocc -j2
 
       - name: Build binary (Windows MSVC)
         if: startsWith(matrix.target, 'windows-msvc')
@@ -183,6 +183,7 @@ jobs:
         run: |
           mkdir -p dist_pkg
           cp papagaio.exe dist_pkg/
+          cp papagaiocc.exe dist_pkg/
           cp README.md dist_pkg/
           powershell -NoProfile -Command "Compress-Archive -Path dist_pkg\\* -DestinationPath papagaio-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force"
 
@@ -192,6 +193,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path dist_pkg
           Copy-Item build-msvc/Release/papagaio.exe dist_pkg/
+          Copy-Item build-msvc/Release/papagaiocc.exe dist_pkg/
           Copy-Item README.md dist_pkg/
           Compress-Archive -Path dist_pkg/* -DestinationPath papagaio-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force
 

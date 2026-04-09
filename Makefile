@@ -11,6 +11,7 @@
 CC         ?= cc
 AR         ?= ar
 RANLIB     ?= ranlib
+WINDRES    ?= windres
 
 # ── Platform ────────────────────────────────────────────────────────────
 UNAME_S := $(shell uname -s)
@@ -103,6 +104,13 @@ install: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 papagaiocc: $(TARGET_BIN)
 	@echo "▶ Generating papagaiocc (Standalone Compiler)..."
 	@bash ./lib/wasm-libc/amalgamate.sh
+ifeq ($(EXE_EXT),.exe)
+	@if [ -n "$(CLANG_PATH)" ]; then cp "$(CLANG_PATH)" clang.exe; fi
+	$(WINDRES) $(if $(CLANG_PATH),-DEMBED_CLANG) src/papagaiocc.rc papagaiocc_res.o
+	$(CC) $(CFLAGS) -DPAP_VERSION=\"0.24.1\" src/papagaiocc_win.c papagaiocc_res.o -o papagaiocc.exe
+	@rm -f papagaiocc_res.o clang.exe
+	@echo "✓ papagaiocc.exe successfully generated."
+else
 	@echo '#!/usr/bin/env bash' > papagaiocc
 	@echo 'set -euo pipefail' >> papagaiocc
 	@echo 'TMP_DIR=$$(mktemp -d /tmp/papagaiocc.XXXXXX)' >> papagaiocc
@@ -140,6 +148,7 @@ endif
 	@echo '"$$CLANG_BIN" --target=wasm32-unknown-unknown -O2 -ffreestanding -fno-builtin -nostdlib -nostdinc -mno-bulk-memory -mno-sign-ext -Wl,--no-entry -Wl,--export-all -Wl,--allow-undefined -Wl,-z,stack-size=65536 "$$TMP_DIR/ready.c" -o "$$OUTPUT" -I "$$TMP_DIR"' >> papagaiocc
 	@chmod +x papagaiocc
 	@echo "✓ papagaiocc successfully generated."
+endif
 
 clean:
 	rm -f $(TARGET_SO) $(TARGET_A) $(TARGET_BIN) $(OBJ)

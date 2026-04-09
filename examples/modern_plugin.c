@@ -1,4 +1,4 @@
-use "plibc";
+use "libc";
 
 /* 
  * Modern Plugin - Using the new 'use' and quoted 'export' syntax

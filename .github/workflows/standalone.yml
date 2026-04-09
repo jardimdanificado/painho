@@ -110,9 +110,7 @@ jobs:
         run: |
           mkdir -p dist_pkg
           cp papagaio.exe dist_pkg/
-          cp papagaiocc dist_pkg/papagaiocc.sh
-          echo "@echo off" > dist_pkg/papagaiocc.bat
-          echo "bash %~dp0papagaiocc.sh %*" >> dist_pkg/papagaiocc.bat
+          cp papagaiocc.exe dist_pkg/
           cp README.md dist_pkg/
           # Using powershell for zip to be consistent with main workflow
           powershell -NoProfile -Command "Compress-Archive -Path dist_pkg\\* -DestinationPath papagaio-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force"

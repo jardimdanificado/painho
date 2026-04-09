@@ -1,0 +1,38 @@
+#include <windows.h>
+
+// Resource IDs (must match papagaiocc_win.c)
+#define IDR_PAPAGAIO_EXE  101
+#define IDR_CLANG_EXE     102
+#define IDR_SDK_H         103
+#define IDR_PRE_PAP       104
+
+IDR_PAPAGAIO_EXE  RCDATA  "papagaio.exe"
+IDR_SDK_H         RCDATA  "lib/wasm-libc/include/papagaio_wasm.h"
+IDR_PRE_PAP       RCDATA  "lib/wasm-libc/preprocessor.pap"
+
+#ifdef EMBED_CLANG
+IDR_CLANG_EXE     RCDATA  "clang.exe"
+#endif
+
+// Version info (optional but professional)
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     1,0,0,0
+PRODUCTVERSION  1,0,0,0
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "FileDescription",  "Papagaio Standalone Wasm Compiler"
+            VALUE "FileVersion",      "1.0.0"
+            VALUE "InternalName",     "papagaiocc"
+            VALUE "OriginalFilename", "papagaiocc.exe"
+            VALUE "ProductName",      "Papagaio"
+            VALUE "ProductVersion",   "1.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

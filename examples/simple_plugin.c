@@ -1,4 +1,4 @@
-use "plibc";
+use "libc";
 
 /* 
  * Ultra-Simplified Plugin

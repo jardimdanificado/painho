@@ -1,4 +1,4 @@
-use "plibc";
+use "libc";
 
 /* 
  * Hello Libc - Demonstration Plugin

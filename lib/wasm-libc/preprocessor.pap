@@ -2,7 +2,7 @@
 // This file is prepended to the C source before processing with Papagaio.
 
 // Import the embedded Wasm SDK
-$pattern {use "plibc";} {
+$pattern {use "libc";} {
 #define PAPAGAIO_WASM_IMPLEMENTATION
 #include "papagaio_wasm.h"
 }
