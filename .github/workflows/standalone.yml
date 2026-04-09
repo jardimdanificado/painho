@@ -57,7 +57,7 @@ jobs:
         with:
           msystem: ${{ matrix.msystem }}
           update: true
-          install: make git coreutils unzip
+          install: make git coreutils unzip mingw-w64-x86_64-gcc
 
       - name: Download Clang-Wasm Asset (nix)
         if: runner.os != 'Windows'
@@ -93,7 +93,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
-          make papagaiocc CLANG_PATH=${{ matrix.clang_path }}
+          make papagaiocc CC=gcc CLANG_PATH=${{ matrix.clang_path }}
 
       - name: Package artifact (Linux/macOS)
         if: runner.os != 'Windows'
