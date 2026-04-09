@@ -1,0 +1,165 @@
+name: Release Standalone
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (ex: 1.2.0)"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark release as pre-release"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-standalone:
+    name: Standalone (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            os: ubuntu-latest
+            asset: clang-wasm-llvmorg-22.1.3-linux-x64.tar.gz
+            clang_path: dist/clang
+            archive: linux-x64-standalone
+          - name: macOS ARM64
+            os: macos-14
+            asset: clang-wasm-llvmorg-22.1.3-macos-arm64.tar.gz
+            clang_path: dist/clang
+            archive: macos-arm64-standalone
+          - name: Windows x64 (MinGW)
+            os: windows-latest
+            asset: clang-wasm-llvmorg-22.1.3-windows-x64-mingw.zip
+            clang_path: clang.exe
+            archive: windows-x64-mingw-standalone
+            msystem: MINGW64
+          - name: Windows x64 (MSVC)
+            os: windows-latest
+            asset: clang-wasm-llvmorg-22.1.3-windows-x64-msvc.zip
+            clang_path: clang.exe
+            archive: windows-x64-msvc-standalone
+            msystem: MINGW64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.msystem }}
+          update: true
+          install: make git base64
+
+      - name: Download Clang-Wasm Asset (nix)
+        if: runner.os != 'Windows'
+        run: |
+          URL="https://github.com/jardimdanificado/clang-wasm/releases/download/llvmorg-22.1.3/${{ matrix.asset }}"
+          curl -L -o clang_asset "$URL"
+
+      - name: Download Clang-Wasm Asset (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          URL="https://github.com/jardimdanificado/clang-wasm/releases/download/llvmorg-22.1.3/${{ matrix.asset }}"
+          curl -L -o clang_asset "$URL"
+
+      - name: Extract Clang (nix)
+        if: runner.os != 'Windows'
+        run: |
+          tar -xzf clang_asset
+          chmod +x ${{ matrix.clang_path }}
+
+      - name: Extract Clang (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          unzip clang_asset
+
+      - name: Build papagaiocc Standalone (nix)
+        if: runner.os != 'Windows'
+        run: |
+          make papagaiocc CLANG_PATH=${{ matrix.clang_path }}
+
+      - name: Build papagaiocc Standalone (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          # Build target papagaio first (required by papagaiocc)
+          make papagaio
+          make papagaiocc CLANG_PATH=${{ matrix.clang_path }}
+
+      - name: Package artifact (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist_pkg
+          cp papagaiocc dist_pkg/
+          cp README.md dist_pkg/
+          tar -czf "papagaio-v${{ inputs.version }}-${{ matrix.archive }}.tar.gz" -C dist_pkg .
+
+      - name: Package artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          mkdir -p dist_pkg
+          cp papagaiocc dist_pkg/papagaiocc.sh
+          echo "@echo off" > dist_pkg/papagaiocc.bat
+          echo "bash %~dp0papagaiocc.sh %*" >> dist_pkg/papagaiocc.bat
+          cp README.md dist_pkg/
+          # Using powershell for zip to be consistent with main workflow
+          powershell -NoProfile -Command "Compress-Archive -Path dist_pkg\\* -DestinationPath papagaio-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: papagaio-${{ matrix.archive }}
+          path: |
+            *.tar.gz
+            *.zip
+
+  release:
+    name: Publish release
+    runs-on: ubuntu-latest
+    needs: [build-standalone]
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create tag if not exists
+        run: |
+          tag="v${{ inputs.version }}"
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" -m "Release $tag"
+            git push origin "$tag"
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: v${{ inputs.version }}
+          body: "papagaio Standalone v${{ inputs.version }} (Includes Clang)"
+          prerelease: ${{ inputs.prerelease }}
+          files: |
+            artifacts/**/*
