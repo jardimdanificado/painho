@@ -110,11 +110,11 @@ papagaiocc: $(TARGET_BIN)
 	@echo 'SDK_H="$$TMP_DIR/papagaio_wasm.h"' >> papagaiocc
 	@echo 'PRE_PAP="$$TMP_DIR/preprocessor.pap"' >> papagaiocc
 	@echo 'PAP_BIN="$$TMP_DIR/papagaio"' >> papagaiocc
-	@if [ -n "$(CLANG_PATH)" ]; then \
-		echo 'CLANG_BIN="$$TMP_DIR/clang"' >> papagaiocc; \
-	else \
-		echo 'CLANG_BIN="clang"' >> papagaiocc; \
-	fi
+ifneq ($(CLANG_PATH),)
+	@echo 'CLANG_BIN="$$TMP_DIR/clang"' >> papagaiocc
+else
+	@echo 'CLANG_BIN="clang"' >> papagaiocc
+endif
 	@echo "cat <<'EOF' > \"\$$SDK_H\"" >> papagaiocc
 	@cat lib/wasm-libc/include/papagaio_wasm.h >> papagaiocc
 	@echo 'EOF' >> papagaiocc
@@ -125,12 +125,12 @@ papagaiocc: $(TARGET_BIN)
 	@base64 < $(TARGET_BIN) >> papagaiocc
 	@echo 'EOF' >> papagaiocc
 	@echo 'chmod +x "$$PAP_BIN"' >> papagaiocc
-	@if [ -n "$(CLANG_PATH)" ]; then \
-		echo "base64 -d <<'EOF' > \"\$$CLANG_BIN\"" >> papagaiocc; \
-		base64 < $(CLANG_PATH) >> papagaiocc; \
-		echo 'EOF' >> papagaiocc; \
-		echo 'chmod +x "$$CLANG_BIN"' >> papagaiocc; \
-	fi
+ifneq ($(CLANG_PATH),)
+	@echo "base64 -d <<'EOF' > \"\$$CLANG_BIN\"" >> papagaiocc
+	@base64 < $(CLANG_PATH) >> papagaiocc
+	@echo 'EOF' >> papagaiocc
+	@echo 'chmod +x "$$CLANG_BIN"' >> papagaiocc
+endif
 	@echo 'ENTRY="$${1:-}"' >> papagaiocc
 	@echo 'OUTPUT="$${2:-}"' >> papagaiocc
 	@echo 'if [[ -z "$$ENTRY" ]]; then echo "Usage: papagaiocc <input.c> [output.wasm]"; exit 1; fi' >> papagaiocc
