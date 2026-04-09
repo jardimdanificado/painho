@@ -57,7 +57,7 @@ jobs:
         with:
           msystem: ${{ matrix.msystem }}
           update: true
-          install: make git base64
+          install: make git coreutils unzip
 
       - name: Download Clang-Wasm Asset (nix)
         if: runner.os != 'Windows'
