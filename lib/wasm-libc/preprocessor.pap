@@ -1,10 +1,3 @@
-// Papagaio Preprocessor Rules for Wasm Plugins
-// This file is prepended to the C source before processing with Papagaio.
-
-// Pattern to export a C function as a Papagaio command
-// Usage: export my_c_func as "papagaio_cmd"
-$pattern {export $func as "$cmd"} {
-    void $func(int argc, char **argv);
-    void papagaio_export_$func() __attribute__((export_name("$cmd")));
-    void papagaio_export_$func() { papagaio_init_cmd($func); }
-}
+// Papagaio Preprocessor Rules
+// This file can be used to add custom syntax via $pattern rules.
+// Currently, it is kept minimal as we use standard C naming conventions.

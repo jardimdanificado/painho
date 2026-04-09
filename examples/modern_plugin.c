@@ -1,26 +1,25 @@
 #include "lib.c"
 
 /* 
- * Modern Plugin - Using the new 'use' and quoted 'export' syntax
+ * Plugin Example - Naming Convention
+ * 
+ * Commands exported with the 'papagaio_' prefix are automatically 
+ * registered as Papagaio commands.
  */
 
-// Style 1: Standalone declaration with quoted name
-export echo as "repeat";
-
-char *echo(int argc, const char **argv) {
+// Registered as: $shout{text}
+char* papagaio_shout(int argc, char **argv) {
     if (argc < 1) return "";
-    return (char*)argv[0];
+    
+    char *input = argv[0];
+    size_t len = strlen(input);
+    char *res = malloc(len + 4);
+    
+    strcpy(res, input);
+    for (size_t i = 0; i < len; i++) {
+        if (res[i] >= 'a' && res[i] <= 'z') res[i] -= 32;
+    }
+    strcat(res, "!!!");
+    
+    return res;
 }
-
-// Style 2: Prefix definition
-export hello 
-{
-    return "Hello from the prefix style!";
-}
-
-// Style 3: Export after definition with quoted name
-char *calculate_pi(int argc, const char **argv) {
-    (void)argc; (void)argv;
-    return "3.14159";
-}
-export calculate_pi as "pi";

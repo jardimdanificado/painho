@@ -98,15 +98,15 @@ This changes the sigil to `@`, delimiters to `< >`, and the optional marker to `
 
 ## Plugin Development
 
-Papagaio features a modern, frictionless Wasm plugin system. With the **`papagaiocc`** standalone compiler, you can write plugins in C using a high-level syntax and compile them into zero-dependency WebAssembly modules.
+Papagaio features a modern, frictionless Wasm plugin system. With the **`papagaiocc`** standalone compiler, you can write plugins in standard C using simple naming conventions and compile them into zero-dependency WebAssembly modules.
 
 ### 1. Write your plugin
 Create a file named `greet.c`:
 ```c
 #include "lib.c"
 
-// Export the function as a Papagaio command named "greet"
-export hello as "greet"
+// Functions starting with 'papagaio_' are automatically registered as commands
+char* papagaio_greet(int argc, char **argv)
 {
     if (argc < 1) return "Hello, Stranger!";
     

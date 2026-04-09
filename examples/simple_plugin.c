@@ -2,31 +2,20 @@
 
 /* 
  * Ultra-Simplified Plugin
- * Demonstrates the modern export syntax.
+ * Demonstrates the auto-registration of commands using the 
+ * "papagaio_" prefix in vanilla C.
  */
 
-// Command: $echo{text}
-export echo 
-{
-    if (argc < 1) return "";
-    
-    printf("[WASM] Echoing back: %s\n", argv[0]);
-    
-    char *res = (char*)malloc(strlen(argv[0]) + 16);
-    if (!res) return NULL;
-    sprintf(res, "Echo: %s", argv[0]);
-    return res;
+// This will be registered as the command: $hello{...}
+char* papagaio_hello(int argc, char** argv) {
+    return "Hi from Wasm!";
 }
 
-// Command: $shout{text}
-export shout as "SHOUT"
-{
-    if (argc < 1) return "";
+// This will be registered as: $greet{...}
+char* papagaio_greet(int argc, char** argv) {
+    if (argc < 1) return "Hello!";
     
-    char *res = strdup(argv[0]);
-    if (!res) return NULL;
-    for (int i = 0; res[i]; i++) {
-        if (res[i] >= 'a' && res[i] <= 'z') res[i] -= 32;
-    }
-    return res;
+    char* buf = malloc(strlen(argv[0]) + 10);
+    sprintf(buf, "Hello, %s", argv[0]);
+    return buf;
 }

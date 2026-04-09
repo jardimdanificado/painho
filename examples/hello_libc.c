@@ -2,12 +2,12 @@
 
 /* 
  * Hello Libc - Demonstration Plugin
- * Shows the use of standard library functions (printf, malloc, strrev, etc).
+ * Shows the use of standard library functions (printf, malloc, strrev, etc)
+ * using the vanilla "papagaio_" naming convention.
  */
 
 // Command: $reverse{text}
-export reverse 
-{
+char* papagaio_reverse(int argc, char** argv) {
     if (argc < 1) return "";
     const char *input = argv[0];
     size_t len = strlen(input);
@@ -18,14 +18,13 @@ export reverse
     if (!result) return NULL;
 
     strcpy(result, input);
-    strrev(result); // Native Papagaio wasm-libc extension
+    strrev(result); 
 
     return result;
 }
 
-// Command: $calc{a}{op}{b}
-export calc as "calculate"
-{
+// Command: $calculate{a}{op}{b}
+char* papagaio_calculate(int argc, char** argv) {
     if (argc < 3) return "Error: missing arguments";
 
     int a = atoi(argv[0]);
