@@ -1,17 +1,10 @@
-// Papagaio rules for C Plugin Preprocessing
+// Papagaio Preprocessor Rules for Wasm Plugins
 // This file is prepended to the C source before processing with Papagaio.
 
-// Import the embedded Wasm SDK
-$pattern {use "libc";} {
-#define PAPAGAIO_WASM_IMPLEMENTATION
-#include "papagaio_wasm.h"
+// Pattern to export a C function as a Papagaio command
+// Usage: export my_c_func as "papagaio_cmd"
+$pattern {export $func as "$cmd"} {
+    void $func(int argc, char **argv);
+    void papagaio_export_$func() __attribute__((export_name("$cmd")));
+    void papagaio_export_$func() { papagaio_init_cmd($func); }
 }
-
-// Support 'export function as "exported_name";'
-$pattern {export $f$identifier as "$n"} {__attribute__((export_name("papagaio_$n"))) char *$f(int argc, const char **argv)}
-
-// Support 'export function as name;' (unquoted version, just in case)
-$pattern {export $f$identifier as $n$identifier} {__attribute__((export_name("papagaio_$n"))) char *$f(int argc, const char **argv)}
-
-// Support 'export function;'
-$pattern {export $f$identifier} {__attribute__((export_name("papagaio_$f"))) char *$f(int argc, const char **argv)}

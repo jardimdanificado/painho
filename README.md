@@ -103,14 +103,14 @@ Papagaio features a modern, frictionless Wasm plugin system. With the **`papagai
 ### 1. Write your plugin
 Create a file named `greet.c`:
 ```c
-use "libc";
+#include "lib.c"
 
 // Export the function as a Papagaio command named "greet"
 export hello as "greet"
 {
     if (argc < 1) return "Hello, Stranger!";
     
-    // libc provides standard C functions like malloc and sprintf
+    // lib.c provides standard C functions like malloc and sprintf
     char *res = (char*)malloc(strlen(argv[0]) + 16);
     sprintf(res, "Hello, %s!", argv[0]);
     
@@ -133,8 +133,8 @@ $greet{Papagaio}
 ```
 *Output: Hello, Papagaio!*
 
-### Unified Wasm SDK (libc)
-The `use "libc";` directive provides a curated, zero-dependency C standard library for WebAssembly, including:
+### Unified Wasm SDK (lib.c)
+The `#include "lib.c"` directive provides a curated, zero-dependency C standard library for WebAssembly, including:
 - **Memory Management**: `malloc`, `free`, `realloc`
 - **String Processing**: `strlen`, `strcpy`, `sprintf`, `strrev`, etc.
 - **Formatted I/O**: `printf`, `snprintf`, `sscanf`

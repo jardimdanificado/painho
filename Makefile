@@ -119,7 +119,7 @@ else
 	@echo 'set -euo pipefail' >> papagaiocc
 	@echo 'TMP_DIR=$$(mktemp -d /tmp/papagaiocc.XXXXXX)' >> papagaiocc
 	@echo 'trap "rm -rf $$TMP_DIR" EXIT' >> papagaiocc
-	@echo 'SDK_H="$$TMP_DIR/papagaio_wasm.h"' >> papagaiocc
+	@echo 'SDK_H="$$TMP_DIR/lib.c"' >> papagaiocc
 	@echo 'PRE_PAP="$$TMP_DIR/preprocessor.pap"' >> papagaiocc
 	@echo 'PAP_BIN="$$TMP_DIR/papagaio"' >> papagaiocc
 ifneq ($(CLANG_PATH),)
@@ -128,7 +128,7 @@ else
 	@echo 'CLANG_BIN="clang"' >> papagaiocc
 endif
 	@echo "cat <<'EOF' > \"\$$SDK_H\"" >> papagaiocc
-	@cat lib/wasm-libc/include/papagaio_wasm.h >> papagaiocc
+	@cat lib/wasm-libc/include/lib.c >> papagaiocc
 	@echo 'EOF' >> papagaiocc
 	@echo "cat <<'EOF' > \"\$$PRE_PAP\"" >> papagaiocc
 	@cat lib/wasm-libc/preprocessor.pap >> papagaiocc

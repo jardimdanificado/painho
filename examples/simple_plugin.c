@@ -1,4 +1,4 @@
-use "libc";
+#include "lib.c"
 
 /* 
  * Ultra-Simplified Plugin

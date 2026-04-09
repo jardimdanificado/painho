@@ -15,7 +15,7 @@
 #endif
 
 #ifndef SDK_H_PATH
-#define SDK_H_PATH ../lib/wasm-libc/include/papagaio_wasm.h
+#define SDK_H_PATH "../lib/wasm-libc/include/lib.c"
 #endif
 
 #ifndef PRE_PAP_PATH

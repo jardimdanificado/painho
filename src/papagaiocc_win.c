@@ -68,10 +68,10 @@ int main(int argc, char** argv) {
     CreateDirectory(temp_dir, NULL);
 
     // 2. Extract tools
-    char pap_path[MAX_PATH], clang_path[MAX_PATH], sdk_path[MAX_PATH], pre_path[MAX_PATH];
+    char pap_path[MAX_PATH], clang_path[MAX_PATH], lib_path[MAX_PATH], pre_path[MAX_PATH];
     sprintf(pap_path,   "%s\\papagaio.exe", temp_dir);
     sprintf(clang_path, "%s\\clang.exe",    temp_dir);
-    sprintf(sdk_path,   "%s\\papagaio_wasm.h", temp_dir);
+    sprintf(lib_path,   "%s\\lib.c",        temp_dir);
     sprintf(pre_path,   "%s\\preprocessor.pap", temp_dir);
 
     // Only extract if they don't exist (optimization)
@@ -89,7 +89,7 @@ int main(int argc, char** argv) {
         strcpy(clang_path, "clang.exe"); // Fallback to system clang
     }
 
-    ExtractResource(IDR_SDK_H, sdk_path);
+    ExtractResource(IDR_SDK_H, lib_path);
     ExtractResource(IDR_PRE_PAP, pre_path);
 
     // 3. Prepare joined source

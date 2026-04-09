@@ -1,4 +1,4 @@
-use "libc";
+#include "lib.c"
 
 /* 
  * Modern Plugin - Using the new 'use' and quoted 'export' syntax
