@@ -106,7 +106,9 @@ papagaiocc: $(TARGET_BIN)
 	@bash ./lib/wasm-libc/amalgamate.sh
 ifeq ($(EXE_EXT),.exe)
 ifneq ($(CLANG_PATH),)
+ifneq ($(CLANG_PATH),clang.exe)
 	@cp "$(CLANG_PATH)" clang.exe
+endif
 endif
 	$(WINDRES) $(if $(CLANG_PATH),-DEMBED_CLANG) src/papagaiocc.rc papagaiocc_res.o
 	$(CC) $(CFLAGS) -DPAP_VERSION=\"0.24.1\" src/papagaiocc_win.c papagaiocc_res.o -o papagaiocc.exe
