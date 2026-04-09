@@ -1,11 +1,11 @@
 use "plibc";
 
 /* 
- * Plugin Ultra-Simplificado
- * Demonstra a sintaxe moderna de exportação.
+ * Ultra-Simplified Plugin
+ * Demonstrates the modern export syntax.
  */
 
-// Comando: $echo{texto}
+// Command: $echo{text}
 export echo 
 {
     if (argc < 1) return "";
@@ -18,8 +18,8 @@ export echo
     return res;
 }
 
-// Comando: $shout{texto}
-export shout as "GRITAR"
+// Command: $shout{text}
+export shout as "SHOUT"
 {
     if (argc < 1) return "";
     

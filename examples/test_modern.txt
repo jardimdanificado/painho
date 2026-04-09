@@ -1,4 +1,4 @@
 $wasmfile{examples/modern_plugin.wasm}
 
-Teste 1 (Repete): $repete{Oi Papagaio}
-Teste 2 (Hello): $hello{}
+Test 1 (Repeat): $repeat{Hi Papagaio}
+Test 2 (Hello): $hello{}

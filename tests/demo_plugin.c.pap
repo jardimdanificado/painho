@@ -1,4 +1,4 @@
-/* Minimal Libc - Desenvolvedor tem total controle */
+/* Minimal Libc - Developer has total control */
 typedef unsigned int  uint32_t;
 typedef unsigned long size_t;
 extern unsigned char __heap_base;
@@ -12,8 +12,8 @@ size_t strlen(const char *s) { const char *a = s; while (*s) s++; return s - a; 
 char *strcat(char *d, const char *s) { char *a = d; while (*d) d++; while ((*d++ = *s++)) { ; } return a; }
 int atoi(const char *s) { int n = 0; while (*s >= '0' && *s <= '9') n = n * 10 + (*s++ - '0'); return n; }
 
-$wasm_plugin{repetir}{
-    if (argc < 2) return "Uso: repetir {palavra} {vezes}";
+$wasm_plugin{repeat}{
+    if (argc < 2) return "Usage: repeat {word} {times}";
     const char *word = argv[0];
     int n = atoi(argv[1]);
     if (n <= 0) n = 1;

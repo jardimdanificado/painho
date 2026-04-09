@@ -1,11 +1,11 @@
 use "plibc";
 
 /* 
- * Hello Libc - Plugin Demonstrativo
- * Mostra o uso de funções da biblioteca padrão (printf, malloc, strrev, etc).
+ * Hello Libc - Demonstration Plugin
+ * Shows the use of standard library functions (printf, malloc, strrev, etc).
  */
 
-// Comando: $reverse{texto}
+// Command: $reverse{text}
 export reverse 
 {
     if (argc < 1) return "";
@@ -18,15 +18,15 @@ export reverse
     if (!result) return NULL;
 
     strcpy(result, input);
-    strrev(result); // Extensão nativa da wasm-libc do Papagaio
+    strrev(result); // Native Papagaio wasm-libc extension
 
     return result;
 }
 
-// Comando: $calc{a}{op}{b}
-export calc as "calcular"
+// Command: $calc{a}{op}{b}
+export calc as "calculate"
 {
-    if (argc < 3) return "Erro: faltam argumentos";
+    if (argc < 3) return "Error: missing arguments";
 
     int a = atoi(argv[0]);
     const char *op = argv[1];
@@ -39,6 +39,6 @@ export calc as "calcular"
     else if (strcmp(op, "/") == 0 && b != 0) res = a / b;
 
     char *out = (char*)malloc(64);
-    snprintf(out, 64, "Resultado: %d %s %d = %d", a, op, b, res);
+    snprintf(out, 64, "Result: %d %s %d = %d", a, op, b, res);
     return out;
 }

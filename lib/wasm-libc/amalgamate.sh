@@ -46,7 +46,7 @@ for h in "${HEADERS[@]}"; do
     echo "" >> "$OUTPUT"
     echo "/* --- $h --- */" >> "$OUTPUT"
     # Remove guards: #ifndef _FILENAME_H, #define _FILENAME_H
-    # Precisamos de âncoras (boundary) para não casar _CT_HX quando procuramos _CTYPE_H
+    # We need boundaries to avoid matching _CT_HX when looking for _CTYPE_H
     sed -E '/^#(ifndef|define)[[:space:]]+_?[A-Z0-9]+_H([[:space:]]|$)/d' "$ROOT/include/$h" | \
     sed -E '/^#endif[[:space:]]+\/\*[[:space:]]+_?[A-Z0-9]+_H[[:space:]]+\*\//d' | \
     grep -Ev "#include[[:space:]]+[\"<]($HEADER_REGEX)[\">]" >> "$OUTPUT"
@@ -70,4 +70,4 @@ done
 echo "" >> "$OUTPUT"
 echo "#endif /* PAPAGAIO_WASM_IMPLEMENTATION */" >> "$OUTPUT"
 
-echo "✓ $OUTPUT gerado com sucesso."
+echo "✓ $OUTPUT successfully generated."

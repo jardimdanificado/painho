@@ -21,7 +21,7 @@ static char *read_file(const char *path, size_t *out_len) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        fprintf(stderr, "Uso: papagaio <arquivo.txt>\n");
+        fprintf(stderr, "Usage: papagaio <file.txt>\n");
         return 1;
     }
 
@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
     size_t len = 0;
     char *input = read_file(argv[1], &len);
     if (!input) {
-        fprintf(stderr, "Erro ao ler arquivo: %s\n", argv[1]);
+        fprintf(stderr, "Error reading file: %s\n", argv[1]);
         papagaio_close(ctx);
         return 1;
     }
@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
         printf("%s", output);
         free(output);
     } else {
-        fprintf(stderr, "Erro no processamento do papagaio.\n");
+        fprintf(stderr, "Error during papagaio processing.\n");
     }
 
     free(input);

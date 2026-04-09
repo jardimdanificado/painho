@@ -5,7 +5,7 @@ use "plibc";
  */
 
 // Style 1: Standalone declaration with quoted name
-export echo as "repete";
+export echo as "repeat";
 
 char *echo(int argc, const char **argv) {
     if (argc < 1) return "";

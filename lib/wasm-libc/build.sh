@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# build.sh — compila wasm-libc com clang bare-metal (target: wasm32-unknown-unknown)
-# Uso:
-#   ./build.sh           — compila a libc (.a) + test.wasm
-#   ./build.sh lib       — só a libc
-#   ./build.sh test      — só o módulo de teste
-#   ./build.sh clean     — limpa artefatos
+# build.sh — compiles wasm-libc with bare-metal clang (target: wasm32-unknown-unknown)
+# Usage:
+#   ./build.sh           — compiles libc (.a) + test.wasm
+#   ./build.sh lib       — only libc
+#   ./build.sh test      — only test module
+#   ./build.sh clean     — clean artifacts
 
 set -euo pipefail
 
-# ── configuração ──────────────────────────────────────────────────────────── #
+# ── configuration ──────────────────────────────────────────────────────────── #
 
 TARGET="wasm32-unknown-unknown"
 CC="${WASM_CC:-clang}"
@@ -24,14 +24,14 @@ CFLAGS=(
     -O2
     -Wall
     -Wextra
-    -ffreestanding          # sem runtime de C padrão
-    -fno-builtin            # não substituir chamadas por builtins
+    -ffreestanding          # no standard C runtime
+    -fno-builtin            # do not replace calls with builtins
     -fno-stack-protector
     -fno-exceptions
     -nostdlib
     -nostdinc
     -I "$ROOT/include"
-    # wasm3 é MVP; desativa extensões não suportadas
+    # wasm3 is MVP; deactivate unsupported extensions
     -mno-bulk-memory
     -mno-sign-ext
 )
@@ -41,13 +41,13 @@ LDFLAGS=(
     --export=wasm_main
     --export=_start
     #--no-entry
-    #--import-memory              # memória importada do host
+    #--import-memory              # imported memory from host
     --export-dynamic
-    --allow-undefined            # __host_write, __host_abort resolvidos em runtime
+    --allow-undefined            # __host_write, __host_abort resolved at runtime
     -z stack-size=65536
 )
 
-# fontes da libc
+# libc sources
 LIBC_SRCS=(
     src/string/string.c
     src/memory/malloc.c
@@ -63,22 +63,22 @@ LIBC_SRCS=(
     src/stdio/scanf.c
 )
 
-# ── funções ───────────────────────────────────────────────────────────────── #
+# ── functions ───────────────────────────────────────────────────────────────── #
 
 die() { echo "✗ $*" >&2; exit 1; }
 log() { echo "  $*"; }
 
 check_deps() {
-    command -v "$CC" >/dev/null 2>&1 || die "clang não encontrado. Instale com: apt install clang"
-    command -v "$AR" >/dev/null 2>&1 || die "llvm-ar não encontrado. Instale com: apt install llvm"
+    command -v "$CC" >/dev/null 2>&1 || die "clang not found. Install with: apt install clang"
+    command -v "$AR" >/dev/null 2>&1 || die "llvm-ar not found. Install with: apt install llvm"
 
-    # verifica suporte ao target wasm32
+    # check support for wasm32 target
     "$CC" --target="$TARGET" -x c -c /dev/null -o /dev/null 2>/dev/null \
-        || die "clang não suporta $TARGET. Verifique a instalação."
+        || die "clang does not support $TARGET. Check your installation."
 }
 
 build_lib() {
-    echo "▶ compilando libc..."
+    echo "▶ compiling libc..."
     mkdir -p "$OUT/obj"
 
     local obj_files=()
@@ -95,17 +95,17 @@ build_lib() {
 }
 
 build_test() {
-    echo "▶ compilando test.wasm..."
+    echo "▶ compiling test.wasm..."
 
     local test_src="$ROOT/test/test_main.c"
     local test_out="$OUT/test.wasm"
 
-    [[ -f "$test_src" ]] || die "test/test_main.c não encontrado"
+    [[ -f "$test_src" ]] || die "test/test_main.c not found"
 
     # compila objeto do teste
     "$CC" "${CFLAGS[@]}" -c "$test_src" -o "$OUT/obj/test_main.o"
 
-    # linka com wasm-ld
+    # link with wasm-ld
     wasm-ld \
         "${LDFLAGS[@]}" \
         "$OUT/obj/test_main.o" \
@@ -114,13 +114,13 @@ build_test() {
 
     echo "✓ $test_out"
     echo ""
-    echo "Para rodar com wasm3:"
+    echo "To run with wasm3:"
     echo "  wasm3 --func main $test_out"
 }
 
 clean() {
     rm -rf "$OUT"
-    echo "✓ limpo"
+    echo "✓ clean"
 }
 
 # ── main ──────────────────────────────────────────────────────────────────── #
@@ -132,5 +132,5 @@ case "${1:-all}" in
     test)  build_lib && build_test ;;
     clean) clean ;;
     all)   build_lib && build_test ;;
-    *)     die "uso: $0 [lib|test|clean|all]" ;;
+    *)     die "usage: $0 [lib|test|clean|all]" ;;
 esac

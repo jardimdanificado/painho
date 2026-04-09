@@ -1,20 +1,20 @@
 # wasm-libc
 
-Implementação bare-metal de uma libc para WebAssembly, compilada com `clang`
-e interpretada com [wasm3](https://github.com/wasm3/wasm3).
+Bare-metal implementation of a libc for WebAssembly, compiled with `clang`
+and interpreted with [wasm3](https://github.com/wasm3/wasm3).
 
-## Filosofia
+## Philosophy
 
-- **Zero dependências** — nenhuma libc do sistema, nenhuma WASI
-- **ABI explícita** — I/O e controle de fluxo são imports declarados do host
-- **Auditável** — cada função tem no máximo 50–100 linhas, sem macros complexas
-- **wasm3-safe** — MVP do WebAssembly apenas; sem threads, SIMD ou bulk-memory
+- **Zero dependencies** — no system libc, no WASI
+- **Explicit ABI** — I/O and flow control are declared host imports
+- **Auditable** — each function has at most 50–100 lines, no complex macros
+- **wasm3-safe** — WebAssembly MVP only; no threads, SIMD, or bulk-memory
 
-## Estrutura
+## Structure
 
 ```
 wasm-libc/
-├── include/          headers públicos
+├── include/          public headers
 │   ├── stddef.h      size_t, NULL, offsetof
 │   ├── stdint.h      int32_t, uint64_t, ...
 │   ├── stdbool.h     bool, true, false
@@ -26,16 +26,16 @@ wasm-libc/
 ├── src/
 │   ├── string/       memcpy, memmove, memset, strcmp, strtok_r, ...
 │   ├── memory/       malloc, free, calloc, realloc (free-list + boundary tags)
-│   ├── stdio/        printf, sprintf, snprintf, vsnprintf (todos os specs)
+│   ├── stdio/        printf, sprintf, snprintf, vsnprintf (all specs)
 │   └── stdlib/       atoi, strtol, itoa, qsort, bsearch, rand, abs
 │
 ├── test/
-│   └── test_main.c   suite de testes unitários
+│   └── test_main.c   unit test suite
 │
-└── build.sh          script de compilação
+└── build.sh          build script
 ```
 
-## Requisitos
+## Requirements
 
 ```bash
 # Ubuntu / Debian
@@ -48,9 +48,9 @@ pacman -S clang llvm lld
 brew install llvm
 ```
 
-Para rodar os testes:
+To run tests:
 ```bash
-# instala wasm3
+# install wasm3
 git clone https://github.com/wasm3/wasm3 && cd wasm3
 cmake . && make -j4
 sudo cp build/wasm3 /usr/local/bin/
@@ -61,46 +61,46 @@ sudo cp build/wasm3 /usr/local/bin/
 ```bash
 chmod +x build.sh
 
-./build.sh        # compila libc + test.wasm
-./build.sh lib    # só a libc estática (.a)
-./build.sh test   # compila e linka o test.wasm
-./build.sh clean  # remove artefatos
+./build.sh        # compiles libc + test.wasm
+./build.sh lib    # only static libc (.a)
+./build.sh test   # compiles and links test.wasm
+./build.sh clean  # removes artifacts
 ```
 
-## Rodando os testes
+## Running tests
 
 ```bash
 wasm3 --func main build/test.wasm
 ```
 
-Saída esperada:
+Expected output:
 ```
 wasm-libc test suite
 ====================
 
 [string]
-  OK   strlen básico
-  OK   strlen vazio
+  OK   basic strlen
+  OK   empty strlen
   ...
 
 [malloc]
-  OK   malloc retorna não-NULL
+  OK   malloc returns non-NULL
   ...
 
-resultado: 42/42 testes passaram
+result: 42/42 tests passed
 ```
 
-## ABI de host imports
+## Host imports ABI
 
-O módulo `"env"` deve exportar para o WASM:
+The `"env"` module must export to WASM:
 
-| Função           | Assinatura C                          | Descrição          |
+| Function           | C Signature                           | Description        |
 |------------------|---------------------------------------|--------------------|
 | `__host_write`   | `(const char *buf, int len) -> void`  | stdout             |
 | `__host_write_err`| `(const char *buf, int len) -> void` | stderr             |
 | `__host_abort`   | `() -> void`                          | abort/panic        |
 
-### Exemplo de binding em C (host wasm3)
+### C binding example (wasm3 host)
 
 ```c
 #include "wasm3.h"
@@ -117,30 +117,30 @@ m3ApiRawFunction(host_abort) {
     abort();
 }
 
-// na inicialização:
+// during initialization:
 m3_LinkRawFunction(module, "env", "__host_write",     "v(*i)", host_write);
 m3_LinkRawFunction(module, "env", "__host_write_err", "v(*i)", host_write);
 m3_LinkRawFunction(module, "env", "__host_abort",     "v()",   host_abort);
 ```
 
-## Alocador de memória
+## Memory Allocator
 
-Implementa **free-list com boundary tags** (Knuth, 1973):
+Implements **free-list with boundary tags** (Knuth, 1973):
 
 ```
 [ header 8B | payload ... | footer 4B ]
    size|flags              size|flags
 ```
 
-- **Coalescing** em O(1) para frente e para trás usando boundary tags
-- **Splitting** quando o bloco tem espaço sobrando para um bloco mínimo
-- **heap_grow** usa `memory.grow` do WASM — sem syscall, sem OS
-- **Alinhamento** de 8 bytes em todos os blocos
+- **Coalescing** in O(1) forwards and backwards using boundary tags
+- **Splitting** when the block has enough space for a minimum block
+- **heap_grow** uses WASM `memory.grow` — no syscall, no OS
+- **Alignment** of 8 bytes on all blocks
 
-## Módulos planejados
+## Planned modules
 
-- [ ] `math.h` — sin, cos, sqrt, pow (implementações puras em C)
+- [ ] `math.h` — sin, cos, sqrt, pow (pure C implementations)
 - [ ] `ctype.h` — isalpha, isdigit, toupper, tolower
-- [ ] `errno.h` — códigos de erro
-- [ ] `setjmp.h` — longjmp bare-metal para WASM
-- [ ] `time.h` — com host import para clock
+- [ ] `errno.h` — error codes
+- [ ] `setjmp.h` — bare-metal longjmp for WASM
+- [ ] `time.h` — with host import for clock

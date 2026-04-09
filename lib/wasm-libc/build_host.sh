@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# build_host.sh — compila o runner host do wasm3
+# build_host.sh — compiles the wasm3 host runner
 
 WASM3_SRC="../wasm3/source"
 
-[[ -d "$WASM3_SRC" ]] || { echo "✗ Erro: $WASM3_SRC não encontrado"; exit 1; }
+[[ -d "$WASM3_SRC" ]] || { echo "✗ Error: $WASM3_SRC not found"; exit 1; }
 
-echo "▶ compilando host runner..."
+echo "▶ compiling host runner..."
 
 gcc runtime/host_example.c runtime/wasm3_host.c \
     -I "$WASM3_SRC" \
@@ -14,8 +14,8 @@ gcc runtime/host_example.c runtime/wasm3_host.c \
     -o host
 
 if [[ -f "./host" ]]; then
-    echo "✓ host criado"
+    echo "✓ host created"
 else
-    echo "✗ falha ao criar host"
+    echo "✗ failed to create host"
     exit 1
 fi

@@ -1,17 +1,17 @@
 #include <time.h>
 /*
- * wasm3_host.c — binding do host para wasm-libc rodando em wasm3
+ * wasm3_host.c — wasm3 host binding for wasm-libc
  *
- * Compila junto com o seu programa host (não vai para o .wasm).
+ * Compiles alongside your host program (does not go into the .wasm).
  *
- * Uso:
+ * Usage:
  *   #include "wasm3_host.h"
  *   ...
- *   IM3Module module = carregar_modulo(...);
+ *   IM3Module module = load_module(...);
  *   wasm_libc_link(runtime, module);
  *   ...
  *
- * Dependências: wasm3 headers (wasm3.h, m3_env.h)
+ * Dependencies: wasm3 headers (wasm3.h, m3_env.h)
  */
 
 #include "wasm3_host.h"
@@ -19,13 +19,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* ── implementações das funções importadas ───────────────────────────────── */
+/* ── imported function implementations ───────────────────────────────────── */
 
 /*
  * __host_write(buf: *u8, len: i32) -> void
  *
- * Escreve `len` bytes de `buf` (na memória WASM) para stdout.
- * m3_GetMemory garante que o ponteiro é válido dentro do linear memory.
+ * Writes `len` bytes from `buf` (in WASM memory) to stdout.
+ * m3_GetMemory ensures the pointer is valid within linear memory.
  */
 m3ApiRawFunction(m3_host_write_stdout) {
     m3ApiGetArgMem(const char *, buf);
@@ -53,10 +53,10 @@ m3ApiRawFunction(m3_host_write_stderr) {
 /*
  * __host_abort() -> void
  *
- * Chamado por abort(). Pode ser customizado para logging, panic, etc.
+ * Called by abort(). Can be customized for logging, panic, etc.
  */
 m3ApiRawFunction(m3_host_abort) {
-    fprintf(stderr, "[wasm3-host] abort() chamado pelo módulo WASM\n");
+    fprintf(stderr, "[wasm3-host] abort() called by WASM module\n");
     fflush(stderr);
     exit(1);
     m3ApiSuccess();
@@ -79,15 +79,15 @@ m3ApiRawFunction(m3_host_readline) {
     m3ApiReturn(0);
 }
 
-/* ── registro no runtime ─────────────────────────────────────────────────── */
+/* ── runtime registration ─────────────────────────────────────────────────── */
 
 /*
- * Assinaturas no formato wasm3:
+ * wasm3 signature format:
  *   v = void, i = i32, I = i64, f = f32, F = f64
- *   * = ponteiro (i32 validado contra o linear memory)
+ *   * = pointer (i32 validated against linear memory)
  *
- *   "v(*i)"  → retorna void, recebe (ptr, i32)
- *   "v()"    → retorna void, sem argumentos
+ *   "v(*i)"  → returns void, receives (ptr, i32)
+ *   "v()"    → returns void, no arguments
  */
 
 m3ApiRawFunction(m3_host_time) {
@@ -100,7 +100,7 @@ m3ApiRawFunction(m3_host_time) {
 m3ApiRawFunction(m3_host_clock_ms) {
     m3ApiReturnType(uint32_t);
     struct timespec ts;
-    /* clock_gettime não disponível em todos os hosts — usa clock() como fallback */
+    /* clock_gettime not available on all hosts — use clock() as fallback */
     m3ApiReturn((uint32_t)(clock() * 1000 / CLOCKS_PER_SEC));
 }
 
