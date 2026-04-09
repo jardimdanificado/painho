@@ -6,31 +6,32 @@
 #define IDR_SDK_H         103
 #define IDR_PRE_PAP       104
 
-// Resource files. 
-// We use macros that can be overridden by the compiler.
-// Defaults are relative to the .rc file (in src/)
+// Macros to stringify paths passed from the compiler
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+
 #ifndef PAPAGAIO_EXE_PATH
-#define PAPAGAIO_EXE_PATH "../papagaio.exe"
+#define PAPAGAIO_EXE_PATH ../papagaio.exe
 #endif
 
 #ifndef SDK_H_PATH
-#define SDK_H_PATH "../lib/wasm-libc/include/papagaio_wasm.h"
+#define SDK_H_PATH ../lib/wasm-libc/include/papagaio_wasm.h
 #endif
 
 #ifndef PRE_PAP_PATH
-#define PRE_PAP_PATH "../lib/wasm-libc/preprocessor.pap"
+#define PRE_PAP_PATH ../lib/wasm-libc/preprocessor.pap
 #endif
 
 #ifndef CLANG_EXE_PATH
-#define CLANG_EXE_PATH "../clang.exe"
+#define CLANG_EXE_PATH ../clang.exe
 #endif
 
-IDR_PAPAGAIO_EXE  RCDATA  PAPAGAIO_EXE_PATH
-IDR_SDK_H         RCDATA  SDK_H_PATH
-IDR_PRE_PAP       RCDATA  PRE_PAP_PATH
+IDR_PAPAGAIO_EXE  RCDATA  TOSTRING(PAPAGAIO_EXE_PATH)
+IDR_SDK_H         RCDATA  TOSTRING(SDK_H_PATH)
+IDR_PRE_PAP       RCDATA  TOSTRING(PRE_PAP_PATH)
 
 #ifdef EMBED_CLANG
-IDR_CLANG_EXE     RCDATA  CLANG_EXE_PATH
+IDR_CLANG_EXE     RCDATA  TOSTRING(CLANG_EXE_PATH)
 #endif
 
 // Version info

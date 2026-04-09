@@ -42,16 +42,16 @@ if (WIN32)
     add_dependencies(papagaiocc papagaio)
     
     # Pass paths to the Resource Compiler
-    # Use absolute paths to avoid issues with different build directories
+    # We use unquoted definitions because papagaiocc.rc uses TOSTRING() logic
     set(SDK_H_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/wasm-libc/include/papagaio_wasm.h")
     set(PRE_PAP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/wasm-libc/preprocessor.pap")
     
     set_property(SOURCE src/papagaiocc.rc PROPERTY COMPILE_DEFINITIONS
-        "SDK_H_PATH=\"${SDK_H_PATH}\";PRE_PAP_PATH=\"${PRE_PAP_PATH}\";PAPAGAIO_EXE_PATH=\"$<TARGET_FILE:papagaio>\"")
+        "SDK_H_PATH=${SDK_H_PATH};PRE_PAP_PATH=${PRE_PAP_PATH};PAPAGAIO_EXE_PATH=$<TARGET_FILE:papagaio>")
 
     if (CLANG_PATH)
         add_definitions(-DEMBED_CLANG)
-        set_property(SOURCE src/papagaiocc.rc APPEND PROPERTY COMPILE_DEFINITIONS "CLANG_EXE_PATH=\"${CLANG_PATH}\"")
+        set_property(SOURCE src/papagaiocc.rc APPEND PROPERTY COMPILE_DEFINITIONS "CLANG_EXE_PATH=${CLANG_PATH}")
     endif()
 
     target_link_libraries(papagaiocc libpapagaio)

@@ -155,6 +155,8 @@ jobs:
         if: startsWith(matrix.target, 'windows-msvc')
         shell: powershell
         run: |
+          # Generate the amalgamated header first
+          bash lib/wasm-libc/amalgamate.sh
           $v_arch = "${{ matrix.target == 'windows-msvc' && 'x64' || 'x86' }}"
           $triplet = "${v_arch}-windows"
           $cmake_arch = if ($v_arch -eq "x64") { "x64" } else { "Win32" }
