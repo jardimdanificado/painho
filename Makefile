@@ -63,21 +63,21 @@ all: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 	$(CC) -c $(CFLAGS) -fPIC -o $@ $<
 
 $(TARGET_SO): $(OBJ)
-	$(CC) $(SHARED_FLAGS) -o $@ $(OBJ) $(LDFLAGS) -lm
+	$(CC) $(SHARED_FLAGS) -o $@ $(OBJ) $(LDFLAGS)
 
 $(TARGET_A): $(OBJ)
 	$(AR) rcs $@ $(OBJ)
 	$(RANLIB) $@
 
 $(TARGET_BIN): src/main.c $(TARGET_A)
-	$(CC) $(CFLAGS) -o $@ src/main.c $(TARGET_A) $(LDFLAGS) -lm
+	$(CC) $(CFLAGS) -o $@ src/main.c $(TARGET_A) $(LDFLAGS)
 
 static: $(TARGET_A)
 
 test: test_c test_node
 
 test_c: $(TARGET_A)
-	$(CC) $(CFLAGS) -o tests/test_bin tests/test.c $(TARGET_A) $(LDFLAGS) -lm
+	$(CC) $(CFLAGS) -o tests/test_bin tests/test.c $(TARGET_A) $(LDFLAGS)
 	@echo "=== Starting Papagaio C Tests ==="
 	./tests/test_bin
 
@@ -117,7 +117,7 @@ papagaiocc: $(TARGET_BIN)
 	@cat lib/wasm-libc/preprocessor.pap >> papagaiocc
 	@echo 'EOF' >> papagaiocc
 	@echo "base64 -d <<'EOF' > \"\$$PAP_BIN\"" >> papagaiocc
-	@base64 papagaio >> papagaiocc
+	@base64 < papagaio >> papagaiocc
 	@echo 'EOF' >> papagaiocc
 	@echo 'chmod +x "$$PAP_BIN"' >> papagaiocc
 	@echo 'ENTRY="$${1:-}"' >> papagaiocc
