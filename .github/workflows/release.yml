@@ -142,7 +142,7 @@ jobs:
           fi
           # Rebuild Lua for each target architecture
           make clean
-          make all -j2
+          make all papagaiocc -j2
 
       - name: Build binary (Windows MinGW)
         if: startsWith(matrix.target, 'windows-mingw')
@@ -171,7 +171,7 @@ jobs:
         run: |
           mkdir -p dist_pkg/plugins/lua
           mkdir -p dist_pkg/plugins/quickjs
-          cp papagaio dist_pkg/
+          cp papagaio papagaiocc dist_pkg/
           cp plugins/lua/*.so dist_pkg/plugins/lua/ || true
           cp plugins/quickjs/*.so dist_pkg/plugins/quickjs/ || true
           cp README.md dist_pkg/

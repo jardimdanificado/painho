@@ -102,7 +102,7 @@ install: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 
 papagaiocc: $(TARGET_BIN)
 	@echo "▶ Generating papagaiocc (Standalone Compiler)..."
-	@./lib/wasm-libc/amalgamate.sh
+	@bash ./lib/wasm-libc/amalgamate.sh
 	@echo '#!/usr/bin/env bash' > papagaiocc
 	@echo 'set -euo pipefail' >> papagaiocc
 	@echo 'TMP_DIR=$$(mktemp -d /tmp/papagaiocc.XXXXXX)' >> papagaiocc
