@@ -122,7 +122,7 @@ papagaiocc: $(TARGET_BIN)
 	@cat lib/wasm-libc/preprocessor.pap >> papagaiocc
 	@echo 'EOF' >> papagaiocc
 	@echo "base64 -d <<'EOF' > \"\$$PAP_BIN\"" >> papagaiocc
-	@base64 < papagaio >> papagaiocc
+	@base64 < $(TARGET_BIN) >> papagaiocc
 	@echo 'EOF' >> papagaiocc
 	@echo 'chmod +x "$$PAP_BIN"' >> papagaiocc
 	@if [ -n "$(CLANG_PATH)" ]; then \

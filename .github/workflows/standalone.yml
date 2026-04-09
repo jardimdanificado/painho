@@ -93,8 +93,6 @@ jobs:
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
-          # Build target papagaio first (required by papagaiocc)
-          make papagaio
           make papagaiocc CLANG_PATH=${{ matrix.clang_path }}
 
       - name: Package artifact (Linux/macOS)
@@ -102,7 +100,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist_pkg
-          cp papagaiocc dist_pkg/
+          cp papagaio papagaiocc dist_pkg/
           cp README.md dist_pkg/
           tar -czf "papagaio-v${{ inputs.version }}-${{ matrix.archive }}.tar.gz" -C dist_pkg .
 
@@ -111,6 +109,7 @@ jobs:
         shell: msys2 {0}
         run: |
           mkdir -p dist_pkg
+          cp papagaio.exe dist_pkg/
           cp papagaiocc dist_pkg/papagaiocc.sh
           echo "@echo off" > dist_pkg/papagaiocc.bat
           echo "bash %~dp0papagaiocc.sh %*" >> dist_pkg/papagaiocc.bat
