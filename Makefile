@@ -105,7 +105,9 @@ papagaiocc: $(TARGET_BIN)
 	@echo "▶ Generating papagaiocc (Standalone Compiler)..."
 	@bash ./lib/wasm-libc/amalgamate.sh
 ifeq ($(EXE_EXT),.exe)
-	@if [ -n "$(CLANG_PATH)" ]; then cp "$(CLANG_PATH)" clang.exe; fi
+ifneq ($(CLANG_PATH),)
+	@cp "$(CLANG_PATH)" clang.exe
+endif
 	$(WINDRES) $(if $(CLANG_PATH),-DEMBED_CLANG) src/papagaiocc.rc papagaiocc_res.o
 	$(CC) $(CFLAGS) -DPAP_VERSION=\"0.24.1\" src/papagaiocc_win.c papagaiocc_res.o -o papagaiocc.exe
 	@rm -f papagaiocc_res.o clang.exe

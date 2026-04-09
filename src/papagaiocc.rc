@@ -7,16 +7,33 @@
 #define IDR_PRE_PAP       104
 
 // Resource files. 
-// The compiler should find these in the include path (/I) or current dir.
-IDR_PAPAGAIO_EXE  RCDATA  "papagaio.exe"
-IDR_SDK_H         RCDATA  "papagaio_wasm.h"
-IDR_PRE_PAP       RCDATA  "preprocessor.pap"
-
-#ifdef EMBED_CLANG
-IDR_CLANG_EXE     RCDATA  "clang.exe"
+// We use macros that can be overridden by the compiler.
+// Defaults are relative to the .rc file (in src/)
+#ifndef PAPAGAIO_EXE_PATH
+#define PAPAGAIO_EXE_PATH "../papagaio.exe"
 #endif
 
-// Version info (optional but professional)
+#ifndef SDK_H_PATH
+#define SDK_H_PATH "../lib/wasm-libc/include/papagaio_wasm.h"
+#endif
+
+#ifndef PRE_PAP_PATH
+#define PRE_PAP_PATH "../lib/wasm-libc/preprocessor.pap"
+#endif
+
+#ifndef CLANG_EXE_PATH
+#define CLANG_EXE_PATH "../clang.exe"
+#endif
+
+IDR_PAPAGAIO_EXE  RCDATA  PAPAGAIO_EXE_PATH
+IDR_SDK_H         RCDATA  SDK_H_PATH
+IDR_PRE_PAP       RCDATA  PRE_PAP_PATH
+
+#ifdef EMBED_CLANG
+IDR_CLANG_EXE     RCDATA  CLANG_EXE_PATH
+#endif
+
+// Version info
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     1,0,0,0
 PRODUCTVERSION  1,0,0,0

@@ -38,30 +38,20 @@ if (WIN32)
     add_definitions(-DPAP_VERSION="${PAP_VERSION}")
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
     
-    # Configure paths for resources
-    # We copy them to the binary dir to simplify RC inclusion
-    configure_file(lib/wasm-libc/include/papagaio_wasm.h ${CMAKE_CURRENT_BINARY_DIR}/papagaio_wasm.h COPYONLY)
-    configure_file(lib/wasm-libc/preprocessor.pap ${CMAKE_CURRENT_BINARY_DIR}/preprocessor.pap COPYONLY)
-    
-    # Check if we should embed clang (provided via -DCLANG_PATH=...)
-    if (CLANG_PATH)
-        add_definitions(-DEMBED_CLANG)
-        configure_file(${CLANG_PATH} ${CMAKE_CURRENT_BINARY_DIR}/clang.exe COPYONLY)
-    endif()
-
     add_executable(papagaiocc src/papagaiocc_win.c src/papagaiocc.rc)
     add_dependencies(papagaiocc papagaio)
     
-    # For RC compiler to find files in the binary directory
-    set_target_properties(papagaiocc PROPERTIES COMPILE_FLAGS "/I${CMAKE_CURRENT_BINARY_DIR}")
+    # Pass paths to the Resource Compiler
+    # Use absolute paths to avoid issues with different build directories
+    set(SDK_H_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/wasm-libc/include/papagaio_wasm.h")
+    set(PRE_PAP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/wasm-libc/preprocessor.pap")
     
-    # Ensure papagaio.exe is built and accessible in a fixed location for RC
-    add_custom_command(TARGET papagaio POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:papagaio> ${CMAKE_CURRENT_BINARY_DIR}/papagaio.exe)
+    set_property(SOURCE src/papagaiocc.rc PROPERTY COMPILE_DEFINITIONS
+        "SDK_H_PATH=\"${SDK_H_PATH}\";PRE_PAP_PATH=\"${PRE_PAP_PATH}\";PAPAGAIO_EXE_PATH=\"$<TARGET_FILE:papagaio>\"")
 
-    # Fix for MSVC RC searching in binary dir
-    if (MSVC)
-        set_property(SOURCE src/papagaiocc.rc PROPERTY COMPILE_FLAGS "/I${CMAKE_CURRENT_BINARY_DIR}")
+    if (CLANG_PATH)
+        add_definitions(-DEMBED_CLANG)
+        set_property(SOURCE src/papagaiocc.rc APPEND PROPERTY COMPILE_DEFINITIONS "CLANG_EXE_PATH=\"${CLANG_PATH}\"")
     endif()
 
     target_link_libraries(papagaiocc libpapagaio)
