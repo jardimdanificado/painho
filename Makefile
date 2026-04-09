@@ -33,7 +33,7 @@ else
   EXE_EXT       =
 endif
 
-CFLAGS  ?= -O2 -Wall -Wextra -std=c99
+CFLAGS  ?= -O2 -Wall -Wextra -std=c99 -D_CRT_SECURE_NO_WARNINGS
 ifneq (,$(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S)))
   LDFLAGS = 
 else

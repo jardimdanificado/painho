@@ -6,9 +6,11 @@
 #define IDR_SDK_H         103
 #define IDR_PRE_PAP       104
 
+// Resource files. 
+// The compiler should find these in the include path (/I) or current dir.
 IDR_PAPAGAIO_EXE  RCDATA  "papagaio.exe"
-IDR_SDK_H         RCDATA  "lib/wasm-libc/include/papagaio_wasm.h"
-IDR_PRE_PAP       RCDATA  "lib/wasm-libc/preprocessor.pap"
+IDR_SDK_H         RCDATA  "papagaio_wasm.h"
+IDR_PRE_PAP       RCDATA  "preprocessor.pap"
 
 #ifdef EMBED_CLANG
 IDR_CLANG_EXE     RCDATA  "clang.exe"
