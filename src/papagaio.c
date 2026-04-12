@@ -1188,7 +1188,32 @@ static char *apply_replacement_ex(const char *rep, const Match *m,
                 i += sl * 2;
                 continue;
             }
+            /* Case 2: Braced variable (e.g., ${n}) */
+            size_t ol = strlen(sym->open), cl = strlen(sym->close);
+            if (i + sl < n && str_pfx(rep + i + sl, sym->open)) {
+                size_t ns = i + sl + ol, ne = ns;
+                while (ne + cl <= n && !str_pfx(rep + ne, sym->close)) ne++;
+                if (ne + cl <= n && str_pfx(rep + ne, sym->close)) {
+                    StrView name = { rep + ns, ne - ns };
+                    int found = 0;
+                    for (int k = 0; k < m->count; k++) {
+                        if (sv_eq(m->cap[k].name, name)) {
+                            sb_append_n(&out, m->cap[k].value.ptr, m->cap[k].value.len);
+                            found = 1; break;
+                        }
+                    }
+                    if (!found) { 
+                        sb_append_n(&out, sym->sigil, sl); 
+                        sb_append_n(&out, sym->open, ol);
+                        sb_append_n(&out, name.ptr, name.len); 
+                        sb_append_n(&out, sym->close, cl); 
+                    }
+                    i = ne + cl;
+                    continue;
+                }
+            }
 
+            /* Case 3: Simple variable (e.g., $n) */
             size_t ns = i + sl, ne = ns;
             while (ne < n && (isalnum((unsigned char)rep[ne]) || rep[ne] == '_')) ne++;
 

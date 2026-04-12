@@ -33,6 +33,10 @@ int main(void)
     printf("Test 7 - %s (esperado: x=a y=c z=)\n", o);
     free(o);
 
+    o = papagaio_process("foo", "$id$word", "${id}x", NULL);
+    printf("Test 8 [Braced] - %s (esperado: foox)\n", o);
+    free(o);
+
     o = papagaio_process("42 days", "$num$regex {[0-9]+}", "Number: $num", NULL);
     printf("Test 17 - %s (esperado: Number: 42 days)\n", o);
     free(o);

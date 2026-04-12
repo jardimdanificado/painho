@@ -377,6 +377,12 @@
       "name": "Wasmfile fallback parsing (nonexistent file)",
       "code": "$wasmfile{phantom.wasm} $test{123}",
       "expected": " $test{123}"
+    },
+    {
+      "id": 64,
+      "name": "Braced variable ambiguity resolution",
+      "code": "$pattern {$id$word} {${id}x}\nfoo",
+      "expected": "foox"
     }
   ]
 }
