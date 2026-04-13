@@ -143,13 +143,21 @@ ifneq ($(CLANG_PATH),)
 	@echo 'EOF' >> papagaiocc
 	@echo 'chmod +x "$$CLANG_BIN"' >> papagaiocc
 endif
-	@echo 'ENTRY="$${1:-}"' >> papagaiocc
-	@echo 'OUTPUT="$${2:-}"' >> papagaiocc
-	@echo 'if [[ -z "$$ENTRY" ]]; then echo "Usage: papagaiocc <input.c> [output.wasm]"; exit 1; fi' >> papagaiocc
+	@echo 'ENTRY=""' >> papagaiocc
+	@echo 'OUTPUT=""' >> papagaiocc
+	@echo 'EXTRA_FLAGS=()' >> papagaiocc
+	@echo 'while [[ $$# -gt 0 ]]; do' >> papagaiocc
+	@echo '  case "$$1" in' >> papagaiocc
+	@echo '    -o|--output) OUTPUT="$$2"; shift 2 ;;' >> papagaiocc
+	@echo '    -*) EXTRA_FLAGS+=("$$1"); shift ;;' >> papagaiocc
+	@echo '    *) if [[ -z "$$ENTRY" ]]; then ENTRY="$$1"; else EXTRA_FLAGS+=("$$1"); fi; shift ;;' >> papagaiocc
+	@echo '  esac' >> papagaiocc
+	@echo 'done' >> papagaiocc
+	@echo 'if [[ -z "$$ENTRY" ]]; then echo "Usage: papagaiocc <input.c> [-o output.wasm] [clang flags...]"; exit 1; fi' >> papagaiocc
 	@echo 'if [[ -z "$$OUTPUT" ]]; then BASENAME=$$(basename "$$ENTRY"); OUTPUT="$${BASENAME%.*}.wasm"; fi' >> papagaiocc
 	@echo 'cat "$$PRE_PAP" "$$ENTRY" > "$$TMP_DIR/joined.pap"' >> papagaiocc
 	@echo '"$$PAP_BIN" "$$TMP_DIR/joined.pap" > "$$TMP_DIR/ready.c"' >> papagaiocc
-	@echo '"$$CLANG_BIN" --target=wasm32-unknown-unknown -O2 -ffreestanding -fno-builtin -nostdlib -nostdinc -mno-bulk-memory -mno-sign-ext -Wl,--no-entry -Wl,--export-all -Wl,--allow-undefined -Wl,-z,stack-size=65536 "$$TMP_DIR/ready.c" -o "$$OUTPUT" -I "$$TMP_DIR"' >> papagaiocc
+	@echo '"$$CLANG_BIN" --target=wasm32-unknown-unknown -O2 -ffreestanding -fno-builtin -nostdlib -nostdinc -mno-bulk-memory -mno-sign-ext -Wl,--no-entry -Wl,--export-all -Wl,--allow-undefined -Wl,-z,stack-size=65536 "$$TMP_DIR/ready.c" -o "$$OUTPUT" -I "$$TMP_DIR" "$${EXTRA_FLAGS[@]+$${EXTRA_FLAGS[@]}}"' >> papagaiocc
 	@chmod +x papagaiocc
 	@echo "✓ papagaiocc successfully generated."
 endif
