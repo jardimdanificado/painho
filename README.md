@@ -62,6 +62,24 @@ Modifiers specify the data type or constraints of a match:
 - **Grouping**: `$item$group{subpattern}` (recursive grouping, matches as one unit)
 - **Optionality**: any token (literal, variable, or group) can be made optional by adding `?` (or a custom marker like `MAYBE`).
 
+### Braced Variables
+
+When a captured variable name needs to be immediately followed by literal text (e.g., a suffix), wrap the name in `${...}` to prevent ambiguity:
+
+```text
+$pattern {$id$word} {${id}x}
+foo
+```
+*Output: `foox`* — without braces, `$idx` would be parsed as a single variable named `idx`.
+
+Braced syntax can be used in any replacement string:
+```text
+$pattern {$first $last} {Hello, ${first}!
+}
+John Doe
+```
+*Output: `Hello, John!`*
+
 ### Nesting
 Modifiers support full recursive nesting:
 ```text
@@ -103,9 +121,18 @@ Papagaio features a modern, frictionless Wasm plugin system. With the **`papagai
 ### 1. Write your plugin
 Create a file named `greet.c`:
 ```c
+// Functions starting with 'papagaio_' are automatically registered as commands
+char* papagaio_greet(int argc, char **argv)
+{
+    if (argc < 1) return "Hello, Stranger!";
+    return argv[0]; // return first argument
+}
+```
+
+To use the Papagaio Wasm SDK (`lib.c`), copy it from `lib/wasm-libc/include/lib.c` into your project and include it explicitly:
+```c
 #include "lib.c"
 
-// Functions starting with 'papagaio_' are automatically registered as commands
 char* papagaio_greet(int argc, char **argv)
 {
     if (argc < 1) return "Hello, Stranger!";
@@ -119,11 +146,22 @@ char* papagaio_greet(int argc, char **argv)
 ```
 
 ### 2. Compile with `papagaiocc`
-The `papagaiocc` tool is a self-contained compiler driver that embeds its own SDK.
+The `papagaiocc` tool is a self-contained compiler driver. Run it with your source file:
 ```sh
 ./papagaiocc greet.c
 ```
 This generates `greet.wasm`.
+
+If your plugin uses `lib.c`, pass the directory containing it via `-I`:
+```sh
+./papagaiocc greet.c -I /path/to/lib/wasm-libc/include
+```
+Or simply place `lib.c` in the same directory as `greet.c`:
+```sh
+# Copy the SDK alongside your source
+cp lib/wasm-libc/include/lib.c .
+./papagaiocc greet.c
+```
 
 ### 3. Use in Papagaio
 Loading the Wasm file automatically registers all exported commands.
@@ -133,8 +171,8 @@ $greet{Papagaio}
 ```
 *Output: Hello, Papagaio!*
 
-### Unified Wasm SDK (lib.c)
-The `#include "lib.c"` directive provides a curated, zero-dependency C standard library for WebAssembly, including:
+### Wasm SDK (lib.c)
+The Wasm SDK lives at `lib/wasm-libc/include/lib.c` inside the repository. It is **not** automatically embedded into `papagaiocc` — you supply it to your plugin's build as needed. It provides a curated, zero-dependency C standard library for WebAssembly, including:
 - **Memory Management**: `malloc`, `free`, `realloc`
 - **String Processing**: `strlen`, `strcpy`, `sprintf`, `strrev`, etc.
 - **Formatted I/O**: `printf`, `snprintf`, `sscanf`
