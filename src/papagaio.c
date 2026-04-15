@@ -1602,12 +1602,12 @@ static void papagaio_load_wasm_bytes(Papagaio *ctx, uint8_t *bytes, size_t size)
     /* Intelligent Auto-Registration: Scan module functions for exports */
     for (uint32_t i = 0; i < module->numFunctions; i++) {
         M3Function *f_info = &module->functions[i];
-        if (f_info->export_name) {
+        /*if (f_info->export_name) {
             fprintf(stderr, "[DEBUG] Export found: '%s'\n", f_info->export_name);
-        }
+        }*/
         if (f_info->export_name && strncmp(f_info->export_name, "papagaio_", 9) == 0) {
             const char *cmd_name = f_info->export_name + 9;
-            fprintf(stderr, "[DEBUG] Registering command: '%s'\n", cmd_name);
+            //fprintf(stderr, "[DEBUG] Registering command: '%s'\n", cmd_name);
             
             /* Must use m3_FindFunction AFTER compile to get JIT-ready handle */
             IM3Function f_ready = NULL;

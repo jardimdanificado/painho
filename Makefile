@@ -103,7 +103,6 @@ install: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 
 papagaiocc: $(TARGET_BIN)
 	@echo "▶ Generating papagaiocc (Standalone Compiler)..."
-	@bash ./lib/wasm-libc/amalgamate.sh
 ifeq ($(EXE_EXT),.exe)
 ifneq ($(CLANG_PATH),)
 ifneq ($(CLANG_PATH),clang.exe)
@@ -127,7 +126,6 @@ else
 	@echo 'CLANG_BIN="clang"' >> papagaiocc
 endif
 	@echo "cat <<'EOF' > \"\$$PRE_PAP\"" >> papagaiocc
-	@cat lib/wasm-libc/preprocessor.pap >> papagaiocc
 	@echo 'EOF' >> papagaiocc
 	@echo "base64 -d <<'EOF' > \"\$$PAP_BIN\"" >> papagaiocc
 	@base64 < $(TARGET_BIN) >> papagaiocc
