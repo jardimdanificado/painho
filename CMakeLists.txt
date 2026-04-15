@@ -43,8 +43,8 @@ if (WIN32)
     
     # Pass paths to the Resource Compiler
     # We use unquoted definitions because papagaiocc.rc uses TOSTRING() logic
-    set(SDK_H_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/wasm-libc/include/lib.c")
-    set(PRE_PAP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/wasm-libc/preprocessor.pap")
+    set(SDK_H_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/lib.c")
+    set(PRE_PAP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/preprocessor.pap")
     
     set_property(SOURCE src/papagaiocc.rc PROPERTY COMPILE_DEFINITIONS
         "SDK_H_PATH=${SDK_H_PATH};PRE_PAP_PATH=${PRE_PAP_PATH};PAPAGAIO_EXE_PATH=$<TARGET_FILE:papagaio>")

@@ -4,7 +4,6 @@
 #define IDR_PAPAGAIO_EXE  101
 #define IDR_CLANG_EXE     102
 #define IDR_SDK_H         103
-#define IDR_PRE_PAP       104
 
 // Macros to stringify paths passed from the compiler
 #define STRINGIFY(x) #x
@@ -15,11 +14,7 @@
 #endif
 
 #ifndef SDK_H_PATH
-#define SDK_H_PATH ../lib/wasm-libc/include/lib.c
-#endif
-
-#ifndef PRE_PAP_PATH
-#define PRE_PAP_PATH ../lib/wasm-libc/preprocessor.pap
+#define SDK_H_PATH ../lib/lib.c
 #endif
 
 #ifndef CLANG_EXE_PATH
@@ -28,7 +23,6 @@
 
 IDR_PAPAGAIO_EXE  RCDATA  TOSTRING(PAPAGAIO_EXE_PATH)
 IDR_SDK_H         RCDATA  TOSTRING(SDK_H_PATH)
-IDR_PRE_PAP       RCDATA  TOSTRING(PRE_PAP_PATH)
 
 #ifdef EMBED_CLANG
 IDR_CLANG_EXE     RCDATA  TOSTRING(CLANG_EXE_PATH)

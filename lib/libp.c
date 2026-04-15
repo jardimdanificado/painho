@@ -19,9 +19,8 @@
 #define PAPAGAIO_H
 
 /* 
- * Papagaio Wasm SDK — lib.c
- * Unified Single-File Library (Headers + Implementation)
- * Generated automatically from wasm-libc.
+ * Papagaio Wasm SDK
+ * libp.c — Papagaio Internal Library (Wasm version)
  */
 
 #ifndef PAPAGAIO_LIBC_H

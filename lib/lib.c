@@ -1,7 +1,6 @@
-/* 
+/*
  * Papagaio Wasm SDK — lib.c
  * Unified Single-File Library (Headers + Implementation)
- * Generated automatically from wasm-libc.
  */
 
 #ifndef PAPAGAIO_LIBC_H

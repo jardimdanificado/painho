@@ -18,7 +18,6 @@
 #define IDR_PAPAGAIO_EXE  101
 #define IDR_CLANG_EXE     102
 #define IDR_SDK_H         103
-#define IDR_PRE_PAP       104
 
 BOOL ExtractResource(int resId, const char* outPath) {
     HRSRC hRes = FindResource(NULL, MAKEINTRESOURCE(resId), RT_RCDATA);
@@ -68,11 +67,10 @@ int main(int argc, char** argv) {
     CreateDirectory(temp_dir, NULL);
 
     // 2. Extract tools
-    char pap_path[MAX_PATH], clang_path[MAX_PATH], lib_path[MAX_PATH], pre_path[MAX_PATH];
+    char pap_path[MAX_PATH], clang_path[MAX_PATH], lib_path[MAX_PATH];
     sprintf(pap_path,   "%s\\papagaio.exe", temp_dir);
     sprintf(clang_path, "%s\\clang.exe",    temp_dir);
     sprintf(lib_path,   "%s\\lib.c",        temp_dir);
-    sprintf(pre_path,   "%s\\preprocessor.pap", temp_dir);
 
     // Only extract if they don't exist (optimization)
     if (access(pap_path, 0) != 0) {
@@ -90,32 +88,15 @@ int main(int argc, char** argv) {
     }
 
     ExtractResource(IDR_SDK_H, lib_path);
-    ExtractResource(IDR_PRE_PAP, pre_path);
 
-    // 3. Prepare joined source
-    char joined_path[MAX_PATH];
-    sprintf(joined_path, "%s\\joined.pap", temp_dir);
-    
-    FILE* fpre = fopen(pre_path, "rb");
-    FILE* fin  = fopen(input_file, "rb");
-    FILE* fout = fopen(joined_path, "wb");
-    
-    if (fpre && fin && fout) {
-        char buf[8192];
-        size_t n;
-        while ((n = fread(buf, 1, sizeof(buf), fpre)) > 0) fwrite(buf, 1, n, fout);
-        while ((n = fread(buf, 1, sizeof(buf), fin)) > 0)  fwrite(buf, 1, n, fout);
-    }
-    if (fpre) fclose(fpre);
-    if (fin)  fclose(fin);
-    if (fout) fclose(fout);
+    const char* processed_input = input_file;
 
     // 4. Run Papagaio Preprocessor
     char ready_path[MAX_PATH];
     sprintf(ready_path, "%s\\ready.c", temp_dir);
     
     char cmd[4096];
-    sprintf(cmd, "\"%s\" \"%s\" > \"%s\"", pap_path, joined_path, ready_path);
+    sprintf(cmd, "\"%s\" \"%s\" > \"%s\"", pap_path, processed_input, ready_path);
     if (system(cmd) != 0) {
         fprintf(stderr, "Error: Preprocessing failed.\n");
         return 1;
