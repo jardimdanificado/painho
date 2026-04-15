@@ -1,3 +1,0 @@
-// Papagaio Preprocessor Rules
-// This file can be used to add custom syntax via $pattern rules.
-// Currently, it is kept minimal as we use standard C naming conventions.
