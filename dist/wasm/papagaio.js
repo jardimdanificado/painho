@@ -46,29 +46,6 @@ class Papagaio {
     );
   }
 
-  setArgs(argv) {
-    if (!this._initialized) throw new Error("Not initialized");
-    if (!Array.isArray(argv)) throw new Error("argv must be an array");
-
-    /* Create a null-terminated array of string pointers in Wasm memory */
-    const ptrs = argv.map(str => {
-      const len = this._module.lengthBytesUTF8(str) + 1;
-      const ptr = this._module._malloc(len);
-      this._module.stringToUTF8(str, ptr, len);
-      return ptr;
-    });
-
-    const argc = argv.length;
-    const argvPtr = this._module._malloc(argc * 4);
-    for (let i = 0; i < argc; i++) {
-        this._module.setValue(argvPtr + (i * 4), ptrs[i], "i32");
-    }
-
-    this._module._papagaio_set_args(this._ctx, argc, argvPtr);
-    /* We don't free ptrs/argvPtr immediately as Papagaio might need them during processing.
-       In a production-ready class, we should track these for cleanup. */
-  }
-
   process(text) {
     if (!this._initialized) {
       throw new Error("Papagaio wasm not initialized. Use 'await papagaio.init()'");

@@ -97,6 +97,26 @@ int main(void)
         printf("Test 22 [Wasm] - SKIPPED (clang wasm32 backend not available)\n");
     }
 
+    /* Test CLI Args Expansion */
+    printf("\n=== Testing CLI Args Expansion ===\n");
+    char *test_argv[] = {"test_bin", "test_script.c", "arg1", "arg2", "foo=bar", "target=wasm"};
+    papagaio_set_args(ctx, 6, test_argv);
+
+    const char *in25 = "Script: $args$0, First: $args$1, Count: $args$count, All: $args$all";
+    o = papagaio_process_text(ctx, in25, strlen(in25));
+    printf("Test 25 [CLI Args Positional] - %s (esperado: Script: test_script.c, First: arg1, Count: 5, All: arg1 arg2 foo=bar target=wasm)\n", o);
+    free(o);
+
+    const char *in26 = "Foo: $args$foo, Target: $args$target, Unknown: $args$unknown";
+    o = papagaio_process_text(ctx, in26, strlen(in26));
+    printf("Test 26 [CLI Args Named] - %s (esperado: Foo: bar, Target: wasm, Unknown: $args$unknown)\n", o);
+    free(o);
+
+    const char *in27 = "Direct Foo: $foo, Direct Target: $target, No Direct: $unknown";
+    o = papagaio_process_text(ctx, in27, strlen(in27));
+    printf("Test 27 [CLI Args Direct] - %s (esperado: Direct Foo: bar, Direct Target: wasm, No Direct: $unknown)\n", o);
+    free(o);
+
     printf("\n=== All C Tests Finished ===\n");
     papagaio_close(ctx);
     return 0;

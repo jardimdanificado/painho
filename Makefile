@@ -146,7 +146,7 @@ endif
 	@echo 'done' >> papagaiocc
 	@echo 'if [[ -z "$$ENTRY" ]]; then echo "Usage: papagaiocc <input.c> [-o output.wasm] [clang flags...]"; exit 1; fi' >> papagaiocc
 	@echo 'if [[ -z "$$OUTPUT" ]]; then BASENAME=$$(basename "$$ENTRY"); OUTPUT="$${BASENAME%.*}.wasm"; fi' >> papagaiocc
-	@echo '"$$PAP_BIN" "$$ENTRY" > "$$TMP_DIR/ready.c"' >> papagaiocc
+	@echo '"$$PAP_BIN" "$$ENTRY" "$${EXTRA_FLAGS[@]+$${EXTRA_FLAGS[@]}}" > "$$TMP_DIR/ready.c"' >> papagaiocc
 	@echo '"$$CLANG_BIN" --target=wasm32-unknown-unknown -O2 -ffreestanding -fno-builtin -nostdlib -nostdinc -mno-bulk-memory -mno-sign-ext -Wl,--no-entry -Wl,--export-all -Wl,--allow-undefined -Wl,-z,stack-size=65536 "$$TMP_DIR/ready.c" -o "$$OUTPUT" "$${EXTRA_FLAGS[@]+$${EXTRA_FLAGS[@]}}"' >> papagaiocc
 	@chmod +x papagaiocc
 	@echo "✓ papagaiocc successfully generated."
@@ -163,7 +163,7 @@ wasm: src/papagaio.c src/papagaio.h
 		-s MODULARIZE=1 \
 		-s EXPORT_ES6=1 \
 		-s SINGLE_FILE=1 \
-		-s "EXPORTED_FUNCTIONS=['_papagaio_open', '_papagaio_close', '_papagaio_process_text', '_papagaio_register_command', '_papagaio_register_modifier', '_malloc', '_free']" \
+		-s "EXPORTED_FUNCTIONS=['_papagaio_open', '_papagaio_close', '_papagaio_set_args', '_papagaio_process_text', '_papagaio_register_command', '_papagaio_register_modifier', '_malloc', '_free']" \
 		-s "EXPORTED_RUNTIME_METHODS=['ccall', 'cwrap', 'getValue', 'UTF8ToString', 'stringToUTF8', 'lengthBytesUTF8', 'addFunction', 'removeFunction']" \
 		-s ALLOW_MEMORY_GROWTH=1 \
 		-s ALLOW_TABLE_GROWTH=1 \

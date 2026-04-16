@@ -99,6 +99,36 @@ Papagaio follows a Wasm-first plugin architecture. Core features are limited to 
 
 ---
 
+## CLI Argument Expansion
+
+Papagaio can resolve command-line arguments directly within your source files. This is useful for passing configuration, flags, or metadata into the processing pipeline.
+
+### Positional Arguments
+- **`$args$0`**: The input file/script name.
+- **`$args$1`, `$args$2`, ...**: Positional arguments passed to the CLI.
+- **`$args$count`**: The total number of arguments (starting from the script).
+- **`$args$all`**: All extra arguments (from index 1 onwards) concatenated with spaces.
+
+### Named Variables (Overrides)
+Arguments in the format `key=value` are automatically parsed and can be accessed in two ways:
+1. **Explicit**: `$args$key`
+2. **Direct**: `$key` (shorthand for `$args$key`)
+
+Direct access (`$key`) will only resolve if `key` does not conflict with a registered command (like `$wasm`) or a built-in directive.
+
+#### Example:
+```sh
+./papagaiocc input.c version=1.2.3 target=wasm -O3
+```
+Inside `input.c`:
+```c
+const char *v = "$version"; // "1.2.3"
+const char *t = "$target";  // "wasm"
+const char *f = "$args$1";  // "-O3"
+```
+
+---
+
 ## Dynamic Customization
 
 You can redefine the engine's syntax symbols at runtime using the atomic **`$changesymbols`** directive.
