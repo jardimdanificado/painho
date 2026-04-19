@@ -110,7 +110,7 @@ ifneq ($(CLANG_PATH),clang.exe)
 endif
 endif
 	$(WINDRES) $(if $(CLANG_PATH),-DEMBED_CLANG) src/papagaiocc.rc papagaiocc_res.o
-	$(CC) $(CFLAGS) -DPAP_VERSION=\"0.24.1\" src/papagaiocc_win.c papagaiocc_res.o -o papagaiocc.exe
+	$(CC) $(CFLAGS) -DPAP_VERSION=\"0.26.1\" src/papagaiocc_win.c papagaiocc_res.o -o papagaiocc.exe
 	@rm -f papagaiocc_res.o clang.exe
 	@echo "✓ papagaiocc.exe successfully generated."
 else
@@ -164,7 +164,7 @@ wasm: src/papagaio.c src/papagaio.h
 		-s EXPORT_ES6=1 \
 		-s SINGLE_FILE=1 \
 		-s "EXPORTED_FUNCTIONS=['_papagaio_open', '_papagaio_close', '_papagaio_set_args', '_papagaio_process_text', '_papagaio_register_command', '_papagaio_register_modifier', '_malloc', '_free']" \
-		-s "EXPORTED_RUNTIME_METHODS=['ccall', 'cwrap', 'getValue', 'UTF8ToString', 'stringToUTF8', 'lengthBytesUTF8', 'addFunction', 'removeFunction']" \
+		-s "EXPORTED_RUNTIME_METHODS=['ccall', 'cwrap', 'getValue', 'setValue', 'UTF8ToString', 'stringToUTF8', 'lengthBytesUTF8', 'addFunction', 'removeFunction']" \
 		-s ALLOW_MEMORY_GROWTH=1 \
 		-s ALLOW_TABLE_GROWTH=1 \
 		-s NODEJS_CATCH_EXIT=0 \

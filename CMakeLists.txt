@@ -34,7 +34,7 @@ install(TARGETS libpapagaio DESTINATION lib)
 
 # Standalone Compiler Driver (Windows only for now via CMake)
 if (WIN32)
-    set(PAP_VERSION "0.24.1")
+    set(PAP_VERSION "0.26.1")
     add_definitions(-DPAP_VERSION="${PAP_VERSION}")
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
     
