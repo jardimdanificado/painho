@@ -147,7 +147,7 @@ endif
 	@echo 'if [[ -z "$$ENTRY" ]]; then echo "Usage: papagaiocc <input.c> [-o output.wasm] [clang flags...]"; exit 1; fi' >> papagaiocc
 	@echo 'if [[ -z "$$OUTPUT" ]]; then BASENAME=$$(basename "$$ENTRY"); OUTPUT="$${BASENAME%.*}.wasm"; fi' >> papagaiocc
 	@echo '"$$PAP_BIN" "$$ENTRY" "$${EXTRA_FLAGS[@]+$${EXTRA_FLAGS[@]}}" > "$$TMP_DIR/ready.c"' >> papagaiocc
-	@echo '"$$CLANG_BIN" --target=wasm32-unknown-unknown -O2 -ffreestanding -fno-builtin -nostdlib -nostdinc -mno-bulk-memory -mno-sign-ext -Wl,--no-entry -Wl,--export-all -Wl,--allow-undefined -Wl,-z,stack-size=65536 "$$TMP_DIR/ready.c" -o "$$OUTPUT" "$${EXTRA_FLAGS[@]+$${EXTRA_FLAGS[@]}}"' >> papagaiocc
+	@echo '"$$CLANG_BIN" --target=wasm32-unknown-unknown -O2 -ffreestanding -fno-builtin -nostdlib -nostdinc -fvisibility=hidden -mno-bulk-memory -mno-sign-ext -Wl,--no-entry -Wl,--export-dynamic -Wl,--allow-undefined -Wl,-z,stack-size=65536 "$$TMP_DIR/ready.c" -o "$$OUTPUT" "$${EXTRA_FLAGS[@]+$${EXTRA_FLAGS[@]}}"' >> papagaiocc
 	@chmod +x papagaiocc
 	@echo "✓ papagaiocc successfully generated."
 endif

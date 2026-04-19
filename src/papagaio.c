@@ -148,6 +148,9 @@ struct Papagaio {
     /* host arguments */
     int    argc;
     char **argv;
+
+    /* preprocessor options */
+    int    auto_export;
 };
 
 /* =========================================================================
@@ -1383,6 +1386,7 @@ Papagaio *papagaio_open(void)
     ctx->modifiers  = NULL; ctx->mod_count = 0; ctx->mod_cap = 0;
     ctx->finalizers = NULL; ctx->fin_count = 0; ctx->fin_cap = 0;
     ctx->argc       = 0;    ctx->argv      = NULL;
+    ctx->auto_export = 1;
     papagaio_register_command(ctx, "wasmfile", wasm_file_handler, NULL);
     papagaio_register_command(ctx, "wasm", wasm_bytes_handler, NULL);
     return ctx;
@@ -1829,7 +1833,42 @@ static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sy
         }
         sb_append_char(&out, src[i++]);
     }
-    char *ret = strdup(out.data); sb_free(&out); return ret;
+    
+    char *result = strdup(out.data);
+    sb_free(&out);
+
+    /* Pass 2: Automatic Export Attributes for papagaio_ functions */
+    /* We look for "papagaio_" and if it looks like a definition at the start of a word, 
+       we prepend visibility attribute. */
+    if (ctx && ctx->auto_export) {
+        StrBuf out2; sb_init(&out2);
+        size_t rl = strlen(result);
+        for (size_t k = 0; k < rl; k++) {
+            if (k + 9 < rl && memcmp(result + k, "papagaio_", 9) == 0) {
+                /* Check context: preceded by whitespace/type and followed by '(' later?
+                   A simple heuristic: if it's at start of line or preceded by ' ' or '*' or '}' */
+                int is_def = (k == 0 || result[k-1] == ' ' || result[k-1] == '\t' || result[k-1] == '\n' || result[k-1] == '*' || result[k-1] == '}');
+                if (is_def) {
+                    /* Check if it's a function call or definition. 
+                       We search forward for '(' before ';' or '='. */
+                    int looks_like_func = 0;
+                    for (size_t m = k + 9; m < rl && m < k + 128; m++) {
+                        if (result[m] == '(') { looks_like_func = 1; break; }
+                        if (result[m] == ';' || result[m] == '=' || result[m] == '{') break;
+                    }
+                    if (looks_like_func) {
+                        sb_append_n(&out2, "__attribute__((visibility(\"default\"))) ", 39);
+                    }
+                }
+            }
+            sb_append_char(&out2, result[k]);
+        }
+        free(result);
+        result = strdup(out2.data);
+        sb_free(&out2);
+    }
+
+    return result;
 }
 
 char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)

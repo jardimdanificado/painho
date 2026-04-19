@@ -126,7 +126,7 @@ int main(int argc, char** argv) {
     // 5. Run Clang
     printf("Compiling: %s -> %s\n", input_file, output_file);
     sprintf(cmd, "\"%s\" --target=wasm32-unknown-unknown -O2 -ffreestanding -fno-builtin -nostdlib -nostdinc "
-                 "-mno-bulk-memory -mno-sign-ext -Wl,--no-entry -Wl,--export-all -Wl,--allow-undefined "
+                 "-fvisibility=hidden -mno-bulk-memory -mno-sign-ext -Wl,--no-entry -Wl,--export-dynamic -Wl,--allow-undefined "
                  "-Wl,-z,stack-size=65536 \"%s\" -o \"%s\" -I \"%s\" %s",
                  clang_path, ready_path, output_file, temp_dir, extra_args);
     
