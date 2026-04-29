@@ -33,7 +33,7 @@ else
   EXE_EXT       =
 endif
 
-CFLAGS  ?= -O2 -Wall -Wextra -std=c99 -D_CRT_SECURE_NO_WARNINGS
+CFLAGS  ?= -O2 -Wall -Wextra -std=gnu99 -D_CRT_SECURE_NO_WARNINGS -Ilib/quickjs -D_GNU_SOURCE -DCONFIG_VERSION=\"$(shell cat lib/quickjs/VERSION)\"
 ifneq (,$(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S)))
   LDFLAGS = 
 else
@@ -44,8 +44,9 @@ LDFLAGS += -lm
 TARGET_SO = papagaio$(SO_EXT)
 TARGET_A  = libpapagaio.a
 TARGET_BIN = papagaio$(EXE_EXT)
-WASM3_SRC = $(wildcard lib/wasm3/*.c)
-SRC       = src/papagaio.c lib/libregexp/libregexp.c lib/libregexp/cutils.c lib/libregexp/libunicode.c $(WASM3_SRC)
+WASM3_SRC = $(wildcard lib/wasm3/source/*.c)
+QJS_SRC   = lib/quickjs/quickjs.c lib/quickjs/libregexp.c lib/quickjs/libunicode.c lib/quickjs/cutils.c lib/quickjs/dtoa.c lib/quickjs/quickjs-libc.c
+SRC       = src/papagaio.c $(QJS_SRC) $(WASM3_SRC)
 OBJ       = $(SRC:.c=.o)
 
 LUA_BIN    ?= lua

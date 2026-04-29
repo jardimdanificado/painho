@@ -1,10 +1,12 @@
 #define _DEFAULT_SOURCE
 #include "papagaio.h"
-#include "../lib/wasm3/wasm3.h"
-#include "../lib/wasm3/m3_env.h"
-#include "../lib/wasm3/m3_function.h"
+#include "../lib/wasm3/source/wasm3.h"
+#include "../lib/wasm3/source/m3_env.h"
+#include "../lib/wasm3/source/m3_function.h"
+#include "../lib/quickjs/quickjs.h"
+#include "watr_bundle.h"
 #include <stdbool.h>
-#include "../lib/libregexp/libregexp.h"
+#include "../lib/quickjs/libregexp.h"
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -12,17 +14,7 @@
 #include <string.h>
 #include <stdint.h>
 
-/* libregexp callbacks */
-int lre_check_stack_overflow(void *opaque, size_t alloca_size) { (void)opaque; (void)alloca_size; return 0; }
-int lre_check_timeout(void *opaque) { (void)opaque; return 0; }
-void *lre_realloc(void *opaque, void *ptr, size_t size) {
-    (void)opaque;
-    if (size == 0) {
-        free(ptr);
-        return NULL;
-    }
-    return realloc(ptr, size);
-}
+
 
 
 
@@ -97,6 +89,7 @@ typedef struct {
         size_t          match_end;
         const char     *src;
     } regex;
+    Papagaio *ctx;
 } Match;
 
 typedef struct { Pattern pattern; const char *replacement; } Rule;
@@ -130,11 +123,14 @@ typedef struct {
 /* Forward declarations */
 static char *wasm_command_bridge(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
 static char *wasm_file_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
-static char *wasm_bytes_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
+static char *wat_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
 
 struct Papagaio {
     IM3Environment      env;
     IM3Runtime          runtime;
+
+    JSRuntime          *js_rt;
+    JSContext          *js_ctx;
 
     RegisteredCommand  *commands;
     int                 cmd_count, cmd_cap;
@@ -461,7 +457,7 @@ static char *extract_nested(const char *src, const Symbols *sym,
  * ====================================================================== */
 
 static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym);
-static int  match_pattern(const char *src, int src_len,
+static int  match_pattern(Papagaio *ctx, const char *src, int src_len,
                            Pattern *p, int start, Match *m);
 static char *apply_replacement_ex(const char *rep, const Match *m,
                                    const Symbols *sym);
@@ -729,11 +725,10 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
 
 /* Helper: check if a sub-pattern matches at position `at` within src[0..src_len).
    Returns the end position of the match, or -1 if no match. */
-static int sub_pattern_matches_at(const char *src, int src_len, Pattern *sp, int at)
+static int sub_pattern_matches_at(Papagaio *ctx, const char *src, int src_len, Pattern *sp, int at)
 {
-    Match sub_m; memset(&sub_m, 0, sizeof(sub_m));
-    memset(&sub_m, 0, sizeof(sub_m));
-    if (match_pattern(src, src_len, sp, at, &sub_m)) {
+    Match sub_m; sub_m.ctx = ctx;
+    if (match_pattern(ctx, src, src_len, sp, at, &sub_m)) {
         int end = sub_m.end;
         free_match(&sub_m);
         return end;
@@ -742,9 +737,10 @@ static int sub_pattern_matches_at(const char *src, int src_len, Pattern *sp, int
 }
 
 
-static int match_pattern(const char *src, int src_len,
+static int match_pattern(Papagaio *ctx, const char *src, int src_len,
                           Pattern *p, int start, Match *m)
 {
+    m->ctx      = ctx;
     m->cap_size = 16; m->count = 0;
     m->cap      = (Capture *)malloc(sizeof(Capture) * m->cap_size);
     m->start    = start; m->src = src;
@@ -797,9 +793,8 @@ static int match_pattern(const char *src, int src_len,
                 if (!hit) {
                     for (int ai = 0; ai < t->alt_pattern_count; ai++) {
                         if (!t->alt_patterns[ai]) continue;
-                        Match sub_m; memset(&sub_m, 0, sizeof(sub_m));
-                        memset(&sub_m, 0, sizeof(sub_m));
-                        if (match_pattern(src, src_len, t->alt_patterns[ai], pos, &sub_m)) {
+                        Match sub_m; sub_m.ctx = ctx;
+                        if (match_pattern(ctx, src, src_len, t->alt_patterns[ai], pos, &sub_m)) {
                             /* Merge sub-captures into parent match */
                             for (int ci = 0; ci < sub_m.count; ci++) {
                                 ensure_cap(m);
@@ -827,7 +822,7 @@ static int match_pattern(const char *src, int src_len,
             if (t->modifier == MOD_GROUP) {
                 if (t->sub_pattern) {
                     Match sub_m; memset(&sub_m, 0, sizeof(sub_m));
-                    if (!match_pattern(src, src_len, t->sub_pattern, pos, &sub_m)) {
+                    if (!match_pattern(ctx, src, src_len, t->sub_pattern, pos, &sub_m)) {
                         if (!t->optional) goto fail;
                         ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL };
                         continue;
@@ -852,7 +847,7 @@ static int match_pattern(const char *src, int src_len,
             if (t->modifier == MOD_STARTS || t->modifier == MOD_PREFIX) {
                 if (t->sub_pattern) {
                     Match sub_m; memset(&sub_m, 0, sizeof(sub_m));
-                    if (!match_pattern(src, src_len, t->sub_pattern, pos, &sub_m)) {
+                    if (!match_pattern(ctx, src, src_len, t->sub_pattern, pos, &sub_m)) {
                         if (!t->optional) goto fail;
                         ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL };
                         continue;
@@ -887,7 +882,7 @@ static int match_pattern(const char *src, int src_len,
                     if ((t->modifier == MOD_ENDS || t->modifier == MOD_SUFFIX) && t->sub_pattern) {
                         /* Try matching sub-pattern ending at current pos */
                         for (int bp = s; bp < pos; bp++) {
-                            int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                            int me = sub_pattern_matches_at(ctx, src, src_len, t->sub_pattern, bp);
                             if (me == pos) { goto ends_break_1; }
                         }
                     }
@@ -905,7 +900,7 @@ static int match_pattern(const char *src, int src_len,
                         /* Check if sub-pattern matches at any position ending at end */
                         int found_sp = 0;
                         for (int bp = s; bp < end; bp++) {
-                            int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                            int me = sub_pattern_matches_at(ctx, src, src_len, t->sub_pattern, bp);
                             if (me == end) { found_sp = 1; break; }
                         }
                         if (!found_sp) failed = 1;
@@ -913,7 +908,7 @@ static int match_pattern(const char *src, int src_len,
                             /* suffix needs more content before the sub-pattern match */
                             int earliest = end;
                             for (int bp = s; bp < end; bp++) {
-                                int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                                int me = sub_pattern_matches_at(ctx, src, src_len, t->sub_pattern, bp);
                                 if (me == end && bp > s) { earliest = bp; break; }
                             }
                             if (earliest <= s) failed = 1;
@@ -926,7 +921,7 @@ static int match_pattern(const char *src, int src_len,
                     }
                 } else if (t->modifier == MOD_PREFIX) {
                     if (t->sub_pattern) {
-                        int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, s);
+                        int me = sub_pattern_matches_at(ctx, src, src_len, t->sub_pattern, s);
                         if (me < 0 || me >= end) failed = 1;
                     } else {
                         if (clen <= t->value.len) failed = 1;
@@ -935,7 +930,7 @@ static int match_pattern(const char *src, int src_len,
                     int found = 0;
                     if (t->sub_pattern) {
                         for (int bp = s + 1; bp < end; bp++) {
-                            int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                            int me = sub_pattern_matches_at(ctx, src, src_len, t->sub_pattern, bp);
                             if (me > 0 && me < end && bp > s) { found = 1; break; }
                         }
                     } else {
@@ -955,7 +950,7 @@ static int match_pattern(const char *src, int src_len,
                     int found = 0;
                     if (t->sub_pattern) {
                         for (int bp = s; bp < end; bp++) {
-                            int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                            int me = sub_pattern_matches_at(ctx, src, src_len, t->sub_pattern, bp);
                             if (me > 0 && me <= end) { found = 1; break; }
                         }
                     } else {
@@ -1000,7 +995,7 @@ static int match_pattern(const char *src, int src_len,
                     memcmp(src+pos-t->value.len, t->value.ptr, t->value.len) == 0) break;
                 if ((t->modifier == MOD_ENDS || t->modifier == MOD_SUFFIX) && t->sub_pattern) {
                     for (int bp = s; bp < pos; bp++) {
-                        int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                        int me = sub_pattern_matches_at(ctx, src, src_len, t->sub_pattern, bp);
                         if (me == pos) { goto ends_break_2; }
                     }
                 }
@@ -1017,14 +1012,14 @@ static int match_pattern(const char *src, int src_len,
                 if (t->sub_pattern) {
                     int found_sp = 0;
                     for (int bp = s; bp < end; bp++) {
-                        int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                        int me = sub_pattern_matches_at(ctx, src, src_len, t->sub_pattern, bp);
                         if (me == end) { found_sp = 1; break; }
                     }
                     if (!found_sp) failed = 1;
                     else if (t->modifier == MOD_SUFFIX) {
                         int earliest = end;
                         for (int bp = s; bp < end; bp++) {
-                            int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                            int me = sub_pattern_matches_at(ctx, src, src_len, t->sub_pattern, bp);
                             if (me == end && bp > s) { earliest = bp; break; }
                         }
                         if (earliest <= s) failed = 1;
@@ -1037,7 +1032,7 @@ static int match_pattern(const char *src, int src_len,
                 }
             } else if (t->modifier == MOD_PREFIX) {
                 if (t->sub_pattern) {
-                    int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, s);
+                    int me = sub_pattern_matches_at(ctx, src, src_len, t->sub_pattern, s);
                     if (me < 0 || me >= end) failed = 1;
                 } else {
                     if (clen <= t->value.len) failed = 1;
@@ -1046,7 +1041,7 @@ static int match_pattern(const char *src, int src_len,
                 int found = 0;
                 if (t->sub_pattern) {
                     for (int bp = s + 1; bp < end; bp++) {
-                        int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                        int me = sub_pattern_matches_at(ctx, src, src_len, t->sub_pattern, bp);
                         if (me > 0 && me < end && bp > s) { found = 1; break; }
                     }
                 } else {
@@ -1066,7 +1061,7 @@ static int match_pattern(const char *src, int src_len,
                 int found = 0;
                 if (t->sub_pattern) {
                     for (int bp = s; bp < end; bp++) {
-                        int me = sub_pattern_matches_at(src, src_len, t->sub_pattern, bp);
+                        int me = sub_pattern_matches_at(ctx, src, src_len, t->sub_pattern, bp);
                         if (me > 0 && me <= end) { found = 1; break; }
                     }
                 } else {
@@ -1105,7 +1100,7 @@ static int match_pattern(const char *src, int src_len,
                 if (pat) {
                     memcpy(pat, t->value.ptr, t->value.len);
                     pat[t->value.len] = '\0';
-                    t->re = lre_compile(&l, err, sizeof(err), pat, t->value.len, 0, NULL);
+                    t->re = lre_compile(&l, err, sizeof(err), pat, t->value.len, 0, ctx->js_ctx);
                     (void)err;
                     free(pat);
                 }
@@ -1122,7 +1117,7 @@ static int match_pattern(const char *src, int src_len,
             if (!capture) goto fail;
             for (int ci = 0; ci < cap_slots; ci++) capture[ci] = NULL;
 
-            int rc = lre_exec(capture, t->re, (const uint8_t *)src, pos, src_len, 0, NULL);
+            int rc = lre_exec(capture, t->re, (const uint8_t *)src, pos, src_len, 0, ctx->js_ctx);
             if (rc != 1) {
                 free(capture);
                 if (!t->optional) goto fail;
@@ -1282,8 +1277,8 @@ static char *pap_process_impl(const char *input,
     while (pos < len) {
         int matched = 0;
         for (int i = 0; i < rc; i++) {
-            Match m;
-            if (match_pattern(work, len, &rules[i].pattern, pos, &m)) {
+            Match m; m.ctx = ctx;
+            if (match_pattern(ctx, work, len, &rules[i].pattern, pos, &m)) {
                 char *r = apply_replacement_ex(rules[i].replacement, &m, &sym);
                 sb_append_n(&out, r, (int)strlen(r)); free(r);
                 pos = m.end; free_match(&m); matched = 1; break;
@@ -1382,13 +1377,38 @@ Papagaio *papagaio_open(void)
     if (!ctx) return NULL;
     ctx->env        = m3_NewEnvironment();
     ctx->runtime    = m3_NewRuntime(ctx->env, 1024 * 1024, NULL);
+
+    ctx->js_rt      = JS_NewRuntime();
+    JS_SetMaxStackSize(ctx->js_rt, 1024 * 1024);
+    ctx->js_ctx     = JS_NewContext(ctx->js_rt);
+
+    const char *polyfills = 
+        "if (typeof TextEncoder === 'undefined') {"
+        "  globalThis.TextEncoder = class { encode(s) { let a = new Uint8Array(s.length); for(let i=0;i<s.length;i++) a[i]=s.charCodeAt(i); return a; } };"
+        "}"
+        "if (typeof TextDecoder === 'undefined') {"
+        "  globalThis.TextDecoder = class { decode(a) { let s=''; for(let i=0;i<a.length;i++) s+=String.fromCharCode(a[i]); return s; } };"
+        "}";
+    JS_FreeValue(ctx->js_ctx, JS_Eval(ctx->js_ctx, polyfills, strlen(polyfills), "polyfills.js", JS_EVAL_TYPE_GLOBAL));
+
+    /* Load watr bundle into QuickJS */
+    JSValue eval_res = JS_Eval(ctx->js_ctx, (const char *)lib_watr_watr_bundle_js, lib_watr_watr_bundle_js_len, "watr.bundle.js", JS_EVAL_TYPE_GLOBAL);
+    if (JS_IsException(eval_res)) {
+        JSValue exc = JS_GetException(ctx->js_ctx);
+        const char *str = JS_ToCString(ctx->js_ctx, exc);
+        fprintf(stderr, "[QuickJS] Error loading watr: %s\n", str);
+        JS_FreeCString(ctx->js_ctx, str);
+        JS_FreeValue(ctx->js_ctx, exc);
+    }
+    JS_FreeValue(ctx->js_ctx, eval_res);
+
     ctx->commands   = NULL; ctx->cmd_count = 0; ctx->cmd_cap = 0;
     ctx->modifiers  = NULL; ctx->mod_count = 0; ctx->mod_cap = 0;
     ctx->finalizers = NULL; ctx->fin_count = 0; ctx->fin_cap = 0;
     ctx->argc       = 0;    ctx->argv      = NULL;
     ctx->auto_export = 1;
     papagaio_register_command(ctx, "wasmfile", wasm_file_handler, NULL);
-    papagaio_register_command(ctx, "wasm", wasm_bytes_handler, NULL);
+    papagaio_register_command(ctx, "wat", wat_handler, NULL);
     return ctx;
 }
 
@@ -1399,6 +1419,8 @@ void papagaio_close(Papagaio *ctx)
         if (ctx->finalizers[i].fn)
             ctx->finalizers[i].fn(ctx->finalizers[i].userdata);
     }
+    if (ctx->js_ctx) JS_FreeContext(ctx->js_ctx);
+    if (ctx->js_rt)  JS_FreeRuntime(ctx->js_rt);
     if (ctx->runtime) m3_FreeRuntime(ctx->runtime);
     if (ctx->env)     m3_FreeEnvironment(ctx->env);
     free(ctx->commands);
@@ -1465,8 +1487,8 @@ char *papagaio_process_pairs(Papagaio *ctx, const char *input,
     while (pos < len) {
         int matched = 0;
         for (int i = 0; i < pair_count; i++) {
-            Match m;
-            if (match_pattern(input, len, &rules[i].pattern, pos, &m)) {
+            Match m; m.ctx = ctx;
+            if (match_pattern(ctx, input, len, &rules[i].pattern, pos, &m)) {
                 char *r = apply_replacement_ex(rules[i].replacement, &m, &sym);
                 sb_append_n(&out, r, strlen(r)); free(r);
                 pos = m.end; free_match(&m); matched = 1; break;
@@ -1484,50 +1506,6 @@ char *papagaio_process_pairs(Papagaio *ctx, const char *input,
     sb_free(&out); return result;
 }
 
-/* =========================================================================
- * resolve_directives
- * ====================================================================== */
-static unsigned char base64_table[256] = {0};
-static void init_b64(void) {
-    if (base64_table[(int)'A']) return;
-    const char *chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    for(int i=0; i<64; i++) base64_table[(int)chars[i]] = i;
-}
-static uint8_t *decode_b64(const char *src, size_t len, size_t *out_len) {
-    init_b64();
-    uint8_t *out = (uint8_t *)malloc(len);
-    if (!out) return NULL;
-    size_t i = 0, j = 0;
-    while (i < len) {
-        uint32_t v = 0;
-        int cnt = 0;
-        int pad = 0;
-        while (cnt < 4 && i < len) {
-            char c = src[i++];
-            if (c == ' ' || c == '\n' || c == '\r' || c == '\t') continue;
-            if (c == '=') { pad++; v <<= 6; cnt++; continue; }
-            if (pad > 0) continue; /* Ignore everything after first padding char in quartet */
-            v = (v << 6) | (base64_table[(int)c] & 0x3F);
-            cnt++;
-        }
-        if (cnt < 4) {
-            if (cnt > 0) { /* Partial block at end of string */
-                 v <<= (6 * (4 - cnt));
-                 if (cnt >= 2) out[j++] = (uint8_t)((v >> 16) & 0xFF);
-                 if (cnt >= 3) out[j++] = (uint8_t)((v >> 8) & 0xFF);
-            }
-            break;
-        }
-        out[j++] = (uint8_t)((v >> 16) & 0xFF);
-        if (pad < 2) out[j++] = (uint8_t)((v >> 8) & 0xFF);
-        if (pad < 1) out[j++] = (uint8_t)(v & 0xFF);
-        if (pad > 0) break; /* End of stream on padding */
-    }
-    *out_len = j;
-    return out;
-}
-
-
 static void papagaio_load_wasm_bytes(Papagaio *ctx, uint8_t *bytes, size_t size) {
     IM3Module module;
     M3Result result = m3_ParseModule(ctx->env, &module, (bytes_t)bytes, (uint32_t)size);
@@ -1544,12 +1522,8 @@ static void papagaio_load_wasm_bytes(Papagaio *ctx, uint8_t *bytes, size_t size)
     /* Intelligent Auto-Registration: Scan module functions for exports */
     for (uint32_t i = 0; i < module->numFunctions; i++) {
         M3Function *f_info = &module->functions[i];
-        /*if (f_info->export_name) {
-            fprintf(stderr, "[DEBUG] Export found: '%s'\n", f_info->export_name);
-        }*/
         if (f_info->export_name && strncmp(f_info->export_name, "papagaio_", 9) == 0) {
             const char *cmd_name = f_info->export_name + 9;
-            //fprintf(stderr, "[DEBUG] Registering command: '%s'\n", cmd_name);
             
             /* Must use m3_FindFunction AFTER compile to get JIT-ready handle */
             IM3Function f_ready = NULL;
@@ -1597,40 +1571,31 @@ static char *wasm_command_bridge(Papagaio *ctx, const char *name, int argc, cons
     IM3Function f = (IM3Function)ud;
     if (!f) return NULL;
 
-    /* Serialize args into Wasm memory:
-       Layout: [argc * i32 offsets] [str0\0] [str1\0] ...
-       Starting at offset ARGS_BASE (leave first 4KB for stack/rodata) */
     const uint32_t ARGS_BASE = 4096;
     uint32_t mem_size = 0;
     uint8_t *mem = m3_GetMemory(ctx->runtime, &mem_size, 0);
     if (!mem) return NULL;
 
-    /* Write string data after the pointer table */
-    uint32_t table_size = (uint32_t)argc * 4; /* array of i32 offsets */
+    uint32_t table_size = (uint32_t)argc * 4;
     uint32_t str_base = ARGS_BASE + table_size;
     uint32_t cur = str_base;
 
     for (int i = 0; i < argc; i++) {
         size_t slen = argl[i];
-        if (cur + slen + 1 > mem_size) return NULL; /* out of bounds */
+        if (cur + slen + 1 > mem_size) return NULL;
         memcpy(mem + cur, argv[i], slen);
         mem[cur + slen] = '\0';
-        /* Write the offset into the pointer table */
         uint32_t off = cur;
         if (ARGS_BASE + i * 4 + 4 > mem_size) return NULL;
         memcpy(mem + ARGS_BASE + i * 4, &off, 4);
-        cur += (uint32_t)(slen + 1 + 7) & ~7u; /* align 8 */
+        cur += (uint32_t)(slen + 1 + 7) & ~7u;
     }
 
-    /* Call: papagaio_X(argc: i32, argv_table: i32) -> i32 */
     g_active_ctx = ctx;
     M3Result res = m3_CallV(f, (uint32_t)argc, (uint32_t)ARGS_BASE);
     g_active_ctx = NULL;
 
-    if (res) {
-        fprintf(stderr, "[WASM] CallV Error: %s\n", res);
-        return NULL;
-    }
+    if (res) { fprintf(stderr, "[WASM] CallV Error: %s\n", res); return NULL; }
 
     uint32_t wasm_ptr = 0;
     m3_GetResultsV(f, &wasm_ptr);
@@ -1639,18 +1604,60 @@ static char *wasm_command_bridge(Papagaio *ctx, const char *name, int argc, cons
     mem = m3_GetMemory(ctx->runtime, &mem_size, 0);
     if (!mem || wasm_ptr >= mem_size) return NULL;
 
-    char *res_str = strdup((const char *)(mem + wasm_ptr));
-    return res_str;
+    return strdup((const char *)(mem + wasm_ptr));
 }
 
 static char *wasm_file_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud) {
     (void)name; (void)ud; (void)argl; if (argc > 0) papagaio_load_wasm_file(ctx, argv[0]); return strdup("");
 }
 
-static char *wasm_bytes_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud) {
-    (void)name; (void)ud; (void)argl; if (argc > 0) {
-        size_t out_len = 0; uint8_t *bytes = decode_b64(argv[0], strlen(argv[0]), &out_len);
-        if (bytes) { papagaio_load_wasm_bytes(ctx, bytes, out_len); free(bytes); }
+static char *wat_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud) {
+    (void)name; (void)ud; (void)argl;
+    if (argc > 0) {
+        /* In QuickJS, call watr.compile(argv[0]) */
+        JSValue global = JS_GetGlobalObject(ctx->js_ctx);
+        JSValue watr_obj = JS_GetPropertyStr(ctx->js_ctx, global, "watr");
+        if (JS_IsUndefined(watr_obj)) {
+            fprintf(stderr, "[WAT] Error: 'watr' object not found in global scope.\n");
+            JS_FreeValue(ctx->js_ctx, global);
+            return strdup("");
+        }
+        JSValue compile_func = JS_GetPropertyStr(ctx->js_ctx, watr_obj, "compile");
+        if (!JS_IsFunction(ctx->js_ctx, compile_func)) {
+            fprintf(stderr, "[WAT] Error: 'watr.compile' is not a function.\n");
+            JS_FreeValue(ctx->js_ctx, watr_obj);
+            JS_FreeValue(ctx->js_ctx, global);
+            return strdup("");
+        }
+        
+        JSValue wat_str = JS_NewString(ctx->js_ctx, argv[0]);
+        JSValue wasm_bytes_val = JS_Call(ctx->js_ctx, compile_func, watr_obj, 1, &wat_str);
+        
+        if (JS_IsException(wasm_bytes_val)) {
+            JSValue exc = JS_GetException(ctx->js_ctx);
+            const char *str = JS_ToCString(ctx->js_ctx, exc);
+            fprintf(stderr, "[WAT] Compilation Error: %s\n", str);
+            JS_FreeCString(ctx->js_ctx, str);
+            JS_FreeValue(ctx->js_ctx, exc);
+        } else {
+            /* Result should be a Uint8Array */
+            size_t offset, length, per_element;
+            JSValue buffer = JS_GetTypedArrayBuffer(ctx->js_ctx, wasm_bytes_val, &offset, &length, &per_element);
+            if (!JS_IsException(buffer)) {
+                size_t buf_size;
+                uint8_t *buf_ptr = JS_GetArrayBuffer(ctx->js_ctx, &buf_size, buffer);
+                if (buf_ptr) {
+                    papagaio_load_wasm_bytes(ctx, buf_ptr + offset, length);
+                }
+                JS_FreeValue(ctx->js_ctx, buffer);
+            }
+        }
+        
+        JS_FreeValue(ctx->js_ctx, wasm_bytes_val);
+        JS_FreeValue(ctx->js_ctx, wat_str);
+        JS_FreeValue(ctx->js_ctx, compile_func);
+        JS_FreeValue(ctx->js_ctx, watr_obj);
+        JS_FreeValue(ctx->js_ctx, global);
     }
     return strdup("");
 }
@@ -1897,8 +1904,8 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
         parse_pattern_ex(pairs[i].m, &pat, &sym);
         
         while (pos < clen) {
-            Match m;
-            if (match_pattern(cur, (int)clen, &pat, (int)pos, &m)) {
+            Match m; m.ctx = ctx;
+            if (match_pattern(ctx, cur, (int)clen, &pat, (int)pos, &m)) {
                 char *r = apply_replacement_ex(pairs[i].r, &m, &sym);
                 sb_append_n(&out, r, strlen(r));
                 free(r);

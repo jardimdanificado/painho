@@ -1,0 +1,9 @@
+[submodule "lib/wasm3"]
+	path = lib/wasm3
+	url = https://github.com/wasm3/wasm3.git
+[submodule "lib/quickjs"]
+	path = lib/quickjs
+	url = https://github.com/bellard/quickjs.git
+[submodule "lib/watr"]
+	path = lib/watr
+	url = https://github.com/dy/watr.git
