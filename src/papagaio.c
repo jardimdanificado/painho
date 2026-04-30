@@ -123,6 +123,7 @@ typedef struct {
 /* Forward declarations */
 static char *wasm_command_bridge(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
 static char *wasm_file_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
+static char *file_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
 static char *wat_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
 
 struct Papagaio {
@@ -1407,7 +1408,10 @@ Papagaio *papagaio_open(void)
     ctx->finalizers = NULL; ctx->fin_count = 0; ctx->fin_cap = 0;
     ctx->argc       = 0;    ctx->argv      = NULL;
     ctx->auto_export = 1;
-    papagaio_register_command(ctx, "wasmfile", wasm_file_handler, NULL);
+#ifndef __wasm__
+    papagaio_register_command(ctx, "wasm", wasm_file_handler, NULL);
+    papagaio_register_command(ctx, "file", file_handler, NULL);
+#endif
     papagaio_register_command(ctx, "wat", wat_handler, NULL);
     return ctx;
 }
@@ -1609,6 +1613,32 @@ static char *wasm_command_bridge(Papagaio *ctx, const char *name, int argc, cons
 
 static char *wasm_file_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud) {
     (void)name; (void)ud; (void)argl; if (argc > 0) papagaio_load_wasm_file(ctx, argv[0]); return strdup("");
+}
+
+static char *file_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud) {
+    (void)ctx; (void)name; (void)ud; (void)argl;
+    if (argc < 1) return strdup("");
+    
+    char trim_path[256]; size_t pl = strlen(argv[0]);
+    size_t start = 0; while(start < pl && isspace((unsigned char)argv[0][start])) start++;
+    size_t end = pl; while(end > start && isspace((unsigned char)argv[0][end-1])) end--;
+    size_t len = end - start; if (len >= 255) len = 255;
+    memcpy(trim_path, argv[0] + start, len); trim_path[len] = '\0';
+    
+    FILE *f = fopen(trim_path, "rb");
+    if (!f) return strdup("");
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    char *buf = malloc(sz + 1);
+    if (buf) {
+        size_t rb = fread(buf, 1, sz, f);
+        buf[rb] = '\0';
+    } else {
+        buf = strdup("");
+    }
+    fclose(f);
+    return buf;
 }
 
 static char *wat_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud) {

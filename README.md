@@ -94,8 +94,8 @@ Papagaio follows a Wasm-first plugin architecture. Core features are limited to 
 
 ### Built-in Operators
 - **$document**: Injects the current state of the document.
-- **$wasmfile{path}**: Loads a WebAssembly plugin from the file system.
-- **$wasm{base64_data}**: Loads a WebAssembly plugin directly from a Base64-encoded string. Useful for self-contained scripts or environments without a file system.
+- **$wasm{path}**: Loads a WebAssembly plugin from the file system (CLI only).
+- **$file{path}**: Injects the content of a file from the file system (CLI only).
 
 ---
 
@@ -196,7 +196,7 @@ cp lib/lib.c .
 ### 3. Use in Papagaio
 Loading the Wasm file automatically registers all exported commands.
 ```text
-$wasmfile{greet.wasm}
+$wasm{greet.wasm}
 $greet{Papagaio}
 ```
 *Output: Hello, Papagaio!*

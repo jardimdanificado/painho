@@ -60,7 +60,7 @@ int main(void)
     
     if (rc == 0) {
         printf("--- Wasm Plugin Compiled. Testing Execution...\n");
-        const char *in22 = "$wasmfile{tests/test_plugin.wasm} $test_mul{7}{6}";
+        const char *in22 = "$wasm{tests/test_plugin.wasm} $test_mul{7}{6}";
         o = papagaio_process_text(ctx, in22, strlen(in22));
         printf("Test 22 [Wasm] - %s (esperado: 42)\n", o);
         free(o);
@@ -70,32 +70,21 @@ int main(void)
         printf("Test 23 [Wasm Memory Isolation] - %s (esperado: -20)\n", o);
         free(o);
 
-        /* Test 24: Wasm via Base64 command */
-        system("base64 -w 0 tests/test_plugin.wasm > tests/test_plugin.b64");
-        FILE *f = fopen("tests/test_plugin.b64", "r");
-        if (f) {
-            fseek(f, 0, SEEK_END);
-            long fsize = ftell(f);
-            fseek(f, 0, SEEK_SET);
-            char *b64 = malloc(fsize + 1);
-            fread(b64, 1, fsize, f);
-            b64[fsize] = '\0';
-            fclose(f);
-
-            char *in24 = malloc(fsize + 128);
-            sprintf(in24, "$wasm{%s} $test_mul{10}{20}", b64);
-            o = papagaio_process_text(ctx, in24, strlen(in24));
-            printf("Test 24 [Wasm Base64] - %s (esperado: 200)\n", o);
-            
-            free(o);
-            free(b64);
-            free(in24);
-        }
-        
-        system("rm -f tests/test_wasm.c tests/test_plugin.wasm tests/test_plugin.b64"); // Cleanup
+        system("rm -f tests/test_wasm.c tests/test_plugin.wasm"); // Cleanup
     } else {
         printf("Test 22 [Wasm] - SKIPPED (clang wasm32 backend not available)\n");
     }
+
+    /* Test $file command */
+    printf("\n=== Testing $file command ===\n");
+    system("echo 'FILE_CONTENT' > tests/test_file.txt");
+    const char *in28 = "$file{tests/test_file.txt}";
+    o = papagaio_process_text(ctx, in28, strlen(in28));
+    /* Trim newline if any from echo */
+    if (o && strlen(o) > 0 && o[strlen(o)-1] == '\n') o[strlen(o)-1] = '\0';
+    printf("Test 28 [$file] - %s (esperado: FILE_CONTENT)\n", o);
+    free(o);
+    system("rm -f tests/test_file.txt");
 
     /* Test CLI Args Expansion */
     printf("\n=== Testing CLI Args Expansion ===\n");

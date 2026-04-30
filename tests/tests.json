@@ -374,9 +374,9 @@
     },
     {
       "id": 63,
-      "name": "Wasmfile fallback parsing (nonexistent file)",
-      "code": "$wasmfile{phantom.wasm} $test{123}",
-      "expected": " $test{123}"
+      "name": "Wasm fallback parsing (nonexistent file)",
+      "code": "$wasm{phantom.wasm} $test{123}",
+      "expected": "$wasm{phantom.wasm} $test{123}"
     },
     {
       "id": 64,
