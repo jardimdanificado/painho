@@ -227,3 +227,4 @@ make test       # Run comprehensive test suite
 - [QuickJS](https://bellard.org/quickjs/)
 - [TCC](https://bellard.org/tcc/)
 - [Wasm3](https://github.com/wasm3/wasm3)
+- [xcc](https://github.com/tyfkda/xcc)

@@ -75,6 +75,8 @@ static const struct {
   {"_Generic", TK_GENERIC},
   {"__auto_type", TK_AUTO_TYPE},
   {"typeof", TK_TYPEOF}, {"__typeof__", TK_TYPEOF},
+  {"at", TK_AT},
+  {"entrypoint", TK_ENTRYPOINT},
 };
 
 static const struct {

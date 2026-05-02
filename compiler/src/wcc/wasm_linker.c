@@ -414,7 +414,16 @@ static uint32_t remap_data_address_wasmobj(WasmObj *wasmobj, uint32_t address) {
   uint32_t max = address;
   for (uint32_t i = 0; i < wasmobj->data.count; ++i) {
     DataSegmentForLink *d = &wasmobj->data.segments[i];
-    d->start += address;
+    bool absolute = false;
+    for (int j = 0; j < symtab->len; ++j) {
+      SymbolInfo *sym = symtab->data[j];
+      if (sym->kind == SIK_SYMTAB_DATA && sym->local_index == i && (sym->flags & WASM_SYM_ABSOLUTE)) {
+        absolute = true;
+        break;
+      }
+    }
+    if (!absolute)
+      d->start += address;
     uint32_t end = d->start + d->size;
     if (end > max)
       max = end;

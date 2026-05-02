@@ -13,6 +13,7 @@
 #include "type.h"
 #include "util.h"
 #include "var.h"
+#include "cc_options.h"
 
 extern bool parsing_stmt;
 
@@ -125,7 +126,7 @@ static StructInfo *parse_struct(bool is_union, Table *attributes) {
     do {
       int storage;
       Token *ident;
-      Type *type = parse_var_def(&rawType, &storage, &ident, NULL);
+      Type *type = parse_var_def(&rawType, &storage, &ident, NULL, NULL);
       if (type == NULL) {
         parse_error(PE_NOFATAL, NULL, "type expected");
         break;
@@ -247,7 +248,7 @@ static StructInfo *parse_struct(bool is_union, Table *attributes) {
 
 static Type *parse_typeof(const Token *tok) {
   consume(TK_LPAR, "`(' expected");
-  Type *type = parse_var_def(NULL, NULL, NULL, NULL);
+  Type *type = parse_var_def(NULL, NULL, NULL, NULL, NULL);
   if (type == NULL) {
     Expr *e = parse_expr();
     if (e == NULL) {
@@ -272,7 +273,7 @@ static void add_attr(Table **pattr, const char *name, void *val) {
 // <declaration-specifier> ::= <storage-class-specifier>
 //                           | <type-specifier>
 //                           | <type-qualifier>
-Type *parse_raw_type(int *pstorage, Table **pattributes) {
+Type *parse_raw_type(int *pstorage, Table **pattributes, int *pfixed_address) {
   static const char MULTIPLE_STORAGE_SPECIFIED[] = "multiple storage specified";
   static const char MULTIPLE_QUALIFIER_SPECIFIED[] = "multiple qualifier specified";
   static const char ILLEGAL_TYPE_COMBINATION[] = "illegal type combination";
@@ -371,6 +372,18 @@ Type *parse_raw_type(int *pstorage, Table **pattributes) {
         add_attr(&tc.attributes, "import_name", v);
       }
       continue;
+    case TK_AT:
+      {
+        tc.storage |= VS_AT;
+        consume(TK_LPAR, "`(' expected");
+        Expr *e = parse_const_fixnum();
+        consume(TK_RPAR, "`)' expected");
+        tc.fixed_address = e->fixnum;
+      }
+      continue;
+    case TK_ENTRYPOINT:
+      tc.storage |= VS_ENTRYPOINT;
+      continue;
     case TK_STRUCT: case TK_UNION:
       if (type != NULL) { unget_token(tok); goto loop_exit; }
       if (!no_type_combination(&tc, 0, 0)) parse_error(PE_NOFATAL, tok, ILLEGAL_TYPE_COMBINATION);
@@ -467,6 +480,8 @@ loop_exit:;
       }
     }
   }
+  if (pfixed_address != NULL)
+    *pfixed_address = tc.fixed_address;
 
   return type;
 }
@@ -713,7 +728,7 @@ Vector *parse_funparams(bool *pvaargs) {
 
       int storage;
       Token *ident;
-      Type *type = parse_var_def(NULL, &storage, &ident, NULL);
+      Type *type = parse_var_def(NULL, &storage, &ident, NULL, NULL);
       if (type == NULL) {
         parse_error(PE_NOFATAL, NULL, "type expected");
         type = &tyInt;

@@ -999,10 +999,16 @@ static inline void assign_data_address(void) {
         continue;
 
       // Mapped to memory
-      address = ALIGN(address, align_size(varinfo->type));
-      info->non_prim.address = address;
+      if (storage & VS_AT) {
+        info->non_prim.address = varinfo->fixed_address;
+      } else {
+        address = ALIGN(address, align_size(varinfo->type));
+        info->non_prim.address = address;
+      }
       size_t size = type_size(varinfo->type);
-      address += size;
+      uint32_t end = info->non_prim.address + size;
+      if (end > address)
+        address = end;
       VERBOSE("%04x: %.*s  (size=0x%zx)\n", info->non_prim.address, NAMES(varinfo->ident->ident),
               size);
     }

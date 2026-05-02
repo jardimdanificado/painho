@@ -66,6 +66,7 @@ typedef struct {
   int i8_num, i16_num, i32_num, i64_num;
   int u8_num, u16_num, u32_num, u64_num;
   int f32_num, f64_num;
+  int fixed_address;
   Table *attributes;
 } TypeCombination;
 

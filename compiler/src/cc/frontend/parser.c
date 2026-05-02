@@ -127,10 +127,10 @@ static void def_type(Type *type, Token *ident) {
   }
 }
 
-Type *parse_var_def(Type **prawType, int *pstorage, Token **pident, Table **pattributes) {
+Type *parse_var_def(Type **prawType, int *pstorage, Token **pident, Table **pattributes, int *pfixed_address) {
   Type *rawType = prawType != NULL ? *prawType : NULL;
   if (rawType == NULL) {
-    rawType = parse_raw_type(pstorage, pattributes);
+    rawType = parse_raw_type(pstorage, pattributes, pfixed_address);
     if (rawType == NULL)
       return NULL;
     if (prawType != NULL)
@@ -149,7 +149,7 @@ static Vector *parse_vardecl_cont(Type *rawType, Type *type, int storage, Token 
   do {
     int tmp_storage = storage;
     if (!first) {
-      type = parse_var_def(&rawType, &tmp_storage, &ident, NULL);
+      type = parse_var_def(&rawType, &tmp_storage, &ident, NULL, NULL);
       if (type == NULL || ident == NULL) {
         parse_error(PE_NOFATAL, NULL, "ident expected");
         return decls;
@@ -276,7 +276,7 @@ static bool parse_vardecl(Vector *stmts) {
   Type *rawType = NULL;
   int storage;
   Token *ident;
-  Type *type = parse_var_def(&rawType, &storage, &ident, NULL);
+  Type *type = parse_var_def(&rawType, &storage, &ident, NULL, NULL);
   if (type == NULL)
     return false;
 
@@ -448,7 +448,7 @@ static Stmt *parse_for(const Token *tok) {
     Type *rawType = NULL;
     int storage;
     Token *ident;
-    Type *type = parse_var_def(&rawType, &storage, &ident, NULL);
+    Type *type = parse_var_def(&rawType, &storage, &ident, NULL, NULL);
     if (type != NULL) {
       if (ident == NULL) {
         parse_error(PE_NOFATAL, NULL, "ident expected");
@@ -831,7 +831,7 @@ static Declaration *parse_defun(Type *functype, int storage, Token *ident, const
 
 // <declaration> ::=  {<declaration-specifier>}+ {<init-declarator>}* ;
 static void parse_global_var_decl(Type *rawtype, int storage, Type *type, Token *ident,
-                                  Table *attributes, Vector *decls) {
+                                  Table *attributes, int fixed_address, Vector *decls) {
   UNUSED(decls);
   for (;;) {
     // attributes = parse_attributes(attributes);  // Removed
@@ -878,8 +878,15 @@ static void parse_global_var_decl(Type *rawtype, int storage, Type *type, Token 
       } else {
         bool has_initializer = match(TK_ASSIGN) != NULL;
         VarInfo *varinfo = NULL;
-        if (ident != NULL)
+        if (ident != NULL) {
+          if (storage & VS_ENTRYPOINT) {
+            storage |= VS_EXPORT;
+          }
           varinfo = add_var_to_scope(global_scope, ident, type, storage, !has_initializer);
+          if (storage & VS_AT) {
+            varinfo->fixed_address = fixed_address;
+          }
+        }
 
         Initializer *init = varinfo->global.init;
         assert(curvarinfo == NULL);
@@ -926,7 +933,8 @@ static Declaration *parse_declaration(Vector *decls) {
   Type *rawtype = NULL;
   int storage;
   Token *ident;
-  Type *type = parse_var_def(&rawtype, &storage, &ident, &attributes);
+  int fixed_address;
+  Type *type = parse_var_def(&rawtype, &storage, &ident, &attributes, &fixed_address);
   if (type != NULL) {
     if (ident == NULL) {
       if ((type->kind == TY_STRUCT ||
@@ -954,7 +962,7 @@ static Declaration *parse_declaration(Vector *decls) {
       // Join with global variable declaration to handle multiple prototype declarations.
     }
 
-    parse_global_var_decl(rawtype, storage, type, ident, attributes, decls);
+    parse_global_var_decl(rawtype, storage, type, ident, attributes, fixed_address, decls);
     return NULL;
   }
   parse_error(PE_NOFATAL, NULL, "unexpected token");

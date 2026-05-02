@@ -32,12 +32,15 @@ enum {
   VS_PARAM = 1 << 9,  // Function parameter
   VS_USED = 1 << 10,  // used.
   VS_STRING = 1 << 11,  // string.
+  VS_ENTRYPOINT = 1 << 12,
+  VS_AT = 1 << 13,
 };
 
 typedef struct VarInfo {
   const Token *ident;
   Type *type;
   int storage;
+  int fixed_address; // For VS_AT
   union {
     struct {
       Initializer *init;

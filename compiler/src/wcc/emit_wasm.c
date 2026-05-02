@@ -173,12 +173,16 @@ typedef struct {
   uint32_t p2align;
 } DataSegment;
 
+static int compare_segments(const void *a, const void *b) {
+  const DataSegment *sa = *(const DataSegment**)a;
+  const DataSegment *sb = *(const DataSegment**)b;
+  intptr_t diff = (intptr_t)sa->gvarinfo->non_prim.address - (intptr_t)sb->gvarinfo->non_prim.address;
+  return diff < 0 ? -1 : diff > 0 ? 1 : 0;
+}
+
 static Vector *construct_data_segment(void) {  // <DataSegment*>
   // Enumerate global variables.
   Vector *segments = new_vector();
-#ifndef NDEBUG
-  uint32_t address = 0;
-#endif
   for (int k = 0; k < 2; ++k) {  // 0=data, 1=bss
     const Name *name;
     GVarInfo *info;
@@ -192,11 +196,6 @@ static Vector *construct_data_segment(void) {  // <DataSegment*>
       if ((k == 0) == (varinfo->global.init == NULL) ||
           !is_global_datsec_var(varinfo, global_scope))
         continue;
-
-#ifndef NDEBUG
-      uint32_t adr = info->non_prim.address;
-      assert(adr >= address);
-#endif
 
       DataSegment *segment = calloc_or_die(sizeof(*segment));
       segment->gvarinfo = info;
@@ -218,12 +217,10 @@ static Vector *construct_data_segment(void) {  // <DataSegment*>
         ds->len += size;
       }
       vec_push(segments, segment);
-
-#ifndef NDEBUG
-      address = adr + type_size(varinfo->type);
-#endif
     }
   }
+
+  qsort(segments->data, segments->len, sizeof(void*), compare_segments);
   return segments;
 }
 
@@ -630,6 +627,8 @@ static inline uint32_t emit_linking_symtab_global(EmitWasm *ew, DataStorage *lin
         flags |= WASM_SYM_UNDEFINED;
       if (varinfo->storage & VS_STATIC)
         flags |= WASM_SYM_BINDING_LOCAL | WASM_SYM_VISIBILITY_HIDDEN;
+      if (varinfo->storage & VS_AT)
+        flags |= WASM_SYM_ABSOLUTE;
 
       if (is_global_datsec_var(varinfo, global_scope)) {
         data_push(linking_section, SIK_SYMTAB_DATA);  // kind

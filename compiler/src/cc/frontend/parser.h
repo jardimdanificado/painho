@@ -22,12 +22,12 @@ void parse(Vector *decls);  // <Declaration*>
 typedef Expr *(*BuiltinExprProc)(const Token*);
 void add_builtin_expr_ident(const char *str, BuiltinExprProc *proc);
 
-Type *parse_raw_type(int *pstorage, Table **pattributes);
+Type *parse_raw_type(int *pstorage, Table **pattributes, int *pfixed_address);
 Type *parse_declarator(Type *rawtype, Token **pident);
 Type *parse_direct_declarator(Type *type, Token **pident);
 Vector *parse_args(Token **ptoken);
 Vector *parse_funparams(bool *pvaargs);  // Vector<VarInfo*>, NULL=>old style.
-Type *parse_var_def(Type **prawType, int *pstorage, Token **pident, Table **pattributes);
+Type *parse_var_def(Type **prawType, int *pstorage, Token **pident, Table **pattributes, int *pfixed_address);
 Expr *parse_const_fixnum(void);
 Expr *parse_assign(void);
 Expr *parse_expr(void);

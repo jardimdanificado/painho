@@ -150,6 +150,8 @@ enum TokenKind {
   TK_GENERIC,
   TK_AUTO_TYPE,
   TK_TYPEOF,
+  TK_AT,
+  TK_ENTRYPOINT,
 
   // For preprocessor.
   PPTK_CONCAT,       // ##

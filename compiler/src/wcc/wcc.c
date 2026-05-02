@@ -11,13 +11,17 @@
 #include <sys/stat.h>
 #include <unistd.h>  // getcwd
 
+#include "ast.h"
+#include "expr.h"
 #include "fe_misc.h"
+#include "initializer.h"
 #include "lexer.h"
 #include "parser.h"
 #include "table.h"
 #include "type.h"
 #include "util.h"
 #include "var.h"
+#include "cc_options.h"
 #include "wasm_linker.h"
 
 // #define USE_EMCC_AS_LINKER  1
@@ -174,23 +178,36 @@ static const char *output_wasm_obj(const char *src, const char *ofn, Options *op
   return outfn;
 }
 
-static void collect_exports(Vector *toplevel, Table *exports) {
+static void collect_exports(Vector *toplevel, Options *opts) {
+  Table *exports = opts->exports;
   UNUSED(toplevel);
   // Functions
-  const Name *name;
-  FuncInfo *finfo;
-  for (int it = 0; (it = table_iterate(&func_info_table, it, &name, (void**)&finfo)) != -1; ) {
-    VarInfo *varinfo = finfo->varinfo;
-    if (varinfo != NULL && (varinfo->storage & VS_EXPORT)) {
-      table_put(exports, name, (void*)name);
-    }
-  }
-  // Global Variables
-  GVarInfo *ginfo;
-  for (int it = 0; (it = table_iterate(&gvar_info_table, it, &name, (void**)&ginfo)) != -1; ) {
-    VarInfo *varinfo = ginfo->varinfo;
-    if (varinfo != NULL && (varinfo->storage & VS_EXPORT)) {
-      table_put(exports, name, (void*)name);
+  for (int i = 0; i < global_scope->vars->len; ++i) {
+    VarInfo *varinfo = global_scope->vars->data[i];
+    const Name *name = varinfo->ident->ident;
+    if (varinfo->type->kind == TY_FUNC) {
+      if (varinfo->storage & VS_EXPORT) {
+        table_put(exports, name, (void*)name);
+      }
+      if (varinfo->storage & VS_ENTRYPOINT) {
+        opts->entry_point = strndup(name->chars, name->bytes);
+      }
+    } else {
+      if (varinfo->storage & VS_EXPORT) {
+        table_put(exports, name, (void*)name);
+      }
+      // Detect special variable __stack_size
+      if (name->bytes == 12 && strncmp(name->chars, "__stack_size", 12) == 0) {
+        if (varinfo->global.init != NULL && varinfo->global.init->kind == IK_SINGLE) {
+          Expr *e = varinfo->global.init->single;
+          if (e->kind == EX_FIXNUM) {
+            opts->stack_size = e->fixnum;
+            // Remove from global scope to avoid emission
+            vec_remove_at(global_scope->vars, i);
+            --i;
+          }
+        }
+      }
     }
   }
 }
@@ -213,6 +230,8 @@ int compile_csource(const char *src, const char *ofn, Vector *obj_files, Options
   if (ipin != stdin)
     fclose(ipin);
 
+  collect_exports(toplevel, opts);
+  
   traverse_ast(toplevel);
   if (compile_error_count != 0)
     return 1;
@@ -223,8 +242,6 @@ int compile_csource(const char *src, const char *ofn, Vector *obj_files, Options
     return 1;
   if (cc_flags.warn_as_error && compile_warning_count != 0)
     return 2;
-  
-  collect_exports(toplevel, opts->exports);
 
   const char *outfn = output_wasm_obj(src, ofn, opts);
   if (outfn == NULL)
@@ -662,16 +679,24 @@ static int do_compile(Options *opts) {
     return 0;
 
   if (opts->out_type >= OutExecutable) {
-    if (opts->exports->count == 0) {
-      if (opts->entry_point == NULL) {
-        opts->entry_point = "_start";
-      }
-      if (opts->entry_point != NULL && *opts->entry_point != '\0') {
-        const Name *entry = alloc_name(opts->entry_point, NULL, false);
-        table_put(opts->exports, entry, (void*)entry);
-      } else {
-        error("no exports (require -e<xxx>)\n");
-      }
+    const Name *main_void = alloc_name("__main_void", NULL, false);
+    const Name *main_argc_argv = alloc_name("__main_argc_argv", NULL, false);
+    
+    if (table_try_get(opts->exports, main_void, NULL)) {
+      opts->entry_point = "__main_void";
+    } else if (table_try_get(opts->exports, main_argc_argv, NULL)) {
+      opts->entry_point = "__main_argc_argv";
+    }
+
+    if (opts->entry_point != NULL) {
+      const Name *name = alloc_name(opts->entry_point, NULL, false);
+      table_put(opts->exports, name, (void*)name);
+    }
+
+    if (opts->exports->count == 0 && opts->entry_point == NULL) {
+      opts->entry_point = "_start";
+      const Name *entry = alloc_name(opts->entry_point, NULL, false);
+      table_put(opts->exports, entry, (void*)entry);
     }
   }
 

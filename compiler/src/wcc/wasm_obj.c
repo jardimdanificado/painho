@@ -224,7 +224,7 @@ static void read_data_section(WasmObj *wasmobj, unsigned char *p) {
   for (uint32_t i = 0; i < count; ++i) {
     read_uleb128(p, &p);  // flag
     DataSegmentForLink *segment = &segments[i];
-    if (*p++ != OP_I32_CONST || (segment->start = read_uleb128(p, &p), *p++ != OP_END)) {
+    if (*p++ != OP_I32_CONST || (segment->start = read_leb128(p, &p), *p++ != OP_END)) {
       error("malformed data section");
     }
     uint32_t size = read_uleb128(p, &p);
