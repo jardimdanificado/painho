@@ -149,7 +149,7 @@ static Expr *parse_generic(void) {
     if (!match(TK_DEFAULT)) {
       int storage;
       Token *ident;
-      type = parse_var_def(NULL, &storage, &ident);
+      type = parse_var_def(NULL, &storage, &ident, NULL);
       if (type == NULL) {
         parse_error(PE_NOFATAL, tok, "type expected");
         break;
@@ -580,7 +580,7 @@ static Expr *grouping(void) {
 static Expr *lparen(Token *tok) {
   int storage;
   Token *token = fetch_token();
-  Type *type = parse_var_def(NULL, &storage, NULL);
+  Type *type = parse_var_def(NULL, &storage, NULL, NULL);
   if (type == NULL) {
     if (!match(TK_LBRACE))
       return grouping();
@@ -665,7 +665,7 @@ static Expr *size_align_of(Token *token) {
   Type *type = NULL;
   const Token *tok;
   if ((tok = match(TK_LPAR)) != NULL) {
-    type = parse_var_def(NULL, NULL, NULL);
+    type = parse_var_def(NULL, NULL, NULL, NULL);
     if (type != NULL) {
       consume(TK_RPAR, "`)' expected");
 #ifndef __NO_VLA

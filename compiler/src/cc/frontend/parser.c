@@ -14,8 +14,8 @@
 #include "lexer.h"
 #include "table.h"
 #include "type.h"
-#include "util.h"
 #include "var.h"
+#include "util.h"
 
 static Stmt *parse_stmt(void);
 
@@ -127,10 +127,10 @@ static void def_type(Type *type, Token *ident) {
   }
 }
 
-Type *parse_var_def(Type **prawType, int *pstorage, Token **pident) {
+Type *parse_var_def(Type **prawType, int *pstorage, Token **pident, Table **pattributes) {
   Type *rawType = prawType != NULL ? *prawType : NULL;
   if (rawType == NULL) {
-    rawType = parse_raw_type(pstorage);
+    rawType = parse_raw_type(pstorage, pattributes);
     if (rawType == NULL)
       return NULL;
     if (prawType != NULL)
@@ -149,7 +149,7 @@ static Vector *parse_vardecl_cont(Type *rawType, Type *type, int storage, Token 
   do {
     int tmp_storage = storage;
     if (!first) {
-      type = parse_var_def(&rawType, &tmp_storage, &ident);
+      type = parse_var_def(&rawType, &tmp_storage, &ident, NULL);
       if (type == NULL || ident == NULL) {
         parse_error(PE_NOFATAL, NULL, "ident expected");
         return decls;
@@ -276,7 +276,7 @@ static bool parse_vardecl(Vector *stmts) {
   Type *rawType = NULL;
   int storage;
   Token *ident;
-  Type *type = parse_var_def(&rawType, &storage, &ident);
+  Type *type = parse_var_def(&rawType, &storage, &ident, NULL);
   if (type == NULL)
     return false;
 
@@ -448,7 +448,7 @@ static Stmt *parse_for(const Token *tok) {
     Type *rawType = NULL;
     int storage;
     Token *ident;
-    Type *type = parse_var_def(&rawType, &storage, &ident);
+    Type *type = parse_var_def(&rawType, &storage, &ident, NULL);
     if (type != NULL) {
       if (ident == NULL) {
         parse_error(PE_NOFATAL, NULL, "ident expected");
@@ -729,71 +729,6 @@ static Stmt *parse_stmt(void) {
   return new_stmt_expr(str_to_char_array_var(curscope, val));
 }
 
-static Table *parse_attribute(Table *attributes) {  // <Token*>
-  // __attribute__((name1, name2(p, q, ...), ...))
-
-  if (consume(TK_LPAR, "`(' expected") == NULL || consume(TK_LPAR, "`(' expected") == NULL) {
-    match(TK_RPAR);
-    match(TK_RPAR);
-    return NULL;
-  }
-
-  for (;;) {
-    if (match(TK_RPAR))
-      break;
-
-    const Token *name = consume(TK_IDENT, "attribute name expected");
-    if (name == NULL)
-      break;
-
-    Vector *params = NULL;
-    if (match(TK_LPAR)) {
-      params = new_vector();
-      if (!match(TK_RPAR)) {
-        for (;;) {
-          Token *token = match(-1);
-          if (token->kind == TK_EOF) {
-            parse_error(PE_NOFATAL, token, "`)' expected");
-            break;
-          }
-          vec_push(params, token);
-          if (!match(TK_COMMA)) {
-            if (!match(TK_RPAR))
-              parse_error(PE_NOFATAL, token, "`)' expected");
-            break;
-          }
-        }
-      }
-    }
-    if (attributes == NULL)
-      attributes = alloc_table();
-    table_put(attributes, name->ident, params);
-
-    if (!match(TK_COMMA)) {
-      if (!match(TK_RPAR))
-        parse_error(PE_NOFATAL, NULL, "`)' expected");
-      break;
-    }
-  }
-
-  consume(TK_RPAR, "`)' expected");
-  return attributes;
-}
-
-Table *parse_attributes(Table *attributes) {
-  for (;;) {
-    if (match(TK_ATTRIBUTE)) {
-      attributes = parse_attribute(attributes);
-    } else if (match(TK_NORETURN)) {
-      if (attributes == NULL)
-        attributes = alloc_table();
-      table_put(attributes, alloc_name("noreturn", NULL, false), NULL);
-    } else {
-      break;
-    }
-  }
-  return attributes;
-}
 
 #ifndef __NO_VLA
 static inline void modify_funparam_vla_type(Type *type, Scope *scope) {
@@ -899,7 +834,7 @@ static void parse_global_var_decl(Type *rawtype, int storage, Type *type, Token 
                                   Table *attributes, Vector *decls) {
   UNUSED(decls);
   for (;;) {
-    attributes = parse_attributes(attributes);
+    // attributes = parse_attributes(attributes);  // Removed
 
 #ifndef __NO_VLA
     if (type->kind == TY_ARRAY && type->pa.vla != NULL)
@@ -987,12 +922,11 @@ static Declaration *parse_declaration(Vector *decls) {
     return new_decl_asm(tok, &asm_->asm_);
   }
 
-  Table *attributes = parse_attributes(NULL);
-
+  Table *attributes = NULL;
   Type *rawtype = NULL;
   int storage;
   Token *ident;
-  Type *type = parse_var_def(&rawtype, &storage, &ident);
+  Type *type = parse_var_def(&rawtype, &storage, &ident, &attributes);
   if (type != NULL) {
     if (ident == NULL) {
       if ((type->kind == TY_STRUCT ||

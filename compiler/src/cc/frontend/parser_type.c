@@ -125,7 +125,7 @@ static StructInfo *parse_struct(bool is_union, Table *attributes) {
     do {
       int storage;
       Token *ident;
-      Type *type = parse_var_def(&rawType, &storage, &ident);
+      Type *type = parse_var_def(&rawType, &storage, &ident, NULL);
       if (type == NULL) {
         parse_error(PE_NOFATAL, NULL, "type expected");
         break;
@@ -220,7 +220,8 @@ static StructInfo *parse_struct(bool is_union, Table *attributes) {
     consume(TK_SEMICOL, "`;' expected");
   }
 
-  attributes = parse_attributes(attributes);
+
+  // attributes = parse_attributes(attributes);  // Removed
 
   int flag = is_union ? SIF_UNION : 0;
   if (flex_arr_mem != NULL)
@@ -246,7 +247,7 @@ static StructInfo *parse_struct(bool is_union, Table *attributes) {
 
 static Type *parse_typeof(const Token *tok) {
   consume(TK_LPAR, "`(' expected");
-  Type *type = parse_var_def(NULL, NULL, NULL);
+  Type *type = parse_var_def(NULL, NULL, NULL, NULL);
   if (type == NULL) {
     Expr *e = parse_expr();
     if (e == NULL) {
@@ -262,10 +263,16 @@ static Type *parse_typeof(const Token *tok) {
 
 #define ASSERT_PARSE_ERROR(cond, tok, ...)  do { if (!(cond)) parse_error(PE_NOFATAL, tok, __VA_ARGS__); } while (0)
 
+static void add_attr(Table **pattr, const char *name, void *val) {
+  if (*pattr == NULL)
+    *pattr = alloc_table();
+  table_put(*pattr, alloc_name(name, NULL, false), val);
+}
+
 // <declaration-specifier> ::= <storage-class-specifier>
 //                           | <type-specifier>
 //                           | <type-qualifier>
-Type *parse_raw_type(int *pstorage) {
+Type *parse_raw_type(int *pstorage, Table **pattributes) {
   static const char MULTIPLE_STORAGE_SPECIFIED[] = "multiple storage specified";
   static const char MULTIPLE_QUALIFIER_SPECIFIED[] = "multiple qualifier specified";
   static const char ILLEGAL_TYPE_COMBINATION[] = "illegal type combination";
@@ -279,19 +286,14 @@ Type *parse_raw_type(int *pstorage) {
       check_type_combination(&tc, tok);  // Check for last token
     tok = match(-1);
     switch (tok->kind) {
-    case TK_UNSIGNED:
-      ++tc.unsigned_num;
-      continue;
-    case TK_SIGNED:
-      ++tc.signed_num;
-      continue;
+    case TK_UNSIGNED: ++tc.unsigned_num; continue;
+    case TK_SIGNED: ++tc.signed_num; continue;
     case TK_STATIC:
       ASSERT_PARSE_ERROR((tc.storage & ~VS_INLINE) == 0, tok, MULTIPLE_STORAGE_SPECIFIED);
       tc.storage |= VS_STATIC;
       continue;
     case TK_INLINE:
-      ASSERT_PARSE_ERROR((tc.storage & ~(VS_STATIC | VS_EXTERN)) == 0, tok,
-                         MULTIPLE_STORAGE_SPECIFIED);
+      ASSERT_PARSE_ERROR((tc.storage & ~(VS_STATIC | VS_EXTERN)) == 0, tok, MULTIPLE_STORAGE_SPECIFIED);
       tc.storage |= VS_INLINE;
       continue;
     case TK_EXTERN:
@@ -310,9 +312,7 @@ Type *parse_raw_type(int *pstorage) {
       ASSERT_PARSE_ERROR((tc.storage & ~VS_AUTO) == 0, tok, MULTIPLE_STORAGE_SPECIFIED);
       tc.storage |= VS_REGISTER;
       continue;
-    case TK_EXPORT:
-      tc.storage |= VS_EXPORT;
-      continue;
+    case TK_EXPORT: tc.storage |= VS_EXPORT; continue;
     case TK_CONST:
       ASSERT_PARSE_ERROR((tc.qualifier & TQ_CONST) == 0, tok, MULTIPLE_QUALIFIER_SPECIFIED);
       tc.qualifier |= TQ_CONST;
@@ -335,89 +335,102 @@ Type *parse_raw_type(int *pstorage) {
     case TK_U64: ++tc.u64_num; continue;
     case TK_F32: ++tc.f32_num; continue;
     case TK_F64: ++tc.f64_num; continue;
-    default: break;
-    }
-
-    if (type != NULL) {
-      unget_token(tok);
-      break;
-    }
-
-    switch (tok->kind) {
-    case TK_STRUCT: case TK_UNION:
+    case TK_CONSTRUCTOR: add_attr(&tc.attributes, "constructor", NULL); continue;
+    case TK_DESTRUCTOR: add_attr(&tc.attributes, "destructor", NULL); continue;
+    case TK_PACKED: add_attr(&tc.attributes, "packed", NULL); continue;
+    case TK_ALIGNED:
       {
-        if (!no_type_combination(&tc, 0, 0))
-          parse_error(PE_NOFATAL, tok, ILLEGAL_TYPE_COMBINATION);
-
-        Table *attributes = parse_attributes(NULL);
+        consume(TK_LPAR, "`(' expected");
+        Expr *e = parse_const_fixnum();
+        consume(TK_RPAR, "`)' expected");
+        Vector *v = new_vector();
+        vec_push(v, (void*)e->token);
+        add_attr(&tc.attributes, "aligned", v);
+      }
+      continue;
+    case TK_NORETURN: add_attr(&tc.attributes, "noreturn", NULL); continue;
+    case TK_NOINLINE: add_attr(&tc.attributes, "noinline", NULL); continue;
+    case TK_WEAK: add_attr(&tc.attributes, "weak", NULL); continue;
+    case TK_IMPORT_MODULE:
+      {
+        consume(TK_LPAR, "`(' expected");
+        Token *t = consume(TK_STR, "string expected");
+        consume(TK_RPAR, "`)' expected");
+        Vector *v = new_vector();
+        vec_push(v, t);
+        add_attr(&tc.attributes, "import_module", v);
+      }
+      continue;
+    case TK_IMPORT_NAME:
+      {
+        consume(TK_LPAR, "`(' expected");
+        Token *t = consume(TK_STR, "string expected");
+        consume(TK_RPAR, "`)' expected");
+        Vector *v = new_vector();
+        vec_push(v, t);
+        add_attr(&tc.attributes, "import_name", v);
+      }
+      continue;
+    case TK_STRUCT: case TK_UNION:
+      if (type != NULL) { unget_token(tok); goto loop_exit; }
+      if (!no_type_combination(&tc, 0, 0)) parse_error(PE_NOFATAL, tok, ILLEGAL_TYPE_COMBINATION);
+      {
+        Table *attributes = tc.attributes;
+        tc.attributes = NULL;
         const Name *name = NULL;
         Token *ident;
-        if ((ident = match(TK_IDENT)) != NULL)
-          name = ident->ident;
-
-        attributes = parse_attributes(attributes);
+        if ((ident = match(TK_IDENT)) != NULL) name = ident->ident;
         StructInfo *sinfo = NULL;
-        if (match(TK_LBRACE)) {  // Definition
+        if (match(TK_LBRACE)) {
           bool is_union = tok->kind == TK_UNION;
           sinfo = parse_struct(is_union, attributes);
-          if (name != NULL)
-            handle_define_type_tag(curscope, ident, TAG_STRUCT, sinfo);
-        } else {
-          if (name != NULL) {
-            sinfo = find_struct(curscope, name, NULL);
-            if (sinfo != NULL) {
-              bool is_union = tok->kind == TK_UNION;
-              if (((sinfo->flag & SIF_UNION) != 0) != is_union)
-                parse_error(PE_NOFATAL, tok, "wrong tag for `%.*s'", NAMES(name));
-            }
-          }
+          if (name != NULL) handle_define_type_tag(curscope, ident, TAG_STRUCT, sinfo);
+        } else if (name != NULL) {
+          sinfo = find_struct(curscope, name, NULL);
         }
-
         if (name == NULL && sinfo == NULL) {
           parse_error(PE_NOFATAL, NULL, "illegal struct/union usage");
-          type = &tyInt;  // Dummy.
+          type = &tyInt;
         } else {
           type = create_struct_type(sinfo, name, tc.qualifier);
         }
       }
-      break;
+      continue;
     case TK_ENUM:
-      if (!no_type_combination(&tc, 0, 0))
-        parse_error(PE_NOFATAL, tok, ILLEGAL_TYPE_COMBINATION);
-
+      if (type != NULL) { unget_token(tok); goto loop_exit; }
+      if (!no_type_combination(&tc, 0, 0)) parse_error(PE_NOFATAL, tok, ILLEGAL_TYPE_COMBINATION);
       type = parse_enum();
-      break;
+      continue;
     case TK_BOOL:
-      if (!no_type_combination(&tc, 0, 0))
-        parse_error(PE_NOFATAL, tok, ILLEGAL_TYPE_COMBINATION);
-
+      if (type != NULL) { unget_token(tok); goto loop_exit; }
+      if (!no_type_combination(&tc, 0, 0)) parse_error(PE_NOFATAL, tok, ILLEGAL_TYPE_COMBINATION);
       type = &tyBool;
-      break;
+      continue;
     case TK_IDENT:
-      if (no_type_combination(&tc, 0, 0)) {
-        type = find_typedef(curscope, tok->ident, NULL);
-      }
-      break;
+      if (type != NULL || !no_type_combination(&tc, 0, 0)) { unget_token(tok); goto loop_exit; }
+      type = find_typedef(curscope, tok->ident, NULL);
+      if (type == NULL) { unget_token(tok); goto loop_exit; }
+      continue;
     case TK_VOID:
+      if (type != NULL) { unget_token(tok); goto loop_exit; }
       type = tc.qualifier & TQ_CONST ? &tyConstVoid : &tyVoid;
-      break;
+      continue;
     case TK_AUTO_TYPE:
-      if (!no_type_combination(&tc, 0, 0))
-        parse_error(PE_NOFATAL, tok, ILLEGAL_TYPE_COMBINATION);
-
+      if (type != NULL || !no_type_combination(&tc, 0, 0)) { unget_token(tok); goto loop_exit; }
       type = calloc_or_die(sizeof(*type));
       type->kind = TY_AUTO;
-      break;
+      continue;
     case TK_TYPEOF:
+      if (type != NULL) { unget_token(tok); goto loop_exit; }
       type = parse_typeof(tok);
-      break;
-    default: break;
-    }
-    if (type == NULL) {
+      continue;
+    default:
       unget_token(tok);
-      break;
+      goto loop_exit;
     }
   }
+loop_exit:;
+
 
   if (type != NULL) {
     if (tc.qualifier != 0)
@@ -442,6 +455,18 @@ Type *parse_raw_type(int *pstorage) {
 
   if (pstorage != NULL)
     *pstorage = tc.storage;
+
+  if (pattributes != NULL) {
+    if (*pattributes == NULL) {
+      *pattributes = tc.attributes;
+    } else if (tc.attributes != NULL) {
+      const Name *name;
+      void *val;
+      for (int it = 0; (it = table_iterate(tc.attributes, it, &name, &val)) != -1; ) {
+        table_put(*pattributes, name, val);
+      }
+    }
+  }
 
   return type;
 }
@@ -688,7 +713,7 @@ Vector *parse_funparams(bool *pvaargs) {
 
       int storage;
       Token *ident;
-      Type *type = parse_var_def(NULL, &storage, &ident);
+      Type *type = parse_var_def(NULL, &storage, &ident, NULL);
       if (type == NULL) {
         parse_error(PE_NOFATAL, NULL, "type expected");
         type = &tyInt;
