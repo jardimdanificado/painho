@@ -99,8 +99,10 @@ $pattern {$n$aliases{$x$int}{abc}} {VALUE: $n}
 Papagaio follows a Wasm-first plugin architecture. Core features are limited to pattern matching and transformation, while custom text processing capabilities are provided by WebAssembly plugins.
 
 ### Built-in Operators
-- **$document**: Injects the current state of the document.
-- **$wasm{path}**: Loads a WebAssembly plugin from the file system (CLI only).
+- **`$document`**: Injects the current state of the document (alias for `$document$current`).
+- **`$document$original`**: Injects the initial, unprocessed input text. Useful for referencing the source even after multiple transformations.
+- **`$document$current`**: Injects the current state of the document during the pre-processing pass.
+- **`$wasm{path}`**: Loads a WebAssembly plugin from the file system (CLI only).
 - **$file{path}**: Injects the content of a file from the file system (CLI only).
 - **$wat{source}**: Compiles a WebAssembly Text Format (WAT) source string inline and registers all exported `papagaio_*` functions as commands. Useful for embedding lightweight plugins without an external `.wasm` file.
 

@@ -154,6 +154,10 @@ struct Papagaio {
     PatternPair *rules;
     int          rule_count, rule_cap;
     int          depth;
+
+    /* original document for $document$original */
+    char        *original_doc;
+    size_t       original_len;
 };
 
 /* =========================================================================
@@ -1462,6 +1466,7 @@ Papagaio *papagaio_open(void)
     ctx->auto_export = 1;
     ctx->rules = NULL; ctx->rule_count = 0; ctx->rule_cap = 0;
     ctx->depth = 0;
+    ctx->original_doc = NULL; ctx->original_len = 0;
 #ifndef __wasm__
     papagaio_register_command(ctx, "wasm", wasm_file_handler, NULL);
     papagaio_register_command(ctx, "file", file_handler, NULL);
@@ -1491,6 +1496,7 @@ void papagaio_close(Papagaio *ctx)
         }
         free(ctx->rules);
     }
+    if (ctx->original_doc) free(ctx->original_doc);
     free(ctx);
 }
 
@@ -1946,7 +1952,21 @@ static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sy
                     i = j; continue;
                 } else if (klen == 8 && memcmp(src + ks, "document", 8) == 0) {
                     /* Special built-in $document operator */
-                    sb_append_n(&out, src, len);
+                    if (j < len && src[j] == '$') {
+                        size_t ns = j + 1;
+                        if (ns + 8 <= len && memcmp(src + ns, "original", 8) == 0) {
+                            if (ctx->original_doc) sb_append_n(&out, ctx->original_doc, ctx->original_len);
+                            j = ns + 8;
+                        } else if (ns + 7 <= len && memcmp(src + ns, "current", 7) == 0) {
+                            sb_append_n(&out, src, len);
+                            j = ns + 7;
+                        } else {
+                            /* Unknown suffix, fallback to current */
+                            sb_append_n(&out, src, len);
+                        }
+                    } else {
+                        sb_append_n(&out, src, len);
+                    }
                     i = j; continue;
                 }
             }
@@ -2155,6 +2175,15 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
                 free(ctx->rules[i].r);
             }
             ctx->rule_count = 0;
+        }
+        if (ctx->original_doc) free(ctx->original_doc);
+        ctx->original_doc = (char*)malloc(len + 1);
+        if (ctx->original_doc) {
+            memcpy(ctx->original_doc, input, len);
+            ctx->original_doc[len] = '\0';
+            ctx->original_len = len;
+        } else {
+            ctx->original_len = 0;
         }
     }
 

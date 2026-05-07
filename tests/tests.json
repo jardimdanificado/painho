@@ -437,6 +437,12 @@
       "name": "Priority system: side effects order",
       "code": "$priority$0{$pattern{X}{1} $priority$1{$pattern{X}{2}}} $priority$1{$pattern{X}{3}} X",
       "expected": "2"
+    },
+    {
+      "id": 74,
+      "name": "$document$original rework",
+      "code": "$pattern{A}{OK} A - $document$original",
+      "expected": "OK - $pattern{A}{OK} A - $document$original"
     }
   ]
 }

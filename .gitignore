@@ -17,3 +17,4 @@ papagaiocc
 /lib/wasm3
 /lib/watr
 /tests/test_priority_bin
+/tests/test_document_bin
