@@ -1,8 +1,16 @@
 {
   "name": "papagaio",
-  "version": "0.32.1",
+  "version": "0.32.2",
   "description": "easy yet powerful preprocessor",
-  "main": "papagaio.js",
+  "main": "dist/wasm/papagaio.js",
+  "bin": {
+    "papagaio": "bin/cli.js"
+  },
+  "files": [
+    "dist/wasm/",
+    "bin/",
+    "README.md"
+  ],
   "type": "module",
   "scripts": {
     "test": "node tests/test.js"
@@ -26,8 +34,5 @@
   "bugs": {
     "url": "https://github.com/jardimdanificado/papagaio/issues"
   },
-  "homepage": "https://github.com/jardimdanificado/papagaio#readme",
-  "bin": {
-    "papagaio": "bin/cli.mjs"
-  }
+  "homepage": "https://github.com/jardimdanificado/papagaio#readme"
 }
