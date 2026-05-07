@@ -1764,6 +1764,7 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
 {
     StrBuf out; sb_init(&out);
     size_t i = 0, len = strlen(src);
+    size_t sl = strlen(sym->sigil);
 
     while (i < len) {
         if (src[i] == '$') { /* FIXED SIGIL for preprocessor */
@@ -1773,6 +1774,67 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
             size_t klen = j - ks;
 
             if (klen > 0) {
+                /* Check for $NAME$from{...} assignment syntax */
+                if (j < len && src[j] == '$') {
+                    size_t j2 = j + 1;
+                    if (j2 + 4 <= len && memcmp(src + j2, "from", 4) == 0) {
+                        size_t ks_name = ks;
+                        size_t name_len = j - ks;
+                        size_t j_next = j2 + 4;
+                        while(j_next < len && isspace((unsigned char)src[j_next])) j_next++;
+                        
+                        StrView so = { sym->open, strlen(sym->open) };
+                        StrView sc = { sym->close, strlen(sym->close) };
+                        if (j_next < len && str_pfx(src + j_next, sym->open)) {
+                            StrView val_blk;
+                            j_next = (size_t)extract_block(src, (int)j_next, so, sc, &val_blk);
+                            char *processed_val = papagaio_process_text(ctx, val_blk.ptr, val_blk.len);
+                            if (processed_val) {
+                                /* Pattern: $$NAME$aliases{NAME} for exact literal match */
+                                size_t pat_len = sl * 3 + name_len + 7 + strlen(sym->open) + name_len + strlen(sym->close);
+                                char *pat_str = (char *)malloc(pat_len + 1);
+                                if (pat_str) {
+                                    char *p = pat_str;
+                                    memcpy(p, sym->sigil, sl); p += sl;
+                                    memcpy(p, sym->sigil, sl); p += sl;
+                                    memcpy(p, src + ks_name, name_len); p += name_len;
+                                    memcpy(p, sym->sigil, sl); p += sl;
+                                    memcpy(p, "aliases", 7); p += 7;
+                                    memcpy(p, sym->open, strlen(sym->open)); p += strlen(sym->open);
+                                    memcpy(p, src + ks_name, name_len); p += name_len;
+                                    memcpy(p, sym->close, strlen(sym->close)); p += strlen(sym->close);
+                                    *p = '\0';
+                                    
+                                    /* Check for redefinition */
+                                    int found_idx = -1;
+                                    for (int ri = 0; ri < ctx->rule_count; ri++) {
+                                        if (strcmp(ctx->rules[ri].m, pat_str) == 0) {
+                                            found_idx = ri; break;
+                                        }
+                                    }
+                                    
+                                    if (found_idx >= 0) {
+                                        free(ctx->rules[found_idx].r);
+                                        ctx->rules[found_idx].r = strdup(processed_val);
+                                        free(pat_str);
+                                    } else {
+                                        if (ctx->rule_count + 1 > ctx->rule_cap) {
+                                            ctx->rule_cap = ctx->rule_cap ? ctx->rule_cap * 2 : 8;
+                                            ctx->rules = (PatternPair *)realloc(ctx->rules, sizeof(PatternPair) * ctx->rule_cap);
+                                        }
+                                        ctx->rules[ctx->rule_count].m = pat_str;
+                                        ctx->rules[ctx->rule_count].r = strdup(processed_val);
+                                        ctx->rule_count++;
+                                    }
+                                }
+                                free(processed_val);
+                            }
+                            i = j_next; continue;
+                        }
+                    }
+                }
+
+
                 int is_sym = (klen == 13 && memcmp(src + ks, "changesymbols", 13) == 0);
                 
                 if (is_sym) {
@@ -1914,13 +1976,14 @@ static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sy
     if (!ctx || !src) return src ? strdup(src) : NULL;
     StrBuf out; sb_init(&out);
     size_t i = 0, len = strlen(src);
+    size_t sl = strlen(sym->sigil);
     char sigil = sym->sigil[0];
     StrView so = { sym->open,  strlen(sym->open)  };
     StrView sc = { sym->close, strlen(sym->close) };
 
     while (i < len) {
         if (src[i] == sigil) {
-            size_t j = i + 1;
+            size_t j = i + sl;
             size_t ks = j;
             while (j < len && (isalnum((unsigned char)src[j]) || src[j] == '_')) j++;
             size_t klen = j - ks;
@@ -1951,22 +2014,24 @@ static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sy
                     if (res) { sb_append_n(&out, res, strlen(res)); free(res); }
                     for (int ci = 0; ci < vargc; ci++) if (vargv[ci]) free(vargv[ci]);
                     i = j; continue;
-                } else if (klen == 8 && memcmp(src + ks, "document", 8) == 0) {
-                    /* Special built-in $document operator */
+                }
+                
+                /* $document logic */
+                if (klen == 8 && memcmp(src + ks, "document", 8) == 0) {
                     if (j < len && src[j] == '$') {
-                        size_t ns = j + 1;
-                        if (ns + 8 <= len && memcmp(src + ns, "original", 8) == 0) {
-                            if (ctx->original_doc) sb_append_n(&out, ctx->original_doc, ctx->original_len);
-                            j = ns + 8;
-                        } else if (ns + 7 <= len && memcmp(src + ns, "current", 7) == 0) {
-                            sb_append_n(&out, src, len);
-                            j = ns + 7;
+                        j++;
+                        size_t s2 = j;
+                        while (j < len && (isalnum((unsigned char)src[j]) || src[j] == '_')) j++;
+                        size_t vlen = j - s2;
+                        if (vlen == 8 && memcmp(src + s2, "original", 8) == 0) {
+                            if (ctx && ctx->original_doc) sb_append_n(&out, ctx->original_doc, strlen(ctx->original_doc));
+                        } else if (vlen == 7 && memcmp(src + s2, "current", 7) == 0) {
+                            sb_append_n(&out, src, strlen(src));
                         } else {
-                            /* Unknown suffix, fallback to current */
-                            sb_append_n(&out, src, len);
+                            sb_append_n(&out, src, strlen(src));
                         }
                     } else {
-                        sb_append_n(&out, src, len);
+                        sb_append_n(&out, src, strlen(src));
                     }
                     i = j; continue;
                 }
@@ -2257,8 +2322,10 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
             }
         }
         free_pattern(&pat);
+        char *next_cur = strdup(out.data);
+        sb_free(&out);
         free(cur);
-        cur = out.data;
+        cur = next_cur;
     }
 
     char *final = dispatch_commands(ctx, cur, &sym);

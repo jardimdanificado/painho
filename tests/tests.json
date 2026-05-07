@@ -443,6 +443,66 @@
       "name": "$document$original rework",
       "code": "$pattern{A}{OK} A - $document$original",
       "expected": "OK - $pattern{A}{OK} A - $document$original"
+    },
+    {
+      "id": 75,
+      "name": "$from chained assignment",
+      "code": "$A$from{1} $B$from{$A$A} $B",
+      "expected": "11"
+    },
+    {
+      "id": 76,
+      "name": "$from nested assignment",
+      "code": "$X$from{ $Y$from{val} $Y } $X",
+      "expected": "val"
+    },
+    {
+      "id": 77,
+      "name": "$from redefinition",
+      "code": "$X$from{1} $X$from{2} $X",
+      "expected": "2"
+    },
+    {
+      "id": 78,
+      "name": "$from multiple same line",
+      "code": "$A$from{1}$B$from{2} $A+$B",
+      "expected": "1+2"
+    },
+    {
+      "id": 79,
+      "name": "$from sigil escaping",
+      "code": "$A$from{$$A} $A",
+      "expected": "$A"
+    },
+    {
+      "id": 80,
+      "name": "$from with recursive content",
+      "code": "$X$from{val} $pattern{$X}{OK} $X",
+      "expected": "OK"
+    },
+    {
+      "id": 81,
+      "name": "$from multi-level chain",
+      "code": "$A$from{1} $B$from{$A} $C$from{$B} $C",
+      "expected": "1"
+    },
+    {
+      "id": 82,
+      "name": "$from dynamic pattern",
+      "code": "$X$from{KEY} $pattern{$X}{VAL} KEY",
+      "expected": "VAL"
+    },
+    {
+      "id": 83,
+      "name": "$from value persistence",
+      "code": "$X$from{1} $Y$from{$X} $X$from{2} $Y",
+      "expected": "1"
+    },
+    {
+      "id": 84,
+      "name": "$document$current verification",
+      "code": "$X$from{VAL} $X - $document$current",
+      "expected": "VAL -  VAL - $document$current"
     }
   ]
 }
