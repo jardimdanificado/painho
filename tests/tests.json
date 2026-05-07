@@ -383,6 +383,42 @@
       "name": "Braced variable ambiguity resolution",
       "code": "$pattern {$id$word} {${id}x}\nfoo",
       "expected": "foox"
+    },
+    {
+      "id": 65,
+      "name": "Braced variable: non-identifier content not parsed as var",
+      "code": "$pattern {$a$word} {${a}-suffix}\nfoo",
+      "expected": " foo-suffix"
+    },
+    {
+      "id": 66,
+      "name": "Trailing sigil on literal: whitespace consumed",
+      "code": "$pattern {hello$ world} {MATCH}\nhello   world",
+      "expected": " MATCH"
+    },
+    {
+      "id": 67,
+      "name": "Trailing sigil on variable: whitespace consumed",
+      "code": "$pattern {$a$ $b} {$a/$b}\nhello   world",
+      "expected": " hello/world"
+    },
+    {
+      "id": 68,
+      "name": "Trailing sigil consumes newlines too",
+      "code": "$pattern {$x$\n$y} {($x,$y)}\nfoo\nbar",
+      "expected": " (foo,bar)"
+    },
+    {
+      "id": 69,
+      "name": "Braced variable: multiple in same replacement",
+      "code": "$pattern {$first $last} {${last}, ${first}}\nJohn Doe",
+      "expected": " Doe, John"
+    },
+    {
+      "id": 70,
+      "name": "Braced variable: unknown name kept as-is",
+      "code": "$pattern {$x$word} {${x}suffix${unknown}}\nfoo",
+      "expected": " foosuffix${unknown}"
     }
   ]
 }

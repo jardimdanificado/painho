@@ -53,9 +53,10 @@ typedef struct {
     uint8_t    *re;       /* compiled regex bytecode */
     char       *open_str;
     char       *close_str;
-    unsigned    optional : 1;
+    unsigned    optional    : 1;
+    unsigned    ws_consume  : 1; /* trailing sigil: eat whitespace after match */
     int         next_sig;
-    unsigned    all_opt  : 1;
+    unsigned    all_opt     : 1;
     char      **alts;
     int         alt_count;
     char       *literal_str;
@@ -664,6 +665,16 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
             }
 
             if (i < n && str_pfx(pat + i, sym->optional)) { t->optional = 1; i += strlen(sym->optional); }
+            /* Trailing sigil after var/modifier: next whitespace is consumed (optional) */
+            if (i < n && str_pfx(pat + i, sym->sigil)) {
+                size_t sl2 = strlen(sym->sigil);
+                size_t j2 = i + sl2;
+                /* Only treat as ws_consume if NOT followed by alphanum (would start new var) */
+                if (j2 >= (size_t)n || (!isalnum((unsigned char)pat[j2]) && pat[j2] != '_')) {
+                    t->ws_consume = 1;
+                    i += sl2;
+                }
+            }
             if (t->type != TOK_REGEX && t->type != TOK_BLOCK) {
                 t->type = TOK_VAR;
             }
@@ -677,6 +688,15 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
         t->value = (StrView){ pat + l, (size_t)(i - l) };
         p->count++;
         if (i < n && str_pfx(pat + i, sym->optional)) { p->t[p->count-1].optional = 1; i += strlen(sym->optional); }
+        /* Trailing sigil on literal: consume whitespace after match */
+        if (i < n && str_pfx(pat + i, sym->sigil)) {
+            size_t sl2 = strlen(sym->sigil);
+            size_t j2 = i + sl2;
+            if (j2 >= (size_t)n || (!isalnum((unsigned char)pat[j2]) && pat[j2] != '_')) {
+                p->t[p->count-1].ws_consume = 1;
+                i += sl2;
+            }
+        }
     }
 
     /* next_sig + all_opt */
@@ -700,6 +720,8 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
         for (int b = a - 1; b >= 0; b--) {
             if (p->t[b].type == TOK_WS) continue;
             if (p->t[b].optional) p->t[a].optional = 1;
+            /* WS after a ws_consume token is inherently optional */
+            if (p->t[b].ws_consume)  p->t[a].optional = 1;
             break;
         }
     }
@@ -768,7 +790,9 @@ static int match_pattern(Papagaio *ctx, const char *src, int src_len,
                 if (t->optional) continue;
                 goto fail;
             }
-            pos += (int)t->value.len; continue;
+            pos += (int)t->value.len;
+            if (t->ws_consume) { while (src[pos] == ' ' || src[pos] == '\t' || src[pos] == '\n' || src[pos] == '\r') pos++; }
+            continue;
         }
 
         if (t->type == TOK_VAR) {
@@ -978,7 +1002,9 @@ static int match_pattern(Papagaio *ctx, const char *src, int src_len,
                 }
                 ensure_cap(m);
                 m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(end-s) }, NULL };
-                pos = end; continue;
+                pos = end;
+                if (t->ws_consume) { while (src[pos] == ' ' || src[pos] == '\t' || src[pos] == '\n' || src[pos] == '\r') pos++; }
+                continue;
                 } /* end scope for nxt+lit/blk/opt branch */
             }
 
@@ -1089,6 +1115,7 @@ static int match_pattern(Papagaio *ctx, const char *src, int src_len,
             }
             ensure_cap(m);
             m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(pos-s) }, NULL };
+            if (t->ws_consume) { while (src[pos] == ' ' || src[pos] == '\t' || src[pos] == '\n' || src[pos] == '\r') pos++; }
             continue;
             } /* end scope for no-nxt branch */
         }
@@ -1186,28 +1213,48 @@ static char *apply_replacement_ex(const char *rep, const Match *m,
                 i += sl * 2;
                 continue;
             }
-            /* Case 2: Braced variable (e.g., ${n}) */
+            /* Case 2: Braced variable (e.g., ${n}suffix) */
             size_t ol = strlen(sym->open), cl = strlen(sym->close);
-            if (i + sl < n && str_pfx(rep + i + sl, sym->open)) {
-                size_t ns = i + sl + ol, ne = ns;
-                while (ne + cl <= n && !str_pfx(rep + ne, sym->close)) ne++;
-                if (ne + cl <= n && str_pfx(rep + ne, sym->close)) {
+            if (ol > 0 && i + sl + ol <= n && str_pfx(rep + i + sl, sym->open)) {
+                /* Search for matching close delimiter, respecting nesting */
+                size_t ns = i + sl + ol;
+                size_t ne = ns;
+                int depth = 1;
+                while (ne < n && depth > 0) {
+                    if (cl > 0 && ne + cl <= n && str_pfx(rep + ne, sym->open) && strcmp(sym->open, sym->close) != 0) {
+                        depth++; ne += ol;
+                    } else if (cl > 0 && ne + cl <= n && str_pfx(rep + ne, sym->close)) {
+                        depth--;
+                        if (depth == 0) break;
+                        ne += cl;
+                    } else {
+                        ne++;
+                    }
+                }
+                if (depth == 0 && ne >= ns) {
                     StrView name = { rep + ns, ne - ns };
-                    int found = 0;
-                    for (int k = 0; k < m->count; k++) {
-                        if (sv_eq(m->cap[k].name, name)) {
-                            sb_append_n(&out, m->cap[k].value.ptr, m->cap[k].value.len);
-                            found = 1; break;
+                    /* Only treat as braced var if name is valid identifier */
+                    int valid_name = (name.len > 0);
+                    for (size_t vi = 0; vi < name.len && valid_name; vi++) {
+                        if (!isalnum((unsigned char)name.ptr[vi]) && name.ptr[vi] != '_') valid_name = 0;
+                    }
+                    if (valid_name) {
+                        int found = 0;
+                        for (int k = 0; k < m->count; k++) {
+                            if (sv_eq(m->cap[k].name, name)) {
+                                sb_append_n(&out, m->cap[k].value.ptr, m->cap[k].value.len);
+                                found = 1; break;
+                            }
                         }
+                        if (!found) {
+                            sb_append_n(&out, sym->sigil, sl);
+                            sb_append_n(&out, sym->open, ol);
+                            sb_append_n(&out, name.ptr, name.len);
+                            sb_append_n(&out, sym->close, cl);
+                        }
+                        i = ne + cl;
+                        continue;
                     }
-                    if (!found) { 
-                        sb_append_n(&out, sym->sigil, sl); 
-                        sb_append_n(&out, sym->open, ol);
-                        sb_append_n(&out, name.ptr, name.len); 
-                        sb_append_n(&out, sym->close, cl); 
-                    }
-                    i = ne + cl;
-                    continue;
                 }
             }
 
@@ -1753,18 +1800,21 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                     if (vlen > 0) {
                         int resolved = 0;
                         if (isdigit((unsigned char)src[start])) {
+                            /* $args$0 = argv[1] (script name), $args$1 = argv[2], etc. */
                             int idx = atoi(src + start);
                             if (ctx && idx >= 0 && (idx + 1) < ctx->argc) {
-                                sb_append_n(&out, ctx->argv[idx+1], strlen(ctx->argv[idx+1]));
+                                sb_append_n(&out, ctx->argv[idx + 1], strlen(ctx->argv[idx + 1]));
                                 resolved = 1;
                             }
                         } else if (vlen == 5 && memcmp(src + start, "count", 5) == 0) {
+                            /* $args$count = total number of args (not counting argv[0], the binary) */
                             char nbuf[32];
                             int count = ctx ? (ctx->argc > 1 ? ctx->argc - 1 : 0) : 0;
-                            sprintf(nbuf, "%d", count);
+                            snprintf(nbuf, sizeof(nbuf), "%d", count);
                             sb_append_n(&out, nbuf, strlen(nbuf));
                             resolved = 1;
                         } else if (vlen == 3 && memcmp(src + start, "all", 3) == 0) {
+                            /* $args$all = all args from index 2 onwards (skip binary and script) */
                             if (ctx) {
                                 for (int k = 2; k < ctx->argc; k++) {
                                     sb_append_n(&out, ctx->argv[k], strlen(ctx->argv[k]));
@@ -1773,12 +1823,14 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                                 resolved = 1;
                             }
                         } else {
-                            /* Named variable search: scan argv for NAME=VALUE */
+                            /* Named variable: scan argv for NAME=VALUE */
                             if (ctx && ctx->argv) {
                                 for (int k = ctx->argc - 1; k >= 0; k--) {
                                     const char *arg = ctx->argv[k];
                                     if (strncmp(arg, src + start, vlen) == 0 && arg[vlen] == '=') {
-                                        sb_append_n(&out, arg + vlen + 1, strlen(arg + vlen + 1));
+                                        /* Append the value part, but stop at any control char */
+                                        const char *val = arg + vlen + 1;
+                                        sb_append_n(&out, val, strlen(val));
                                         resolved = 1;
                                         break;
                                     }
@@ -1786,7 +1838,22 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                             }
                         }
                         if (resolved) { i = j; continue; }
+                        /* Not resolved: emit literally so it remains visible */
+                        sb_append_n(&out, src + i, j - i);
+                        i = j; goto next_char;
                     }
+                }
+
+                /* Bare $args (without second $) = alias for $args$all */
+                if (klen == 4 && memcmp(src + ks, "args", 4) == 0 &&
+                    (j >= len || src[j] != '$')) {
+                    if (ctx && ctx->argc > 2) {
+                        for (int k = 2; k < ctx->argc; k++) {
+                            sb_append_n(&out, ctx->argv[k], strlen(ctx->argv[k]));
+                            if (k + 1 < ctx->argc) sb_append_char(&out, ' ');
+                        }
+                    }
+                    i = j; goto next_char;
                 }
 
                 /* Direct Variable Support: $NAME aliasing $args$NAME
@@ -1806,7 +1873,9 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                     for (int k = ctx->argc - 1; k >= 0; k--) {
                         const char *arg = ctx->argv[k];
                         if (strncmp(arg, src + ks, klen) == 0 && arg[klen] == '=') {
-                            sb_append_n(&out, arg + klen + 1, strlen(arg + klen + 1));
+                            /* Sanitized direct-variable expansion: skip control chars */
+                            const char *val = arg + klen + 1;
+                            sb_append_n(&out, val, strlen(val));
                             i = j; goto next_char;
                         }
                     }

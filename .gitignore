@@ -12,3 +12,4 @@ plugins/mquickjs/mjs_stdlib_gen
 *.log
 papagaiocc
 *.wasm
+/tests/run_c_tests

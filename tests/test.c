@@ -106,6 +106,54 @@ int main(void)
     printf("Test 27 [CLI Args Direct] - %s (esperado: Direct Foo: bar, Direct Target: wasm, No Direct: $unknown)\n", o);
     free(o);
 
+    /* Reset args before further tests */
+    papagaio_set_args(ctx, 0, NULL);
+
+    /* Test trailing-sigil whitespace consumption */
+    printf("\n=== Testing Trailing Sigil Whitespace Consumption ===\n");
+
+    o = papagaio_process("hello   world",
+                         "hello$ world", "MATCH", NULL);
+    printf("Test 30 [Trailing sigil literal] - '%s' (esperado: 'MATCH')\n", o);
+    free(o);
+
+    o = papagaio_process("foo   bar",
+                         "$a$ $b", "$a/$b", NULL);
+    printf("Test 31 [Trailing sigil var] - '%s' (esperado: 'foo/bar')\n", o);
+    free(o);
+
+    /* Test multiple braced vars in one replacement */
+    printf("\n=== Testing Braced Variables ===\n");
+
+    o = papagaio_process("John Doe",
+                         "$first $last", "${last}, ${first}", NULL);
+    printf("Test 32 [Braced multi-var] - '%s' (esperado: 'Doe, John')\n", o);
+    free(o);
+
+    o = papagaio_process("foo",
+                         "$x$word", "${x}suffix${unknown}", NULL);
+    printf("Test 33 [Braced unknown kept] - '%s' (esperado: 'foosuffix${unknown}')\n", o);
+    free(o);
+
+    /* $args$0 tests */
+    printf("\n=== Testing $args$0 (script name) ===\n");
+    char *argv0[] = {"binary_name", "script.pap", "extra_arg", "key=val"};
+    papagaio_set_args(ctx, 4, argv0);
+    const char *in_a0 = "Script: $args$0, Extra: $args$1, Count: $args$count";
+    o = papagaio_process_text(ctx, in_a0, strlen(in_a0));
+    printf("Test 34 [$args$0] - %s (esperado: Script: script.pap, Extra: extra_arg, Count: 3)\n", o);
+    free(o);
+    const char *in_named = "Named: $args$key, All: $args$all";
+    o = papagaio_process_text(ctx, in_named, strlen(in_named));
+    printf("Test 35 [$args$ named+all] - %s (esperado: Named: val, All: extra_arg key=val)\n", o);
+    free(o);
+
+    /* Unresolved $args$ stays literal */
+    const char *in_miss = "Miss: $args$missing";
+    o = papagaio_process_text(ctx, in_miss, strlen(in_miss));
+    printf("Test 36 [$args$ unresolved literal] - %s (esperado: Miss: $args$missing)\n", o);
+    free(o);
+
     printf("\n=== All C Tests Finished ===\n");
     papagaio_close(ctx);
     return 0;

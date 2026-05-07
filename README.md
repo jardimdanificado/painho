@@ -61,6 +61,12 @@ Modifiers specify the data type or constraints of a match:
 - **Substrings**: `$var$starts{foo}`, `$var$ends{bar}`, `$var$prefix{p}`, `$var$suffix{s}`, `$var$infix{i}`, `$var$includes{x}`
 - **Grouping**: `$item$group{subpattern}` (recursive grouping, matches as one unit)
 - **Optionality**: any token (literal, variable, or group) can be made optional by adding `?` (or a custom marker like `MAYBE`).
+- **Trailing Sigil (whitespace collapse)**: appending a bare `$` (or the current sigil) directly after any variable or literal causes the matcher to **consume all following whitespace** in the input — making the adjacent `TOK_WS` optional. This is useful when the number of spaces between tokens is variable:
+  ```text
+  $pattern {$a$ $b} {$a/$b}
+  hello   world   → hello/world
+  ```
+  The trailing `$` after `$a` collapses any run of spaces/tabs/newlines between `$a` and `$b`.
 
 ### Braced Variables
 
@@ -96,6 +102,16 @@ Papagaio follows a Wasm-first plugin architecture. Core features are limited to 
 - **$document**: Injects the current state of the document.
 - **$wasm{path}**: Loads a WebAssembly plugin from the file system (CLI only).
 - **$file{path}**: Injects the content of a file from the file system (CLI only).
+- **$wat{source}**: Compiles a WebAssembly Text Format (WAT) source string inline and registers all exported `papagaio_*` functions as commands. Useful for embedding lightweight plugins without an external `.wasm` file.
+
+  ```text
+  $wat{
+    (module
+      (func (export "papagaio_hello") (result i32)
+        i32.const 42))
+  }
+  $hello
+  ```
 
 ---
 
@@ -104,10 +120,16 @@ Papagaio follows a Wasm-first plugin architecture. Core features are limited to 
 Papagaio can resolve command-line arguments directly within your source files. This is useful for passing configuration, flags, or metadata into the processing pipeline.
 
 ### Positional Arguments
-- **`$args$0`**: The input file/script name.
-- **`$args$1`, `$args$2`, ...**: Positional arguments passed to the CLI.
-- **`$args$count`**: The total number of arguments (starting from the script).
-- **`$args$all`**: All extra arguments (from index 1 onwards) concatenated with spaces.
+The `argv` array maps as follows (where `argv[0]` is the binary name, invisible to Papagaio):
+
+| Variable | Value |
+|---|---|
+| `$args$0` | `argv[1]` — the input file/script name |
+| `$args$1`, `$args$2`, … | Subsequent positional arguments |
+| `$args$count` | Total number of arguments (excludes the binary name, `argv[0]`) |
+| `$args$all` | All extra arguments from index 1 onwards (after the script), joined with spaces |
+
+If a `$args$NAME` variable is not found, it is emitted **literally** (e.g. `$args$missing` stays as-is).
 
 ### Named Variables (Overrides)
 Arguments in the format `key=value` are automatically parsed and can be accessed in two ways:
