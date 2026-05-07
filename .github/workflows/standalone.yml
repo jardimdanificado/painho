@@ -159,7 +159,7 @@ jobs:
         with:
           tag_name: v${{ inputs.version }}
           name: v${{ inputs.version }}
-          body: "papagaio Standalone v${{ inputs.version }} (Includes Clang)"
+          body: "papagaio v${{ inputs.version }} (includes standalone releases)"
           prerelease: ${{ inputs.prerelease }}
           files: |
             artifacts/**/*
