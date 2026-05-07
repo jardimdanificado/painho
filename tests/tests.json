@@ -419,6 +419,24 @@
       "name": "Braced variable: unknown name kept as-is",
       "code": "$pattern {$x$word} {${x}suffix${unknown}}\nfoo",
       "expected": " foosuffix${unknown}"
+    },
+    {
+      "id": 71,
+      "name": "Priority system: basic reordering",
+      "code": "$priority$1{Result: A} $priority$0{$pattern{A}{OK}}",
+      "expected": "Result: OK"
+    },
+    {
+      "id": 72,
+      "name": "Priority system: recursive blocks",
+      "code": "$priority$0{A $priority$1{B}} $priority$1{C}",
+      "expected": "A B C"
+    },
+    {
+      "id": 73,
+      "name": "Priority system: side effects order",
+      "code": "$priority$0{$pattern{X}{1} $priority$1{$pattern{X}{2}}} $priority$1{$pattern{X}{3}} X",
+      "expected": "2"
     }
   ]
 }

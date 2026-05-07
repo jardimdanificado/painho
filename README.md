@@ -166,6 +166,24 @@ This changes the sigil to `@`, delimiters to `< >`, and the optional marker to `
 
 ---
 
+## Recursive Priority System
+
+Papagaio allows you to control the order of execution and side-effects (such as pattern definitions or WASM loading) using the **`$priority$N`** directive.
+
+- **`$priority$0{...}`**: Maximum priority.
+- **`$priority$1`, `$priority$2`, ...**: Successively lower priorities.
+- **Recursive Evaluation**: Blocks with higher numerical priority (lower value) are fully processed — including their own nested patterns and commands — before any lower-priority blocks, regardless of their physical position in the file.
+- **Unspecified Priority**: Any text not wrapped in a `$priority` block is treated as priority `1,000,000,000` (processed last).
+
+#### Example:
+```text
+$priority$1{ Result: A }
+$priority$0{ $pattern{A}{OK} }
+```
+*Output: `Result: OK`* — even though `A` is used before being defined in the source, the priority 0 block ensures the pattern definition happens first.
+
+---
+
 ## Plugin Development
 
 Papagaio features a modern, frictionless Wasm plugin system. With the **`papagaiocc`** standalone compiler, you can write plugins in standard C using simple naming conventions and compile them into zero-dependency WebAssembly modules.
@@ -243,9 +261,10 @@ make test       # Run comprehensive test suite
 
 ## References
 
-- [CPP](https://en.wikipedia.org/wiki/C_preprocessor)
+- [cpp](https://en.wikipedia.org/wiki/C_preprocessor)
 - [m4](https://www.gnu.org/software/m4/)
 - [libregexp](https://bellard.org/quickjs/)
-- [QuickJS](https://bellard.org/quickjs/)
-- [TCC](https://bellard.org/tcc/)
-- [Wasm3](https://github.com/wasm3/wasm3)
+- [quickjs](https://bellard.org/quickjs/)
+- [tcc](https://bellard.org/tcc/)
+- [wasm3](https://github.com/wasm3/wasm3)
+- [watr](https://github.com/dy/watr)

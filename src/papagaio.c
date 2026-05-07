@@ -149,6 +149,11 @@ struct Papagaio {
 
     /* preprocessor options */
     int    auto_export;
+
+    /* patterns - persistent within one top-level call */
+    PatternPair *rules;
+    int          rule_count, rule_cap;
+    int          depth;
 };
 
 /* =========================================================================
@@ -1455,6 +1460,8 @@ Papagaio *papagaio_open(void)
     ctx->finalizers = NULL; ctx->fin_count = 0; ctx->fin_cap = 0;
     ctx->argc       = 0;    ctx->argv      = NULL;
     ctx->auto_export = 1;
+    ctx->rules = NULL; ctx->rule_count = 0; ctx->rule_cap = 0;
+    ctx->depth = 0;
 #ifndef __wasm__
     papagaio_register_command(ctx, "wasm", wasm_file_handler, NULL);
     papagaio_register_command(ctx, "file", file_handler, NULL);
@@ -1477,6 +1484,13 @@ void papagaio_close(Papagaio *ctx)
     free(ctx->commands);
     free(ctx->modifiers);
     free(ctx->finalizers);
+    if (ctx->rules) {
+        for (int i = 0; i < ctx->rule_count; i++) {
+            free(ctx->rules[i].m);
+            free(ctx->rules[i].r);
+        }
+        free(ctx->rules);
+    }
     free(ctx);
 }
 
@@ -1977,10 +1991,179 @@ static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sy
     return result;
 }
 
+typedef struct {
+    int priority;
+    size_t start;
+    size_t end;
+    char *content;
+    char *result;
+    int is_priority_block;
+    int original_index;
+} PChunk;
+
+static int compare_pchunks_priority(const void *a, const void *b) {
+    const PChunk *ca = (const PChunk *)a;
+    const PChunk *cb = (const PChunk *)b;
+    if (ca->priority != cb->priority) return ca->priority - cb->priority;
+    return ca->original_index - cb->original_index;
+}
+
+static int compare_pchunks_original(const void *a, const void *b) {
+    const PChunk *ca = (const PChunk *)a;
+    const PChunk *cb = (const PChunk *)b;
+    return (int)ca->original_index - (int)cb->original_index;
+}
+
+static char *handle_priorities(Papagaio *ctx, const char *src, size_t len, const Symbols *sym) {
+    size_t i = 0;
+    size_t last_pos = 0;
+    size_t sl = strlen(sym->sigil);
+    
+    PChunk *chunks = NULL;
+    int chunk_count = 0;
+    int chunk_cap = 0;
+    int found_any = 0;
+
+    while (i < len) {
+        if (i + sl + 8 + sl < len && 
+            memcmp(src + i, sym->sigil, sl) == 0 &&
+            memcmp(src + i + sl, "priority", 8) == 0 &&
+            memcmp(src + i + sl + 8, sym->sigil, sl) == 0) {
+            
+            size_t ps = i;
+            size_t j = i + sl + 8 + sl;
+            int prio = 0;
+            int has_prio_val = 0;
+            while (j < len && isdigit((unsigned char)src[j])) {
+                prio = prio * 10 + (src[j] - '0');
+                j++;
+                has_prio_val = 1;
+            }
+            if (has_prio_val) {
+                while (j < len && isspace((unsigned char)src[j])) j++;
+                if (j < len && str_pfx(src + j, sym->open)) {
+                    found_any = 1;
+                    
+                    /* Add non-priority chunk before this */
+                    if (ps > last_pos) {
+                        if (chunk_count >= chunk_cap) {
+                            chunk_cap = chunk_cap ? chunk_cap * 2 : 8;
+                            chunks = (PChunk *)realloc(chunks, sizeof(PChunk) * chunk_cap);
+                        }
+                        chunks[chunk_count].priority = 1000000000;
+                        chunks[chunk_count].start = last_pos;
+                        chunks[chunk_count].end = ps;
+                        chunks[chunk_count].content = NULL;
+                        chunks[chunk_count].result = NULL;
+                        chunks[chunk_count].is_priority_block = 0;
+                        chunks[chunk_count].original_index = chunk_count;
+                        chunk_count++;
+                    }
+
+                    StrView v;
+                    StrView so = { sym->open, strlen(sym->open) };
+                    StrView sc = { sym->close, strlen(sym->close) };
+                    int next = extract_block(src, (int)j, so, sc, &v);
+                    
+                    if (chunk_count >= chunk_cap) {
+                        chunk_cap = chunk_cap ? chunk_cap * 2 : 8;
+                        chunks = (PChunk *)realloc(chunks, sizeof(PChunk) * chunk_cap);
+                    }
+                    chunks[chunk_count].priority = prio;
+                    chunks[chunk_count].start = ps;
+                    chunks[chunk_count].end = (size_t)next;
+                    chunks[chunk_count].content = (char *)malloc(v.len + 1);
+                    memcpy(chunks[chunk_count].content, v.ptr, v.len);
+                    chunks[chunk_count].content[v.len] = '\0';
+                    chunks[chunk_count].result = NULL;
+                    chunks[chunk_count].is_priority_block = 1;
+                    chunks[chunk_count].original_index = chunk_count;
+                    chunk_count++;
+                    
+                    i = (size_t)next;
+                    last_pos = i;
+                    continue;
+                }
+            }
+        }
+        i++;
+    }
+
+    if (!found_any) {
+        if (chunks) free(chunks);
+        return NULL;
+    }
+
+    /* Add trailing chunk */
+    if (last_pos < len) {
+        if (chunk_count >= chunk_cap) {
+            chunk_cap = chunk_cap ? chunk_cap * 2 : 8;
+            chunks = (PChunk *)realloc(chunks, sizeof(PChunk) * chunk_cap);
+        }
+        chunks[chunk_count].priority = 1000000000;
+        chunks[chunk_count].start = last_pos;
+        chunks[chunk_count].end = len;
+        chunks[chunk_count].content = NULL;
+        chunks[chunk_count].result = NULL;
+        chunks[chunk_count].is_priority_block = 0;
+        chunks[chunk_count].original_index = chunk_count;
+        chunk_count++;
+    }
+
+    /* Sort by priority */
+    qsort(chunks, chunk_count, sizeof(PChunk), compare_pchunks_priority);
+
+    /* Process in priority order */
+    for (int j = 0; j < chunk_count; j++) {
+        if (chunks[j].is_priority_block) {
+            chunks[j].result = papagaio_process_text(ctx, chunks[j].content, strlen(chunks[j].content));
+        } else {
+            const char *chunk_text = src + chunks[j].start;
+            size_t chunk_len = chunks[j].end - chunks[j].start;
+            chunks[j].result = papagaio_process_text(ctx, chunk_text, chunk_len);
+        }
+    }
+
+    /* Sort back to original order for reassembly */
+    qsort(chunks, chunk_count, sizeof(PChunk), compare_pchunks_original);
+
+    StrBuf out; sb_init(&out);
+    for (int j = 0; j < chunk_count; j++) {
+        if (chunks[j].result) {
+            sb_append_n(&out, chunks[j].result, strlen(chunks[j].result));
+            free(chunks[j].result);
+        }
+        if (chunks[j].content) free(chunks[j].content);
+    }
+    free(chunks);
+    
+    char *final_res = strdup(out.data);
+    sb_free(&out);
+    return final_res;
+}
+
 char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
 {
     if (!ctx || !input) return NULL;
     Symbols sym = make_symbols(PAP_SIGIL, PAP_OPEN, PAP_CLOSE);
+
+    ctx->depth++;
+    if (ctx->depth == 1) {
+        if (ctx->rules) {
+            for (int i = 0; i < ctx->rule_count; i++) {
+                free(ctx->rules[i].m);
+                free(ctx->rules[i].r);
+            }
+            ctx->rule_count = 0;
+        }
+    }
+
+    /* 0. Handle Priorities */
+    char *prio_res = handle_priorities(ctx, input, len, &sym);
+    if (prio_res) {
+        ctx->depth--;
+        return prio_res;
+    }
 
     char *buf = (char *)malloc(len + 1);
     if (!buf) return NULL;
@@ -1989,23 +2172,35 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
     char *preprocessed = resolve_preprocessor(ctx, buf, &sym); free(buf);
     if (!preprocessed) return NULL;
     
-    /* A. Resolve Patterns */
-    PatternPair *pairs = NULL; int pc = 0;
-    char *text_no_patterns = extract_nested(preprocessed, &sym, &pairs, &pc);
+    /* A. Resolve Patterns - Now adds to persistent ctx->rules */
+    PatternPair *new_pairs = NULL; int new_pc = 0;
+    char *text_no_patterns = extract_nested(preprocessed, &sym, &new_pairs, &new_pc);
     free(preprocessed);
-    if (!text_no_patterns) { free_pairs(pairs, pc); return NULL; }
+    if (!text_no_patterns) { free_pairs(new_pairs, new_pc); return NULL; }
+
+    if (new_pc > 0) {
+        if (ctx->rule_count + new_pc > ctx->rule_cap) {
+            ctx->rule_cap = ctx->rule_cap ? (ctx->rule_cap + new_pc) * 2 : (new_pc + 8);
+            ctx->rules = (PatternPair *)realloc(ctx->rules, sizeof(PatternPair) * ctx->rule_cap);
+        }
+        for (int i = 0; i < new_pc; i++) {
+            ctx->rules[ctx->rule_count++] = new_pairs[i];
+        }
+        free(new_pairs); /* Don't use free_pairs as we moved the strings */
+    }
     
     char *cur = text_no_patterns;
-    for (int i = 0; i < pc; i++) {
+    /* Apply ALL rules (both just found and previous persistent ones) */
+    for (int i = 0; i < ctx->rule_count; i++) {
         StrBuf out; sb_init(&out);
         size_t clen = strlen(cur), pos = 0;
         Pattern pat;
-        parse_pattern_ex(pairs[i].m, &pat, &sym);
+        parse_pattern_ex(ctx->rules[i].m, &pat, &sym);
         
         while (pos < clen) {
             Match m; m.ctx = ctx;
             if (match_pattern(ctx, cur, (int)clen, &pat, (int)pos, &m)) {
-                char *r = apply_replacement_ex(pairs[i].r, &m, &sym);
+                char *r = apply_replacement_ex(ctx->rules[i].r, &m, &sym);
                 sb_append_n(&out, r, strlen(r));
                 free(r);
                 pos = (size_t)m.end;
@@ -2018,11 +2213,11 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
         free(cur);
         cur = out.data;
     }
-    free_pairs(pairs, pc);
 
     char *final = dispatch_commands(ctx, cur, &sym);
     free(cur);
     
+    ctx->depth--;
     return final;
 }
 

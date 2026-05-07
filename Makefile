@@ -82,6 +82,9 @@ test_c: $(TARGET_A)
 	$(CC) $(CFLAGS) -o tests/test_bin tests/test.c $(TARGET_A) $(LDFLAGS)
 	@echo "=== Starting Papagaio C Tests ==="
 	./tests/test_bin
+	$(CC) $(CFLAGS) -o tests/test_priority_bin tests/test_priority.c $(TARGET_A) $(LDFLAGS)
+	@echo "=== Starting Papagaio Priority Tests ==="
+	./tests/test_priority_bin
 
 test_node: wasm
 	@if command -v node > /dev/null 2>&1; then \
