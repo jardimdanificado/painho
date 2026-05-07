@@ -94,6 +94,20 @@ test_node: wasm
 		echo "Node.js not found, skipping Node tests."; \
 	fi
 
+test_valgrind: $(TARGET_A)
+	$(CC) $(CFLAGS) -o tests/test_bin tests/test.c $(TARGET_A) $(LDFLAGS)
+	@echo "=== Running Papagaio C Tests with Valgrind ==="
+	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 ./tests/test_bin
+	$(CC) $(CFLAGS) -o tests/test_priority_bin tests/test_priority.c $(TARGET_A) $(LDFLAGS)
+	@echo "=== Running Papagaio Priority Tests with Valgrind ==="
+	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 ./tests/test_priority_bin
+
+bench: $(TARGET_BIN) wasm
+	@echo "=== Running Benchmark (Native C) ==="
+	@bash -c "time ./papagaio tests/benchmark.pap > /dev/null"
+	@echo "=== Running Benchmark (Node.js WASM) ==="
+	@bash -c "time ./bin/cli.js tests/benchmark.pap > /dev/null"
+
 install: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 	install -d $(BINDIR)
 	install -m 755 $(TARGET_BIN) $(BINDIR)/$(TARGET_BIN)

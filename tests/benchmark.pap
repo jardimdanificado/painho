@@ -1,0 +1,33 @@
+$priority$max{
+  $wat{
+    (module
+      (func (export "papagaio_fib") (param i32) (result i32)
+        (if (result i32) (i32.lt_s (local.get 0) (i32.const 2))
+          (then (local.get 0))
+          (else
+            (i32.add
+              (call 0 (i32.sub (local.get 0) (i32.const 1)))
+              (call 0 (i32.sub (local.get 0) (i32.const 2))))))))
+  }
+  $pattern {fib $n$int} {FIB($n) = $fib{$n}}
+}
+
+$A$from{20}
+$B$from{21}
+$C$from{22}
+
+$priority$1{
+  Fib of A: fib $A
+  Fib of B: fib $B
+  Fib of C: fib $C
+}
+
+$priority$2{
+  Nested: $INNER$from{fib 15} Value of inner is $INNER
+}
+
+$priority$3{
+  $D$from{fib 10}
+  $E$from{fib 11}
+  Result D+E: $D and $E
+}

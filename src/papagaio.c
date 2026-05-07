@@ -1487,8 +1487,18 @@ void papagaio_close(Papagaio *ctx)
     if (ctx->js_rt)  JS_FreeRuntime(ctx->js_rt);
     if (ctx->runtime) m3_FreeRuntime(ctx->runtime);
     if (ctx->env)     m3_FreeEnvironment(ctx->env);
-    free(ctx->commands);
-    free(ctx->modifiers);
+    if (ctx->commands) {
+        for (int i = 0; i < ctx->cmd_count; i++) {
+            free((void*)ctx->commands[i].name);
+        }
+        free(ctx->commands);
+    }
+    if (ctx->modifiers) {
+        for (int i = 0; i < ctx->mod_count; i++) {
+            free((void*)ctx->modifiers[i].name);
+        }
+        free(ctx->modifiers);
+    }
     free(ctx->finalizers);
     if (ctx->rules) {
         for (int i = 0; i < ctx->rule_count; i++) {

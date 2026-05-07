@@ -3,16 +3,19 @@ project(papagaio C)
 
 set(CMAKE_C_STANDARD 99)
 
-include_directories(.)
+include_directories(. lib/quickjs lib/wasm3/source)
 
-file(GLOB WASM3_SRC "lib/wasm3/*.c")
+file(GLOB WASM3_SRC "lib/wasm3/source/*.c")
 
 # Main library (static)
 add_library(libpapagaio STATIC
   src/papagaio.c
-  lib/libregexp/libregexp.c
-  lib/libregexp/cutils.c
-  lib/libregexp/libunicode.c
+  lib/quickjs/quickjs.c
+  lib/quickjs/libregexp.c
+  lib/quickjs/libunicode.c
+  lib/quickjs/cutils.c
+  lib/quickjs/dtoa.c
+  lib/quickjs/quickjs-libc.c
   ${WASM3_SRC}
 )
 if (NOT MSVC)
