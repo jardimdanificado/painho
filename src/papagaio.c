@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <limits.h>
 
 
 
@@ -2024,7 +2025,8 @@ typedef struct {
 static int compare_pchunks_priority(const void *a, const void *b) {
     const PChunk *ca = (const PChunk *)a;
     const PChunk *cb = (const PChunk *)b;
-    if (ca->priority != cb->priority) return ca->priority - cb->priority;
+    if (ca->priority < cb->priority) return -1;
+    if (ca->priority > cb->priority) return 1;
     return ca->original_index - cb->original_index;
 }
 
@@ -2054,10 +2056,26 @@ static char *handle_priorities(Papagaio *ctx, const char *src, size_t len, const
             size_t j = i + sl + 8 + sl;
             int prio = 0;
             int has_prio_val = 0;
-            while (j < len && isdigit((unsigned char)src[j])) {
-                prio = prio * 10 + (src[j] - '0');
-                j++;
+            if (j + 3 <= len && memcmp(src + j, "max", 3) == 0) {
+                prio = INT_MIN + 1;
+                j += 3;
                 has_prio_val = 1;
+            } else if (j + 3 <= len && memcmp(src + j, "min", 3) == 0) {
+                prio = INT_MAX - 1;
+                j += 3;
+                has_prio_val = 1;
+            } else {
+                int sign = 1;
+                if (j < len && src[j] == '-') {
+                    sign = -1;
+                    j++;
+                }
+                while (j < len && isdigit((unsigned char)src[j])) {
+                    prio = prio * 10 + (src[j] - '0');
+                    j++;
+                    has_prio_val = 1;
+                }
+                prio *= sign;
             }
             if (has_prio_val) {
                 while (j < len && isspace((unsigned char)src[j])) j++;
@@ -2070,7 +2088,7 @@ static char *handle_priorities(Papagaio *ctx, const char *src, size_t len, const
                             chunk_cap = chunk_cap ? chunk_cap * 2 : 8;
                             chunks = (PChunk *)realloc(chunks, sizeof(PChunk) * chunk_cap);
                         }
-                        chunks[chunk_count].priority = 1000000000;
+                        chunks[chunk_count].priority = INT_MAX - 1;
                         chunks[chunk_count].start = last_pos;
                         chunks[chunk_count].end = ps;
                         chunks[chunk_count].content = NULL;
@@ -2120,7 +2138,7 @@ static char *handle_priorities(Papagaio *ctx, const char *src, size_t len, const
             chunk_cap = chunk_cap ? chunk_cap * 2 : 8;
             chunks = (PChunk *)realloc(chunks, sizeof(PChunk) * chunk_cap);
         }
-        chunks[chunk_count].priority = 1000000000;
+        chunks[chunk_count].priority = INT_MAX - 1;
         chunks[chunk_count].start = last_pos;
         chunks[chunk_count].end = len;
         chunks[chunk_count].content = NULL;

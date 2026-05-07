@@ -50,5 +50,27 @@ int main(void)
         free(o);
         papagaio_close(ctx);
     }
+
+    /* Test 5: Negative priority side effects */
+    {
+        Papagaio *ctx = papagaio_open();
+        const char *in = "$priority$0{Result: A} $priority$-1{$pattern{A}{OK}}";
+        char *o = papagaio_process_text(ctx, in, strlen(in));
+        /* P-1 runs before P0. Result: OK. */
+        printf("Test 5 [Negative Priority] - '%s' (esperado: 'Result: OK ')\n", o);
+        free(o);
+        papagaio_close(ctx);
+    }
+
+    /* Test 6: Priority max alias */
+    {
+        Papagaio *ctx = papagaio_open();
+        const char *in = "$priority$0{Result: A} $priority$max{$pattern{A}{MAX}}";
+        char *o = papagaio_process_text(ctx, in, strlen(in));
+        /* max runs before 0. Result: MAX. */
+        printf("Test 6 [Priority Max] - '%s' (esperado: 'Result: MAX ')\n", o);
+        free(o);
+        papagaio_close(ctx);
+    }
     return 0;
 }
