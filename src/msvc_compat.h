@@ -55,14 +55,14 @@
 
 #define __js_printf_like(f, a)
 
-/* clz/ctz shims using macros to avoid redefinition in cutils.h */
-static inline int msvc_clz32(unsigned int a) {
+/* clz/ctz shims using unique names to avoid conflicts with QuickJS cutils.h fallbacks */
+static inline int papagaio_msvc_clz32(unsigned int a) {
     unsigned long index;
     if (_BitScanReverse(&index, a)) return 31 - index;
     return 32;
 }
 
-static inline int msvc_clz64(uint64_t a) {
+static inline int papagaio_msvc_clz64(uint64_t a) {
     unsigned long index;
 #if defined(_M_X64) || defined(_M_ARM64)
     if (_BitScanReverse64(&index, a)) return 63 - index;
@@ -73,13 +73,13 @@ static inline int msvc_clz64(uint64_t a) {
     return 64;
 }
 
-static inline int msvc_ctz32(unsigned int a) {
+static inline int papagaio_msvc_ctz32(unsigned int a) {
     unsigned long index;
     if (_BitScanForward(&index, a)) return index;
     return 32;
 }
 
-static inline int msvc_ctz64(uint64_t a) {
+static inline int papagaio_msvc_ctz64(uint64_t a) {
     unsigned long index;
 #if defined(_M_X64) || defined(_M_ARM64)
     if (_BitScanForward64(&index, a)) return index;
@@ -90,19 +90,13 @@ static inline int msvc_ctz64(uint64_t a) {
     return 64;
 }
 
-/* Redefine the function names as macros. 
-   When QuickJS's cutils.h tries to define them as static inline, 
-   the macro expansion will change the name, preventing conflicts. */
-#define clz32 msvc_clz32
-#define clz64 msvc_clz64
-#define ctz32 msvc_ctz32
-#define ctz64 msvc_ctz64
-
-/* Builtin shims for QuickJS */
-#define __builtin_clz msvc_clz32
-#define __builtin_clzll msvc_clz64
-#define __builtin_ctz msvc_ctz32
-#define __builtin_ctzll msvc_ctz64
+/* Provide __builtin_ shims for submodules that expect them (like wasm3).
+   We do NOT define clz32/clz64/ctz32/ctz64 as macros here to allow 
+   QuickJS's cutils.h to define its own portable fallbacks without conflict. */
+#define __builtin_clz papagaio_msvc_clz32
+#define __builtin_clzll papagaio_msvc_clz64
+#define __builtin_ctz papagaio_msvc_ctz32
+#define __builtin_ctzll papagaio_msvc_ctz64
 #define __builtin_expect(x, y) (x)
 
 /* Redefine strdup if needed (MSVC uses _strdup) */

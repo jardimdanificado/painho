@@ -1,6 +1,7 @@
 #define _DEFAULT_SOURCE
 #include "papagaio.h"
 #include "../lib/wasm3/source/wasm3.h"
+#include "../lib/wasm3/source/m3_core.h"
 #include "../lib/wasm3/source/m3_env.h"
 #include "../lib/wasm3/source/m3_function.h"
 #include "../lib/quickjs/quickjs.h"
