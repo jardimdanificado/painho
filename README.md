@@ -254,7 +254,7 @@ char* papagaio_greet(int argc, char **argv)
 }
 ```
 
-To use the Papagaio Wasm SDK (`lib.c`), copy it from `lib/lib.c` into your project and include it explicitly:
+To use the Papagaio Wasm SDK (`lib.c`), copy it from `examples/lib.c` into your project and include it explicitly:
 ```c
 #include "lib.c"
 
@@ -284,7 +284,7 @@ If your plugin uses `lib.c`, pass the directory containing it via `-I`:
 Or simply place `lib.c` in the same directory as `greet.c`:
 ```sh
 # Copy the SDK alongside your source
-cp lib/lib.c .
+cp examples/lib.c .
 ./papagaiocc greet.c
 ```
 
@@ -297,7 +297,7 @@ $greet{Papagaio}
 *Output: Hello, Papagaio!*
 
 ### Wasm SDK (lib.c)
-The Wasm SDK lives at `lib/lib.c` inside the repository. It is **not** automatically embedded into `papagaiocc` — you supply it to your plugin's build as needed. It provides a curated, zero-dependency C standard library for WebAssembly, including:
+The Wasm SDK lives at `examples/lib.c` inside the repository. It is **not** automatically embedded into `papagaiocc` — you supply it to your plugin's build as needed. It provides a curated, zero-dependency C standard library for WebAssembly, including:
 - **Memory Management**: `malloc`, `free`, `realloc`
 - **String Processing**: `strlen`, `strcpy`, `sprintf`, `strrev`, etc.
 - **Formatted I/O**: `printf`, `snprintf`, `sscanf`

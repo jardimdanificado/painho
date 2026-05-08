@@ -34,7 +34,7 @@ else
 endif
 
 PAP_VERSION = $(shell grep '"version":' package.json | cut -d '"' -f 4)
-CFLAGS  ?= -O2 -Wall -Wextra -std=gnu99 -D_CRT_SECURE_NO_WARNINGS -Ilib/quickjs -D_GNU_SOURCE -DCONFIG_VERSION=\"$(PAP_VERSION)\"
+CFLAGS  ?= -O2 -Wall -Wextra -std=gnu99 -D_CRT_SECURE_NO_WARNINGS -Ilibs/quickjs -D_GNU_SOURCE -DCONFIG_VERSION=\"$(PAP_VERSION)\"
 ifneq (,$(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S)))
   LDFLAGS = 
 else
@@ -45,8 +45,8 @@ LDFLAGS += -lm
 TARGET_SO = papagaio$(SO_EXT)
 TARGET_A  = libpapagaio.a
 TARGET_BIN = papagaio$(EXE_EXT)
-WASM3_SRC = $(wildcard lib/wasm3/source/*.c)
-QJS_SRC   = lib/quickjs/quickjs.c lib/quickjs/libregexp.c lib/quickjs/libunicode.c lib/quickjs/cutils.c lib/quickjs/dtoa.c lib/quickjs/quickjs-libc.c
+WASM3_SRC = $(wildcard libs/wasm3/source/*.c)
+QJS_SRC   = libs/quickjs/quickjs.c libs/quickjs/libregexp.c libs/quickjs/libunicode.c libs/quickjs/cutils.c libs/quickjs/dtoa.c libs/quickjs/quickjs-libc.c
 SRC       = src/papagaio.c $(QJS_SRC) $(WASM3_SRC)
 OBJ       = $(SRC:.c=.o)
 

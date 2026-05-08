@@ -40,12 +40,6 @@ jobs:
             clang_path: clang.exe
             archive: windows-x64-mingw-standalone
             msystem: MINGW64
-          - name: Windows x64 (MSVC)
-            os: windows-latest
-            asset: clang-wasm-llvmorg-22.1.3-windows-x64-msvc.zip
-            clang_path: clang.exe
-            archive: windows-x64-msvc-standalone
-            msystem: MINGW64
 
     steps:
       - name: Checkout

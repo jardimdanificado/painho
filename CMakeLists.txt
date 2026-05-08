@@ -1,35 +1,32 @@
 cmake_minimum_required(VERSION 3.10)
 project(papagaio C)
 
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 99)
 
-include_directories(. lib/quickjs lib/wasm3/source)
+include_directories(. libs/quickjs libs/wasm3/source)
 
-file(GLOB WASM3_SRC "lib/wasm3/source/*.c")
+file(GLOB WASM3_SRC "libs/wasm3/source/*.c")
 
 # Main library (static)
 # Determine if we should include quickjs-libc.c (requires unistd.h, etc)
 if(MSVC)
   set(QUICKJS_LIBC "")
-  include_directories(src/msvc_shims)
-  add_compile_options(/FI"${CMAKE_CURRENT_SOURCE_DIR}/src/msvc_compat.h")
-  add_compile_options(/std:c11)
   add_definitions(-D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_DEPRECATE)
   # Force NaN boxing on 64-bit MSVC
   if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     add_definitions(-DJS_NAN_BOXING)
   endif()
 else()
-  set(QUICKJS_LIBC "lib/quickjs/quickjs-libc.c")
+  set(QUICKJS_LIBC "libs/quickjs/quickjs-libc.c")
 endif()
 
 add_library(libpapagaio STATIC
   src/papagaio.c
-  lib/quickjs/quickjs.c
-  lib/quickjs/libregexp.c
-  lib/quickjs/libunicode.c
-  lib/quickjs/cutils.c
-  lib/quickjs/dtoa.c
+  libs/quickjs/quickjs.c
+  libs/quickjs/libregexp.c
+  libs/quickjs/libunicode.c
+  libs/quickjs/cutils.c
+  libs/quickjs/dtoa.c
   ${QUICKJS_LIBC}
   ${WASM3_SRC}
 )
@@ -62,8 +59,8 @@ if (WIN32)
     
     # Pass paths to the Resource Compiler
     # We use unquoted definitions because papagaiocc.rc uses TOSTRING() logic
-    set(SDK_H_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/lib.c")
-    set(PRE_PAP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/preprocessor.pap")
+    set(SDK_H_PATH "${CMAKE_CURRENT_SOURCE_DIR}/examples/lib.c")
+    set(PRE_PAP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libs/preprocessor.pap")
     
     set_property(SOURCE src/papagaiocc.rc PROPERTY COMPILE_DEFINITIONS
         "SDK_H_PATH=${SDK_H_PATH};PRE_PAP_PATH=${PRE_PAP_PATH};PAPAGAIO_EXE_PATH=$<TARGET_FILE:papagaio>")

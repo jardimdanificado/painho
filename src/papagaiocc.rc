@@ -14,7 +14,7 @@
 #endif
 
 #ifndef SDK_H_PATH
-#define SDK_H_PATH ../lib/lib.c
+#define SDK_H_PATH ../examples/lib.c
 #endif
 
 #ifndef CLANG_EXE_PATH

@@ -1,2 +1,2 @@
-$wasmfile{examples/hello.wasm}
+$wasm{examples/hello.wasm}
 Test 1 (revers): $reverse{Hi Papagaio}

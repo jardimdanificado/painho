@@ -66,14 +66,6 @@ jobs:
             os: windows-latest
             target: windows-mingw32
             archive: windows-x86-mingw
-          - name: Windows x64 (MSVC)
-            os: windows-latest
-            target: windows-msvc
-            archive: windows-x64-msvc
-          - name: Windows x86 32-bit (MSVC)
-            os: windows-latest
-            target: windows-msvc32
-            archive: windows-x86-msvc
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -153,20 +145,6 @@ jobs:
           make clean
           make all papagaiocc -j2
 
-      - name: Build binary (Windows MSVC)
-        if: startsWith(matrix.target, 'windows-msvc')
-        shell: powershell
-        run: |
-          # Generate the amalgamated header first (No longer needed, using lib/lib.c)
-          $v_arch = "${{ matrix.target == 'windows-msvc' && 'x64' || 'x86' }}"
-          $triplet = "${v_arch}-windows"
-          $cmake_arch = if ($v_arch -eq "x64") { "x64" } else { "Win32" }
-          $vcpkg = "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe"
-          & $vcpkg install libffi:$triplet
-          cmake -S . -B build-msvc -A $cmake_arch `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=$triplet
-          cmake --build build-msvc --config Release -j2
 
       - name: Package artifact (Linux/macOS)
         if: startsWith(matrix.target, 'linux') || startsWith(matrix.target, 'macos')
@@ -190,15 +168,6 @@ jobs:
           cp README.md dist_pkg/
           powershell -NoProfile -Command "Compress-Archive -Path dist_pkg\\* -DestinationPath papagaio-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force"
 
-      - name: Package artifact (Windows MSVC)
-        if: startsWith(matrix.target, 'windows-msvc')
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Force -Path dist_pkg
-          Copy-Item build-msvc/Release/papagaio.exe dist_pkg/
-          Copy-Item build-msvc/Release/papagaiocc.exe dist_pkg/
-          Copy-Item README.md dist_pkg/
-          Compress-Archive -Path dist_pkg/* -DestinationPath papagaio-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
