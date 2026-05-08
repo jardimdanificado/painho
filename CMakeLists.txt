@@ -8,6 +8,18 @@ include_directories(. lib/quickjs lib/wasm3/source)
 file(GLOB WASM3_SRC "lib/wasm3/source/*.c")
 
 # Main library (static)
+# Determine if we should include quickjs-libc.c (requires unistd.h, etc)
+if(MSVC)
+  set(QUICKJS_LIBC "")
+  add_definitions(-D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_DEPRECATE)
+  # Force NaN boxing on 64-bit MSVC
+  if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    add_definitions(-DJS_NAN_BOXING)
+  endif()
+else()
+  set(QUICKJS_LIBC "lib/quickjs/quickjs-libc.c")
+endif()
+
 add_library(libpapagaio STATIC
   src/papagaio.c
   lib/quickjs/quickjs.c
@@ -15,11 +27,12 @@ add_library(libpapagaio STATIC
   lib/quickjs/libunicode.c
   lib/quickjs/cutils.c
   lib/quickjs/dtoa.c
-  lib/quickjs/quickjs-libc.c
+  ${QUICKJS_LIBC}
   ${WASM3_SRC}
 )
-if (NOT MSVC)
-  target_link_libraries(libpapagaio m)
+
+if(NOT MSVC)
+  target_link_libraries(libpapagaio PRIVATE m)
 endif()
 
 # Main executable

@@ -1,0 +1,913 @@
+Run # Generate the amalgamated header first (No longer needed, using lib/lib.c)
+Computing installation plan...
+A suitable version of cmake was not found (required v4.2.3).
+Downloading https://github.com/Kitware/CMake/releases/download/v4.2.3/cmake-4.2.3-windows-x86_64.zip -> cmake-4.2.3-windows-x86_64.zip
+Successfully downloaded cmake-4.2.3-windows-x86_64.zip
+Extracting cmake...
+The following packages will be built and installed:
+    libffi:x64-windows@3.5.2
+  * vcpkg-cmake:x64-windows@2024-04-23
+  * vcpkg-cmake-get-vars:x64-windows@2025-05-29
+  * vcpkg-make:x64-windows@2026-01-01
+Additional packages (*) will be modified to complete this operation.
+Detecting compiler hash for triplet x64-windows...
+A suitable version of powershell-core was not found (required v7.5.4).
+Downloading https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/PowerShell-7.5.4-win-x64.zip -> PowerShell-7.5.4-win-x64.zip
+Successfully downloaded PowerShell-7.5.4-win-x64.zip
+Extracting powershell-core...
+Compiler found: C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe
+Restored 0 package(s) from C:\Users\runneradmin\AppData\Local\vcpkg\archives in 88.7 us. Use --debug to see more details.
+Installing 1/4 vcpkg-cmake:x64-windows@2024-04-23...
+vcpkg-cmake:x64-windows@2024-04-23 package ABI: b2a7b5ecca963278c009cea798fd26d1f399d89a6b39b4ce9da59dfd3ca68aa6
+Building vcpkg-cmake:x64-windows@2024-04-23...
+-- Installing: C:/vcpkg/packages/vcpkg-cmake_x64-windows/share/vcpkg-cmake/vcpkg_cmake_configure.cmake
+-- Installing: C:/vcpkg/packages/vcpkg-cmake_x64-windows/share/vcpkg-cmake/vcpkg_cmake_build.cmake
+-- Installing: C:/vcpkg/packages/vcpkg-cmake_x64-windows/share/vcpkg-cmake/vcpkg_cmake_install.cmake
+-- Installing: C:/vcpkg/packages/vcpkg-cmake_x64-windows/share/vcpkg-cmake/vcpkg-port-config.cmake
+-- Installing: C:/vcpkg/packages/vcpkg-cmake_x64-windows/share/vcpkg-cmake/copyright
+-- Performing post-build validation
+Starting submission of vcpkg-cmake:x64-windows@2024-04-23 to 1 binary cache(s) in the background
+Elapsed time to handle vcpkg-cmake:x64-windows: 99.1 ms
+Installing 2/4 vcpkg-cmake-get-vars:x64-windows@2025-05-29...
+vcpkg-cmake-get-vars:x64-windows@2025-05-29 package ABI: 6eb0b06e06455acf566a8dfde4347eea217890697a4fbbc4373ef4487d94728b
+Building vcpkg-cmake-get-vars:x64-windows@2025-05-29...
+-- Installing: C:/vcpkg/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/vcpkg_cmake_get_vars.cmake
+-- Installing: C:/vcpkg/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/cmake_get_vars
+-- Installing: C:/vcpkg/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/cmake_get_vars/CMakeLists.txt
+-- Installing: C:/vcpkg/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/cmake-get-vars.cmake.in
+-- Installing: C:/vcpkg/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/vcpkg-port-config.cmake
+-- Installing: C:/vcpkg/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/copyright
+-- Performing post-build validation
+Starting submission of vcpkg-cmake-get-vars:x64-windows@2025-05-29 to 1 binary cache(s) in the background
+Elapsed time to handle vcpkg-cmake-get-vars:x64-windows: 115 ms
+Completed submission of vcpkg-cmake:x64-windows@2024-04-23 to 1 binary cache(s) in 92.2 ms
+Installing 3/4 vcpkg-make:x64-windows@2026-01-01...
+vcpkg-make:x64-windows@2026-01-01 package ABI: bde8b2d4db2eba214525e4d1d80d8088f8c1f51bf65b6d70480f79c8efd69122
+Building vcpkg-make:x64-windows@2026-01-01...
+Downloading automake-1.17.tar.gz, trying https://ftpmirror.gnu.org/gnu/automake/automake-1.17.tar.gz
+Successfully downloaded automake-1.17.tar.gz
+-- Extracting source C:/vcpkg/downloads/automake-1.17.tar.gz
+-- Using source at C:/vcpkg/buildtrees/vcpkg-make/src/automake-1-c362683103.clean
+-- Getting CMake variables for x64-windows
+-- Loading CMake variables from C:/vcpkg/buildtrees/vcpkg-make/cmake-get-vars_C_CXX-x64-windows.cmake.log
+-- x64-windows autotools triplet: x86_64-pc-mingw32 (from vcpkg)
+-- Performing post-build validation
+Starting submission of vcpkg-make:x64-windows@2026-01-01 to 1 binary cache(s) in the background
+Elapsed time to handle vcpkg-make:x64-windows: 4.6 s
+Completed submission of vcpkg-cmake-get-vars:x64-windows@2025-05-29 to 1 binary cache(s) in 72.3 ms
+Installing 4/4 libffi:x64-windows@3.5.2...
+libffi:x64-windows@3.5.2 package ABI: f3e5f08b3c6f33354a72b168832a5e15b8883a771ae77506efce03896cb2635f
+Building libffi:x64-windows@3.5.2...
+Downloading https://github.com/libffi/libffi/releases/download/v3.5.2/libffi-3.5.2.tar.gz -> libffi-3.5.2.tar.gz
+Successfully downloaded libffi-3.5.2.tar.gz
+-- Extracting source C:/vcpkg/downloads/libffi-3.5.2.tar.gz
+-- Applying patch dll-bindir.diff
+-- Using source at C:/vcpkg/buildtrees/libffi/src/libffi-3-c1e5d7d6da.clean
+-- Getting CMake variables for x64-windows
+-- Loading CMake variables from C:/vcpkg/buildtrees/libffi/cmake-get-vars_ASM_C_CXX-x64-windows.cmake.log
+Downloading msys2-autoconf-wrapper-20250528-1-any.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/autoconf-wrapper-20250528-1-any.pkg.tar.zst
+Successfully downloaded msys2-autoconf-wrapper-20250528-1-any.pkg.tar.zst
+Downloading msys2-automake-wrapper-20250528-1-any.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/automake-wrapper-20250528-1-any.pkg.tar.zst
+Successfully downloaded msys2-automake-wrapper-20250528-1-any.pkg.tar.zst
+Downloading msys2-autoconf-archive-2024.10.16-1-any.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/autoconf-archive-2024.10.16-1-any.pkg.tar.zst
+Successfully downloaded msys2-autoconf-archive-2024.10.16-1-any.pkg.tar.zst
+Downloading msys2-binutils-2.45.1-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/binutils-2.45.1-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-binutils-2.45.1-1-x86_64.pkg.tar.zst
+Downloading msys2-libtool-2.5.4-4-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/libtool-2.5.4-4-x86_64.pkg.tar.zst
+Successfully downloaded msys2-libtool-2.5.4-4-x86_64.pkg.tar.zst
+Downloading msys2-make-4.4.1-2-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/make-4.4.1-2-x86_64.pkg.tar.zst
+Successfully downloaded msys2-make-4.4.1-2-x86_64.pkg.tar.zst
+Downloading msys2-which-2.23-4-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/which-2.23-4-x86_64.pkg.tar.zst
+Successfully downloaded msys2-which-2.23-4-x86_64.pkg.tar.zst
+Downloading msys2-bash-5.3.009-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/bash-5.3.009-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-bash-5.3.009-1-x86_64.pkg.tar.zst
+Downloading msys2-coreutils-8.32-5-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/coreutils-8.32-5-x86_64.pkg.tar.zst
+Successfully downloaded msys2-coreutils-8.32-5-x86_64.pkg.tar.zst
+Downloading msys2-file-5.46-2-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/file-5.46-2-x86_64.pkg.tar.zst
+Successfully downloaded msys2-file-5.46-2-x86_64.pkg.tar.zst
+Downloading msys2-gawk-5.3.2-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/gawk-5.3.2-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-gawk-5.3.2-1-x86_64.pkg.tar.zst
+Downloading msys2-grep-1~3.0-7-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/grep-1~3.0-7-x86_64.pkg.tar.zst
+Successfully downloaded msys2-grep-1~3.0-7-x86_64.pkg.tar.zst
+Downloading msys2-gzip-1.14-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/gzip-1.14-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-gzip-1.14-1-x86_64.pkg.tar.zst
+Downloading msys2-diffutils-3.12-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/diffutils-3.12-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-diffutils-3.12-1-x86_64.pkg.tar.zst
+Downloading msys2-pkgconf-2.5.1-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/pkgconf-2.5.1-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-pkgconf-2.5.1-1-x86_64.pkg.tar.zst
+Downloading msys2-sed-4.9-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/sed-4.9-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-sed-4.9-1-x86_64.pkg.tar.zst
+Downloading msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+Downloading msys2-autoconf2.72-2.72-3-any.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/autoconf2.72-2.72-3-any.pkg.tar.zst
+Successfully downloaded msys2-autoconf2.72-2.72-3-any.pkg.tar.zst
+Downloading msys2-automake1.16-1.16.5-1-any.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/automake1.16-1.16.5-1-any.pkg.tar.zst
+Successfully downloaded msys2-automake1.16-1.16.5-1-any.pkg.tar.zst
+Downloading msys2-automake1.17-1.17-1-any.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/automake1.17-1.17-1-any.pkg.tar.zst
+Successfully downloaded msys2-automake1.17-1.17-1-any.pkg.tar.zst
+Downloading msys2-automake1.18-1.18.1-1-any.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/automake1.18-1.18.1-1-any.pkg.tar.zst
+Successfully downloaded msys2-automake1.18-1.18.1-1-any.pkg.tar.zst
+Downloading msys2-libiconv-1.18-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/libiconv-1.18-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-libiconv-1.18-1-x86_64.pkg.tar.zst
+Downloading msys2-libintl-0.22.5-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/libintl-0.22.5-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-libintl-0.22.5-1-x86_64.pkg.tar.zst
+Downloading msys2-zlib-1.3.1-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/zlib-1.3.1-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-zlib-1.3.1-1-x86_64.pkg.tar.zst
+Downloading msys2-findutils-4.10.0-2-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/findutils-4.10.0-2-x86_64.pkg.tar.zst
+Successfully downloaded msys2-findutils-4.10.0-2-x86_64.pkg.tar.zst
+Downloading msys2-tar-1.35-3-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/tar-1.35-3-x86_64.pkg.tar.zst
+Successfully downloaded msys2-tar-1.35-3-x86_64.pkg.tar.zst
+Downloading msys2-gmp-6.3.0-2-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/gmp-6.3.0-2-x86_64.pkg.tar.zst
+Successfully downloaded msys2-gmp-6.3.0-2-x86_64.pkg.tar.zst
+Downloading msys2-gcc-libs-15.2.0-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/gcc-libs-15.2.0-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-gcc-libs-15.2.0-1-x86_64.pkg.tar.zst
+Downloading msys2-libbz2-1.0.8-4-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/libbz2-1.0.8-4-x86_64.pkg.tar.zst
+Successfully downloaded msys2-libbz2-1.0.8-4-x86_64.pkg.tar.zst
+Downloading msys2-liblzma-5.8.2-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/liblzma-5.8.2-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-liblzma-5.8.2-1-x86_64.pkg.tar.zst
+Downloading msys2-libzstd-1.5.7-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/libzstd-1.5.7-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-libzstd-1.5.7-1-x86_64.pkg.tar.zst
+Downloading msys2-libreadline-8.3.003-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/libreadline-8.3.003-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-libreadline-8.3.003-1-x86_64.pkg.tar.zst
+Downloading msys2-mpfr-4.2.2-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/mpfr-4.2.2-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-mpfr-4.2.2-1-x86_64.pkg.tar.zst
+Downloading msys2-libpcre-8.45-5-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/libpcre-8.45-5-x86_64.pkg.tar.zst
+Successfully downloaded msys2-libpcre-8.45-5-x86_64.pkg.tar.zst
+Downloading msys2-m4-1.4.19-2-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/m4-1.4.19-2-x86_64.pkg.tar.zst
+Successfully downloaded msys2-m4-1.4.19-2-x86_64.pkg.tar.zst
+Downloading msys2-perl-5.40.3-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/perl-5.40.3-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-perl-5.40.3-1-x86_64.pkg.tar.zst
+Downloading msys2-ncurses-6.5.20240831-2-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/ncurses-6.5.20240831-2-x86_64.pkg.tar.zst
+Successfully downloaded msys2-ncurses-6.5.20240831-2-x86_64.pkg.tar.zst
+Downloading msys2-libxcrypt-4.5.2-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/libxcrypt-4.5.2-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-libxcrypt-4.5.2-1-x86_64.pkg.tar.zst
+-- Applying patch C:/vcpkg/scripts/cmake/compile_wrapper_consider_clang-cl.patch
+-- Using msys root at C:/vcpkg/downloads/tools/msys2/19f68f647e350a23
+Downloading msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst, trying https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+Successfully downloaded msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+-- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+-- Using msys root at C:/vcpkg/downloads/tools/msys2/3e71d1f8e22ab23f
+-- Configuring x64-windows-dbg
+-- Configuring x64-windows-rel
+-- Using cached msys2-autoconf-wrapper-20250528-1-any.pkg.tar.zst
+-- Using cached msys2-automake-wrapper-20250528-1-any.pkg.tar.zst
+-- Using cached msys2-autoconf-archive-2024.10.16-1-any.pkg.tar.zst
+-- Using cached msys2-binutils-2.45.1-1-x86_64.pkg.tar.zst
+-- Using cached msys2-libtool-2.5.4-4-x86_64.pkg.tar.zst
+-- Using cached msys2-make-4.4.1-2-x86_64.pkg.tar.zst
+-- Using cached msys2-which-2.23-4-x86_64.pkg.tar.zst
+-- Using cached msys2-bash-5.3.009-1-x86_64.pkg.tar.zst
+-- Using cached msys2-coreutils-8.32-5-x86_64.pkg.tar.zst
+-- Using cached msys2-file-5.46-2-x86_64.pkg.tar.zst
+-- Using cached msys2-gawk-5.3.2-1-x86_64.pkg.tar.zst
+-- Using cached msys2-grep-1~3.0-7-x86_64.pkg.tar.zst
+-- Using cached msys2-gzip-1.14-1-x86_64.pkg.tar.zst
+-- Using cached msys2-diffutils-3.12-1-x86_64.pkg.tar.zst
+-- Using cached msys2-pkgconf-2.5.1-1-x86_64.pkg.tar.zst
+-- Using cached msys2-sed-4.9-1-x86_64.pkg.tar.zst
+-- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+-- Using cached msys2-autoconf2.72-2.72-3-any.pkg.tar.zst
+-- Using cached msys2-automake1.16-1.16.5-1-any.pkg.tar.zst
+-- Using cached msys2-automake1.17-1.17-1-any.pkg.tar.zst
+-- Using cached msys2-automake1.18-1.18.1-1-any.pkg.tar.zst
+-- Using cached msys2-libiconv-1.18-1-x86_64.pkg.tar.zst
+-- Using cached msys2-libintl-0.22.5-1-x86_64.pkg.tar.zst
+-- Using cached msys2-zlib-1.3.1-1-x86_64.pkg.tar.zst
+-- Using cached msys2-findutils-4.10.0-2-x86_64.pkg.tar.zst
+-- Using cached msys2-tar-1.35-3-x86_64.pkg.tar.zst
+-- Using cached msys2-gmp-6.3.0-2-x86_64.pkg.tar.zst
+-- Using cached msys2-gcc-libs-15.2.0-1-x86_64.pkg.tar.zst
+-- Using cached msys2-libbz2-1.0.8-4-x86_64.pkg.tar.zst
+-- Using cached msys2-liblzma-5.8.2-1-x86_64.pkg.tar.zst
+-- Using cached msys2-libzstd-1.5.7-1-x86_64.pkg.tar.zst
+-- Using cached msys2-libreadline-8.3.003-1-x86_64.pkg.tar.zst
+-- Using cached msys2-mpfr-4.2.2-1-x86_64.pkg.tar.zst
+-- Using cached msys2-libpcre-8.45-5-x86_64.pkg.tar.zst
+-- Using cached msys2-m4-1.4.19-2-x86_64.pkg.tar.zst
+-- Using cached msys2-perl-5.40.3-1-x86_64.pkg.tar.zst
+-- Using cached msys2-ncurses-6.5.20240831-2-x86_64.pkg.tar.zst
+-- Using cached msys2-libxcrypt-4.5.2-1-x86_64.pkg.tar.zst
+-- Using msys root at C:/vcpkg/downloads/tools/msys2/19f68f647e350a23
+-- Building/Installing x64-windows-dbg
+-- Making target 'all' for x64-windows-dbg
+-- Making target 'install' for x64-windows-dbg
+-- Building/Installing x64-windows-rel
+-- Making target 'all' for x64-windows-rel
+-- Making target 'install' for x64-windows-rel
+-- Fixing pkgconfig file: C:/vcpkg/packages/libffi_x64-windows/lib/pkgconfig/libffi.pc
+-- Fixing pkgconfig file: C:/vcpkg/packages/libffi_x64-windows/debug/lib/pkgconfig/libffi.pc
+-- Installing: C:/vcpkg/packages/libffi_x64-windows/share/libffi/usage
+-- Installing: C:/vcpkg/packages/libffi_x64-windows/share/unofficial-libffi/unofficial-libffi-config.cmake
+-- Installing: C:/vcpkg/packages/libffi_x64-windows/share/libffi/libffiConfig.cmake
+-- Installing: C:/vcpkg/packages/libffi_x64-windows/share/libffi/copyright
+-- Performing post-build validation
+Starting submission of libffi:x64-windows@3.5.2 to 1 binary cache(s) in the background
+Elapsed time to handle libffi:x64-windows: 3.5 min
+Total install time: 3.6 min
+Installed contents are licensed to you by owners. Microsoft is not responsible for, nor does it grant any licenses to, third-party packages.
+Some packages did not declare an SPDX license. Check the `copyright` file for each package for more information about their licensing.
+Packages installed in this vcpkg installation declare the following licenses:
+MIT
+vcpkg provides proprietary CMake targets:
+
+  find_package(unofficial-libffi CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE unofficial::libffi::libffi)
+
+libffi provides pkg-config modules:
+
+  # Library supporting Foreign Function Interfaces
+  libffi
+
+Completed submission of vcpkg-make:x64-windows@2026-01-01 to 1 binary cache(s) in 79.5 ms
+Waiting for 1 remaining binary cache submissions...
+Completed submission of libffi:x64-windows@3.5.2 to 1 binary cache(s) in 134 ms (1/1)
+All requested installations completed successfully in: 3.6 min
+-- Building for: Visual Studio 17 2022
+-- The C compiler identification is MSVC 19.44.35226.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Configuring done (5.4s)
+-- Generating done (0.0s)
+-- Build files have been written to: D:/a/papagaio/papagaio/build-msvc
+MSBuild version 17.14.40+3e7442088 for .NET Framework
+
+  1>Checking Build System
+  Building Custom Rule D:/a/papagaio/papagaio/CMakeLists.txt
+  papagaio.c
+  quickjs.c
+  libregexp.c
+  libunicode.c
+  cutils.c
+D:\a\papagaio\papagaio\lib\quickjs\quickjs.h(275,25): warning C4244: '=': conversion from 'int64_t' to 'int32_t', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../src/papagaio.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\quickjs.h(571,30): warning C4244: 'function': conversion from 'int64_t' to 'int32_t', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../src/papagaio.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\quickjs.h(573,34): warning C4244: 'function': conversion from 'int64_t' to 'double', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../src/papagaio.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\quickjs.h(704,12): error C2440: 'type cast': cannot convert from 'JSValue' to 'JSValue' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../src/papagaio.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\quickjs.h(704,5): warning C4033: 'JS_DupValue' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../src/papagaio.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\quickjs.h(713,12): error C2440: 'type cast': cannot convert from 'JSValue' to 'JSValue' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../src/papagaio.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\quickjs.h(713,5): warning C4033: 'JS_DupValueRT' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../src/papagaio.c')
+  
+D:\a\papagaio\papagaio\src\papagaio.c(366,17): warning C4267: '+=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(379,13): warning C4267: '+=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(382,59): warning C4267: '+=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(388,21): warning C4267: '+=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(677,83): warning C4267: '+=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(685,26): warning C4267: '+=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(700,93): warning C4267: '+=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(707,22): warning C4267: '+=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(1370,42): warning C4996: 'strdup': The POSIX name for this item is deprecated. Instead, use the ISO C and C++ conformant name: _strdup. See online help for details. [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(1388,43): warning C4996: 'strdup': The POSIX name for this item is deprecated. Instead, use the ISO C and C++ conformant name: _strdup. See online help for details. [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(1689,12): warning C4996: 'strdup': The POSIX name for this item is deprecated. Instead, use the ISO C and C++ conformant name: _strdup. See online help for details. [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(1693,99): warning C4996: 'strdup': The POSIX name for this item is deprecated. Instead, use the ISO C and C++ conformant name: _strdup. See online help for details. [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(1698,26): warning C4996: 'strdup': The POSIX name for this item is deprecated. Instead, use the ISO C and C++ conformant name: _strdup. See online help for details. [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(1707,20): warning C4996: 'strdup': The POSIX name for this item is deprecated. Instead, use the ISO C and C++ conformant name: _strdup. See online help for details. [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(1716,15): warning C4996: 'strdup': The POSIX name for this item is deprecated. Instead, use the ISO C and C++ conformant name: _strdup. See online help for details. [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(1731,20): warning C4996: 'strdup': The POSIX name for this item is deprecated. Instead, use the ISO C and C++ conformant name: _strdup. See online help for details. [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(1738,20): warning C4996: 'strdup': The POSIX name for this item is deprecated. Instead, use the ISO C and C++ conformant name: _strdup. See online help for details. [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(1770,12): warning C4996: 'strdup': The POSIX name for this item is deprecated. Instead, use the ISO C and C++ conformant name: _strdup. See online help for details. [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(1828,67): warning C4996: 'strdup': The POSIX name for this item is deprecated. Instead, use the ISO C and C++ conformant name: _strdup. See online help for details. [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(1836,73): warning C4996: 'strdup': The POSIX name for this item is deprecated. Instead, use the ISO C and C++ conformant name: _strdup. See online help for details. [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(1986,36): warning C4996: 'strdup': The POSIX name for this item is deprecated. Instead, use the ISO C and C++ conformant name: _strdup. See online help for details. [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\src\papagaio.c(2083,18): warning C4996: 'strdup': The POSIX name for this item is deprecated. Instead, use the ISO C and C++ conformant name: _strdup. See online help for details. [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\quickjs.c(31,10): error C1083: Cannot open include file: 'sys/time.h': No such file or directory [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(131,12): warning C4013: '__builtin_clz' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(137,12): warning C4013: '__builtin_clzll' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(143,12): warning C4013: '__builtin_ctz' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(149,12): warning C4013: '__builtin_ctzll' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(152,32): error C2061: syntax error: identifier 'packed_u64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(152,32): error C2059: syntax error: ';' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(152,43): error C2449: found '{' at file scope (missing function header?) [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(154,1): error C2059: syntax error: '}' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(160,32): error C2061: syntax error: identifier 'packed_u16' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(160,32): error C2059: syntax error: ';' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(160,43): error C2449: found '{' at file scope (missing function header?) [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(162,1): error C2059: syntax error: '}' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(171,49): error C2037: left of 'v' specifies undefined struct/union 'packed_u64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  dtoa.c
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(171,5): warning C4033: 'get_i64' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(176,27): error C2037: left of 'v' specifies undefined struct/union 'packed_u64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(181,40): error C2037: left of 'v' specifies undefined struct/union 'packed_u32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(181,5): warning C4033: 'get_u32' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(186,49): error C2037: left of 'v' specifies undefined struct/union 'packed_u32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(186,5): warning C4033: 'get_i32' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(191,27): error C2037: left of 'v' specifies undefined struct/union 'packed_u32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(196,40): error C2037: left of 'v' specifies undefined struct/union 'packed_u16' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(196,5): warning C4033: 'get_u16' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(201,49): error C2037: left of 'v' specifies undefined struct/union 'packed_u16' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(201,5): warning C4033: 'get_i16' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(206,27): error C2037: left of 'v' specifies undefined struct/union 'packed_u16' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(278,9): warning C4013: '__builtin_expect' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,19): error C2143: syntax error: missing ')' before '(' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,26): error C2143: syntax error: missing ')' before '(' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,5): error C2091: function returns function [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,35): error C2059: syntax error: 'constant' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,38): error C2059: syntax error: 'constant' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,39): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,40): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,41): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,43): error C2146: syntax error: missing ')' before identifier 'dbuf_printf' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,43): error C2061: syntax error: identifier 'dbuf_printf' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,43): error C2059: syntax error: ';' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,55): error C2059: syntax error: '<parameter-list>' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(432,30): warning C4244: '=': conversion from 'uint64_t' to 'uint32_t', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libregexp.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(173,18): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(196,8): error C2143: syntax error: missing ')' before '(' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(196,8): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(196,23): error C2143: syntax error: missing ')' before 'type' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(196,8): error C2091: function returns function [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(196,28): error C2085: 're_string_list_dump': not in formal parameter list [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(197,1): error C2143: syntax error: missing ';' before '{' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(202,21): error C2065: 'str': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(202,12): warning C4477: 'printf' : format string '%s' requires an argument of type 'char *', but variadic argument 1 has type 'int' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(202,12): warning C4313: 'printf': '%s' in format string conflicts with argument 1 of type 'int' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(204,11): error C2065: 's': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(204,14): error C2223: left of '->cr' must point to struct/union [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(215,20): error C2065: 's': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(215,23): error C2223: left of '->hash_size' must point to struct/union [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(216,17): error C2065: 's': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(216,20): error C2223: left of '->hash_table' must point to struct/union [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(217,37): error C2065: 's': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(217,40): error C2223: left of '->n_strings' must point to struct/union [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(217,20): warning C4473: 'printf' : not enough arguments passed for format string [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+      D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(217,20):
+      placeholders and their parameters expect 2 variadic arguments, but 1 were provided
+      D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(217,20):
+      the missing variadic argument 2 is required by format string '%d'
+  
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(218,26): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(256,22): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(314,26): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(324,22): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(374,22): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(376,30): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(626,23): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(635,23): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(645,23): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(656,23): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(673,26): error C2143: syntax error: missing ')' before '(' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(673,33): error C2143: syntax error: missing ')' before '(' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(673,12): error C2091: function returns function [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(673,42): error C2059: syntax error: 'constant' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(673,45): error C2059: syntax error: 'constant' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(673,46): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(673,47): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(673,48): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(673,50): error C2146: syntax error: missing ')' before identifier 're_parse_error' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(673,50): error C2061: syntax error: identifier 're_parse_error' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(673,50): error C2059: syntax error: ';' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(673,65): error C2059: syntax error: '<parameter-list>' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(684,12): warning C4013: 're_parse_error' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(711,12): warning C4244: 'return': conversion from 'uint64_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(1019,40): warning C4267: 'function': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(1297,22): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(1318,26): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(1323,73): warning C4267: 'function': conversion from 'size_t' to 'uint32_t', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(1339,73): warning C4267: 'function': conversion from 'size_t' to 'uint32_t', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(1345,74): warning C4267: 'function': conversion from 'size_t' to 'uint32_t', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(1867,39): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(1905,47): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(1940,47): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(1967,51): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(1981,67): warning C4267: 'function': conversion from 'size_t' to 'uint32_t', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2012,43): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2079,47): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2137,47): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2149,39): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2169,39): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2268,74): warning C4267: 'function': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2285,41): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2413,25): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2419,33): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2436,33): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2588,75): warning C4267: 'function': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2597,31): warning C4267: 'function': conversion from 'size_t' to 'uint32_t', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2612,25): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2750,8): error C2143: syntax error: missing ')' before '(' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2750,8): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2750,18): error C2143: syntax error: missing ')' before 'type' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2750,8): error C2091: function returns function [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2750,8): error C2084: function 'int (__cdecl *__attribute__())()' already has a body [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+      D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(196,8):
+      see previous definition of '__attribute__'
+  
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2750,22): error C2085: 'stack_realloc': not in formal parameter list [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2751,1): error C2143: syntax error: missing ';' before '{' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2754,16): error C2065: 's': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2754,19): error C2223: left of '->stack_size' must point to struct/union [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2755,20): error C2065: 'n': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2756,20): error C2065: 'n': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2757,9): error C2065: 's': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2757,12): error C2223: left of '->stack_buf' must point to struct/union [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2757,25): error C2065: 's': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2757,28): error C2223: left of '->static_stack_buf' must point to struct/union [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2758,33): error C2065: 's': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2758,36): error C2223: left of '->opaque' must point to struct/union [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2758,59): warning C4022: 'lre_realloc': pointer mismatch for actual parameter 2 [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2758,21): error C2198: 'void *lre_realloc(void *,void *,size_t)': too few arguments for call [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2760,13): warning C4047: 'return': 'int (__cdecl *)()' differs in levels of indirection from 'int' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2762,27): error C2065: 's': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2762,30): error C2223: left of '->stack_buf' must point to struct/union [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2762,41): error C2065: 's': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2762,44): error C2223: left of '->stack_size' must point to struct/union [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2762,9): error C2168: 'memcpy': too few actual parameters for intrinsic function [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2764,33): error C2065: 's': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2764,36): error C2223: left of '->opaque' must point to struct/union [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2764,44): error C2065: 's': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2764,47): error C2223: left of '->stack_buf' must point to struct/union [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2764,67): warning C4022: 'lre_realloc': pointer mismatch for actual parameter 1 [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2764,21): error C2198: 'void *lre_realloc(void *,void *,size_t)': too few arguments for call [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2766,13): warning C4047: 'return': 'int (__cdecl *)()' differs in levels of indirection from 'int' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2768,5): error C2065: 's': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2768,8): error C2223: left of '->stack_size' must point to struct/union [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2769,5): error C2065: 's': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2769,8): error C2223: left of '->stack_buf' must point to struct/union [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(2958,17): warning C4013: 'stack_realloc' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(3068,48): warning C4244: '=': conversion from 'uintptr_t' to 'uint32_t', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(3090,48): warning C4244: '=': conversion from 'uintptr_t' to 'uint32_t', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(3188,29): warning C4018: '>=': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libregexp.c(3359,11): warning C4244: '=': conversion from 'intptr_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(131,12): warning C4013: '__builtin_clz' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(137,12): warning C4013: '__builtin_clzll' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(143,12): warning C4013: '__builtin_ctz' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(149,12): warning C4013: '__builtin_ctzll' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(152,32): error C2061: syntax error: identifier 'packed_u64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(152,32): error C2059: syntax error: ';' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(152,43): error C2449: found '{' at file scope (missing function header?) [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(154,1): error C2059: syntax error: '}' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(160,32): error C2061: syntax error: identifier 'packed_u16' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(160,32): error C2059: syntax error: ';' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(160,43): error C2449: found '{' at file scope (missing function header?) [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(162,1): error C2059: syntax error: '}' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(171,49): error C2037: left of 'v' specifies undefined struct/union 'packed_u64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(171,5): warning C4033: 'get_i64' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(176,27): error C2037: left of 'v' specifies undefined struct/union 'packed_u64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(181,40): error C2037: left of 'v' specifies undefined struct/union 'packed_u32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(181,5): warning C4033: 'get_u32' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(186,49): error C2037: left of 'v' specifies undefined struct/union 'packed_u32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(186,5): warning C4033: 'get_i32' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(191,27): error C2037: left of 'v' specifies undefined struct/union 'packed_u32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(196,40): error C2037: left of 'v' specifies undefined struct/union 'packed_u16' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(196,5): warning C4033: 'get_u16' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(201,49): error C2037: left of 'v' specifies undefined struct/union 'packed_u16' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(201,5): warning C4033: 'get_i16' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(206,27): error C2037: left of 'v' specifies undefined struct/union 'packed_u16' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(278,9): warning C4013: '__builtin_expect' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,19): error C2143: syntax error: missing ')' before '(' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,26): error C2143: syntax error: missing ')' before '(' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,5): error C2091: function returns function [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,35): error C2059: syntax error: 'constant' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,38): error C2059: syntax error: 'constant' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,39): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,40): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,41): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,43): error C2146: syntax error: missing ')' before identifier 'dbuf_printf' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,43): error C2061: syntax error: identifier 'dbuf_printf' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,43): error C2059: syntax error: ';' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,55): error C2059: syntax error: '<parameter-list>' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(432,30): warning C4244: '=': conversion from 'uint64_t' to 'uint32_t', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/libunicode.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(381,8): error C2143: syntax error: missing ')' before '(' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(381,8): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(381,23): error C2143: syntax error: missing ')' before 'type' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(381,8): error C2091: function returns function [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(381,28): error C2085: 'cr_dump': not in formal parameter list [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(382,1): error C2143: syntax error: missing ';' before '{' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(384,20): error C2065: 'cr': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(384,24): error C2223: left of '->len' must point to struct/union [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(385,35): error C2065: 'cr': undeclared identifier [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(385,39): error C2223: left of '->points' must point to struct/union [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(385,16): warning C4473: 'printf' : not enough arguments passed for format string [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+      D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(385,16):
+      placeholders and their parameters expect 2 variadic arguments, but 1 were provided
+      D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(385,16):
+      the missing variadic argument 2 is required by format string '%04x'
+  
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(629,18): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(633,18): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(690,18): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(987,28): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(1205,26): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(1931,38): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(1942,38): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(1954,38): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(1967,38): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\libunicode.c(2089,38): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(131,12): warning C4013: '__builtin_clz' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(137,12): warning C4013: '__builtin_clzll' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(143,12): warning C4013: '__builtin_ctz' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(149,12): warning C4013: '__builtin_ctzll' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(152,32): error C2061: syntax error: identifier 'packed_u64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(152,32): error C2059: syntax error: ';' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(152,43): error C2449: found '{' at file scope (missing function header?) [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(154,1): error C2059: syntax error: '}' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(160,32): error C2061: syntax error: identifier 'packed_u16' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(160,32): error C2059: syntax error: ';' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(160,43): error C2449: found '{' at file scope (missing function header?) [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(162,1): error C2059: syntax error: '}' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(171,49): error C2037: left of 'v' specifies undefined struct/union 'packed_u64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(171,5): warning C4033: 'get_i64' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(176,27): error C2037: left of 'v' specifies undefined struct/union 'packed_u64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(181,40): error C2037: left of 'v' specifies undefined struct/union 'packed_u32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(181,5): warning C4033: 'get_u32' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(186,49): error C2037: left of 'v' specifies undefined struct/union 'packed_u32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(186,5): warning C4033: 'get_i32' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(191,27): error C2037: left of 'v' specifies undefined struct/union 'packed_u32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(196,40): error C2037: left of 'v' specifies undefined struct/union 'packed_u16' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(196,5): warning C4033: 'get_u16' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(201,49): error C2037: left of 'v' specifies undefined struct/union 'packed_u16' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(201,5): warning C4033: 'get_i16' must return a value [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(206,27): error C2037: left of 'v' specifies undefined struct/union 'packed_u16' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(278,9): warning C4013: '__builtin_expect' undefined; assuming extern returning int [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,19): error C2143: syntax error: missing ')' before '(' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,26): error C2143: syntax error: missing ')' before '(' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,5): error C2091: function returns function [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,35): error C2059: syntax error: 'constant' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,38): error C2059: syntax error: 'constant' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,39): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,40): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,41): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,43): error C2146: syntax error: missing ')' before identifier 'dbuf_printf' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,43): error C2061: syntax error: identifier 'dbuf_printf' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,43): error C2059: syntax error: ';' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(319,55): error C2059: syntax error: '<parameter-list>' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.h(432,30): warning C4244: '=': conversion from 'uint64_t' to 'uint32_t', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/quickjs/cutils.c')
+  
+D:\a\papagaio\papagaio\lib\quickjs\cutils.c(53,11): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.c(177,19): error C2143: syntax error: missing ')' before '(' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.c(177,26): error C2143: syntax error: missing ')' before '(' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.c(177,5): error C2091: function returns function [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.c(177,35): error C2059: syntax error: 'constant' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.c(177,38): error C2059: syntax error: 'constant' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.c(177,39): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.c(177,40): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.c(177,41): error C2059: syntax error: ')' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.c(177,43): error C2146: syntax error: missing ')' before identifier 'dbuf_printf' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.c(177,43): error C2061: syntax error: identifier 'dbuf_printf' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.c(177,43): error C2059: syntax error: ';' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.c(177,55): error C2059: syntax error: '<parameter-list>' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.c(248,14): warning C4244: 'return': conversion from '__int64' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\cutils.c(310,11): warning C4018: '<': signed/unsigned mismatch [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\quickjs\dtoa.c(31,10): error C1083: Cannot open include file: 'sys/time.h': No such file or directory [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  quickjs-libc.c
+D:\a\papagaio\papagaio\lib\quickjs\quickjs-libc.c(31,10): error C1083: Cannot open include file: 'unistd.h': No such file or directory [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  m3_api_libc.c
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_api_libc.c(100,30): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_api_libc.c(148,27): warning C4267: '+=': conversion from 'size_t' to 'int32_t', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_api_libc.c(166,27): warning C4267: '+=': conversion from 'size_t' to 'int32_t', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  m3_api_meta_wasi.c
+  m3_api_tracer.c
+  m3_api_uvwasi.c
+  m3_api_wasi.c
+  m3_bind.c
+  m3_code.c
+  m3_compile.c
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_math_utils.h(128,31): warning C4146: unary minus operator applied to unsigned type, result still unsigned [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_math_utils.h(135,31): warning C4146: unary minus operator applied to unsigned type, result still unsigned [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_math_utils.h(142,31): warning C4146: unary minus operator applied to unsigned type, result still unsigned [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_math_utils.h(149,31): warning C4146: unary minus operator applied to unsigned type, result still unsigned [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(237,1): warning C4244: 'function': conversion from 'u64' to 'unsigned int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(238,1): warning C4244: 'function': conversion from 'u64' to 'unsigned int', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(240,1): warning C4002: too many arguments for function-like macro invocation 'OP_DIV_U' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(242,1): warning C4002: too many arguments for function-like macro invocation 'OP_DIV_U' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(245,1): warning C4002: too many arguments for function-like macro invocation 'OP_REM_U' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(247,1): warning C4002: too many arguments for function-like macro invocation 'OP_REM_U' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(380,1): warning C4002: too many arguments for function-like macro invocation 'OP_I32_TRUNC_F32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(381,1): warning C4002: too many arguments for function-like macro invocation 'OP_U32_TRUNC_F32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(382,1): warning C4002: too many arguments for function-like macro invocation 'OP_I32_TRUNC_F64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(383,1): warning C4002: too many arguments for function-like macro invocation 'OP_U32_TRUNC_F64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(385,1): warning C4002: too many arguments for function-like macro invocation 'OP_I64_TRUNC_F32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(386,1): warning C4002: too many arguments for function-like macro invocation 'OP_U64_TRUNC_F32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(387,1): warning C4002: too many arguments for function-like macro invocation 'OP_I64_TRUNC_F64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(388,1): warning C4002: too many arguments for function-like macro invocation 'OP_U64_TRUNC_F64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(390,1): warning C4002: too many arguments for function-like macro invocation 'OP_I32_TRUNC_SAT_F32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(391,1): warning C4002: too many arguments for function-like macro invocation 'OP_U32_TRUNC_SAT_F32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(392,1): warning C4002: too many arguments for function-like macro invocation 'OP_I32_TRUNC_SAT_F64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(393,1): warning C4002: too many arguments for function-like macro invocation 'OP_U32_TRUNC_SAT_F64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(395,1): warning C4002: too many arguments for function-like macro invocation 'OP_I64_TRUNC_SAT_F32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(396,1): warning C4002: too many arguments for function-like macro invocation 'OP_U64_TRUNC_SAT_F32' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(397,1): warning C4002: too many arguments for function-like macro invocation 'OP_I64_TRUNC_SAT_F64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(398,1): warning C4002: too many arguments for function-like macro invocation 'OP_U64_TRUNC_SAT_F64' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(711,26): warning C4244: 'initializing': conversion from 'm3reg_t' to 'i32', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(856,13): warning C4003: not enough arguments for function-like macro invocation 'fillBacktraceFrame' [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_exec.h(1297,16): warning C4244: '=': conversion from 'f64' to 'f32', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  (compiling source file '../lib/wasm3/source/m3_compile.c')
+  
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_compile.c(750,30): warning C4244: 'initializing': conversion from 'u64' to 'u32', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_compile.c(1807,1): warning C4244: 'function': conversion from 'i64' to 'i8', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  m3_core.c
+  m3_env.c
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_env.c(906,42): warning C4244: '=': conversion from 'f64' to 'f32', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_env.c(1005,42): warning C4244: '=': conversion from 'double' to 'f32', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+D:\a\papagaio\papagaio\lib\wasm3\source\m3_env.c(1227,40): warning C4267: 'return': conversion from 'size_t' to 'uint32_t', possible loss of data [D:\a\papagaio\papagaio\build-msvc\libpapagaio.vcxproj]
+  m3_exec.c
+  m3_function.c
+  m3_info.c
+  Generating Code...
+  Compiling...
+  m3_module.c
+  m3_parse.c
+  Generating Code...
+Error: Process completed with exit code 1.

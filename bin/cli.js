@@ -10,6 +10,12 @@ async function main() {
     const args = process.argv.slice(2);
     
     // Help / Version
+    if (args.includes('--version') || args.includes('-v')) {
+        const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf-8'));
+        console.log(`papagaio v${pkg.version}`);
+        process.exit(0);
+    }
+
     if (args.includes('--help') || args.includes('-h')) {
         console.log("Papagaio - easy yet powerful preprocessor");
         console.log("Usage: papagaio <file.txt> [key=value ...]");

@@ -20,7 +20,11 @@ static char *read_file(const char *path, size_t *out_len) {
 }
 
 int main(int argc, char **argv) {
-    if (argc < 2) {
+    if (argc >= 2 && (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0)) {
+        printf("papagaio v%s\n", CONFIG_VERSION);
+        return 0;
+    }
+    if (argc < 2 || (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)) {
         fprintf(stderr, "Usage: papagaio <file.txt>\n");
         return 1;
     }

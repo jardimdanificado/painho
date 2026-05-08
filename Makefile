@@ -33,7 +33,8 @@ else
   EXE_EXT       =
 endif
 
-CFLAGS  ?= -O2 -Wall -Wextra -std=gnu99 -D_CRT_SECURE_NO_WARNINGS -Ilib/quickjs -D_GNU_SOURCE -DCONFIG_VERSION=\"$(shell [ -f lib/quickjs/VERSION ] && cat lib/quickjs/VERSION || echo "unknown")\"
+PAP_VERSION = $(shell grep '"version":' package.json | cut -d '"' -f 4)
+CFLAGS  ?= -O2 -Wall -Wextra -std=gnu99 -D_CRT_SECURE_NO_WARNINGS -Ilib/quickjs -D_GNU_SOURCE -DCONFIG_VERSION=\"$(PAP_VERSION)\"
 ifneq (,$(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S)))
   LDFLAGS = 
 else
