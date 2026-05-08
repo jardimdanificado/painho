@@ -11,6 +11,8 @@ file(GLOB WASM3_SRC "lib/wasm3/source/*.c")
 # Determine if we should include quickjs-libc.c (requires unistd.h, etc)
 if(MSVC)
   set(QUICKJS_LIBC "")
+  include_directories(src/msvc_shims)
+  add_compile_options(/FI"${CMAKE_CURRENT_SOURCE_DIR}/src/msvc_compat.h")
   add_definitions(-D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_DEPRECATE)
   # Force NaN boxing on 64-bit MSVC
   if(CMAKE_SIZEOF_VOID_P EQUAL 8)
