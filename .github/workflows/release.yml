@@ -72,6 +72,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
+
       - name: Install dependencies (Ubuntu Native)
         if: matrix.os == 'ubuntu-latest' && (matrix.target == 'linux')
         run: |
@@ -192,6 +195,9 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
+
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
 
       - name: Create tag if requested
         if: inputs.create_tag

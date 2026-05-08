@@ -47,6 +47,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
+
       - name: Setup MSYS2 (Windows)
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
@@ -130,6 +133,9 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
+
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
 
       - name: Create tag if not exists
         run: |
