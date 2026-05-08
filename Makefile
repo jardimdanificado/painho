@@ -34,7 +34,7 @@ else
 endif
 
 PAP_VERSION = $(shell grep '"version":' package.json | cut -d '"' -f 4)
-CFLAGS  ?= -O2 -Wall -Wextra -std=gnu99 -D_CRT_SECURE_NO_WARNINGS -Ilibs/quickjs -D_GNU_SOURCE -DCONFIG_VERSION=\"$(PAP_VERSION)\"
+CFLAGS  ?= -O2 -Wall -Wextra -std=gnu99 -D_CRT_SECURE_NO_WARNINGS -Ilibs/quickjs -Ilibs/wasm3/source -D_GNU_SOURCE -DCONFIG_VERSION=\"$(PAP_VERSION)\"
 ifneq (,$(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S)))
   LDFLAGS = 
 else
