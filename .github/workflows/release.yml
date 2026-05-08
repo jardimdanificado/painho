@@ -138,15 +138,13 @@ jobs:
             export CC=gcc
           fi
           # Rebuild Lua for each target architecture
-          make clean
-          make all papagaiocc -j2
+          make all -j2
 
       - name: Build binary (Windows MinGW)
         if: startsWith(matrix.target, 'windows-mingw')
         shell: msys2 {0}
         run: |
-          make clean
-          make all papagaiocc -j2
+          make all -j2
 
 
       - name: Package artifact (Linux/macOS)
@@ -155,7 +153,7 @@ jobs:
         run: |
           mkdir -p dist_pkg/plugins/lua
           mkdir -p dist_pkg/plugins/quickjs
-          cp papagaio papagaiocc dist_pkg/
+          cp papagaio dist_pkg/
           cp plugins/lua/*.so dist_pkg/plugins/lua/ || true
           cp plugins/quickjs/*.so dist_pkg/plugins/quickjs/ || true
           cp README.md dist_pkg/
@@ -167,7 +165,6 @@ jobs:
         run: |
           mkdir -p dist_pkg
           cp papagaio.exe dist_pkg/
-          cp papagaiocc.exe dist_pkg/
           cp README.md dist_pkg/
           powershell -NoProfile -Command "Compress-Archive -Path dist_pkg\\* -DestinationPath papagaio-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force"
 

@@ -48,28 +48,3 @@ install(TARGETS papagaio DESTINATION bin)
 install(FILES src/papagaio.h DESTINATION include)
 install(TARGETS libpapagaio DESTINATION lib)
 
-# Standalone Compiler Driver (Windows only for now via CMake)
-if (WIN32)
-    set(PAP_VERSION "0.26.1")
-    add_definitions(-DPAP_VERSION="${PAP_VERSION}")
-    add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-    
-    add_executable(papagaiocc src/papagaiocc_win.c src/papagaiocc.rc)
-    add_dependencies(papagaiocc papagaio)
-    
-    # Pass paths to the Resource Compiler
-    # We use unquoted definitions because papagaiocc.rc uses TOSTRING() logic
-    set(SDK_H_PATH "${CMAKE_CURRENT_SOURCE_DIR}/examples/lib.c")
-    set(PRE_PAP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libs/preprocessor.pap")
-    
-    set_property(SOURCE src/papagaiocc.rc PROPERTY COMPILE_DEFINITIONS
-        "SDK_H_PATH=${SDK_H_PATH};PRE_PAP_PATH=${PRE_PAP_PATH};PAPAGAIO_EXE_PATH=$<TARGET_FILE:papagaio>")
-
-    if (CLANG_PATH)
-        add_definitions(-DEMBED_CLANG)
-        set_property(SOURCE src/papagaiocc.rc APPEND PROPERTY COMPILE_DEFINITIONS "CLANG_EXE_PATH=${CLANG_PATH}")
-    endif()
-
-    target_link_libraries(papagaiocc libpapagaio)
-    install(TARGETS papagaiocc DESTINATION bin)
-endif()

@@ -424,7 +424,7 @@
         async function init() {
             try {
                 await processor.init();
-                processor.setArgs(['web_ui', 'version=0.26.1', 'compiler=papagaiocc']);
+                processor.setArgs(['web_ui', 'version=0.32.9']);
 
                 const saved = localStorage.getItem('papagaio_v3');
                 inputEl.value = saved ?? DEFAULT;

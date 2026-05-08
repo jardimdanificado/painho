@@ -149,7 +149,8 @@ Direct access (`$key`) will only resolve if `key` does not conflict with a regis
 
 #### Example:
 ```sh
-./papagaiocc input.c version=1.2.3 target=wasm -O3
+./papagaio input.c version=1.2.3 target=wasm -O3 > ready.c
+# Then compile ready.c with clang to WASM
 ```
 Inside `input.c`:
 ```c
@@ -241,7 +242,7 @@ Result: FOO
 
 ## Plugin Development
 
-Papagaio features a modern, frictionless Wasm plugin system. With the **`papagaiocc`** standalone compiler, you can write plugins in standard C using simple naming conventions and compile them into zero-dependency WebAssembly modules.
+Papagaio features a modern, frictionless Wasm plugin system. You can write plugins in standard C using simple naming conventions and compile them into zero-dependency WebAssembly modules using `papagaio` as a preprocessor and `clang` as the WASM compiler.
 
 ### 1. Write your plugin
 Create a file named `greet.c`:
@@ -270,22 +271,22 @@ char* papagaio_greet(int argc, char **argv)
 }
 ```
 
-### 2. Compile with `papagaiocc`
-The `papagaiocc` tool is a self-contained compiler driver. Run it with your source file:
-```sh
-./papagaiocc greet.c
-```
-This generates `greet.wasm`.
+### 2. Compile to WebAssembly
+To compile your plugin, first process it with `papagaio` and then compile the result with `clang` using the following flags:
 
-If your plugin uses `lib.c`, pass the directory containing it via `-I`:
 ```sh
-./papagaiocc greet.c -I /path/to/lib
+# 1. Preprocess with Papagaio
+./papagaio greet.c > greet.ready.c
+
+# 2. Compile to WASM with Clang
+clang --target=wasm32-unknown-unknown -ffreestanding -nostdlib -fvisibility=hidden \
+      -Wl,--no-entry,--export-dynamic,--allow-undefined \
+      greet.ready.c -o greet.wasm
 ```
-Or simply place `lib.c` in the same directory as `greet.c`:
+
+Or simply use the provided Makefile in the `examples/` directory:
 ```sh
-# Copy the SDK alongside your source
-cp examples/lib.c .
-./papagaiocc greet.c
+cd examples && make
 ```
 
 ### 3. Use in Papagaio
@@ -297,7 +298,7 @@ $greet{Papagaio}
 *Output: Hello, Papagaio!*
 
 ### Wasm SDK (lib.c)
-The Wasm SDK lives at `examples/lib.c` inside the repository. It is **not** automatically embedded into `papagaiocc` — you supply it to your plugin's build as needed. It provides a curated, zero-dependency C standard library for WebAssembly, including:
+The Wasm SDK lives at `examples/lib.c` inside the repository. It provides a curated, zero-dependency C standard library for WebAssembly, including:
 - **Memory Management**: `malloc`, `free`, `realloc`
 - **String Processing**: `strlen`, `strcpy`, `sprintf`, `strrev`, etc.
 - **Formatted I/O**: `printf`, `snprintf`, `sscanf`
@@ -309,7 +310,6 @@ The Wasm SDK lives at `examples/lib.c` inside the repository. It is **not** auto
 
 ```sh
 make            # Core & CLI
-make papagaiocc # Standalone plugin compiler
 make wasm       # WebAssembly build (Papagaio in the browser/node)
 make test       # Run comprehensive test suite
 ```

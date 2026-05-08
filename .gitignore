@@ -10,7 +10,6 @@ test
 tests/test_bin
 plugins/mquickjs/mjs_stdlib_gen
 *.log
-papagaiocc
 *.wasm
 /tests/run_c_tests
 /tests/test_priority_bin
