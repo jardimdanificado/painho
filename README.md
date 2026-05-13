@@ -1,6 +1,6 @@
 # Papagaio
 
-Papagaio is a C-first, embeddable text processing engine. It is designed to be highly modular and **script-agnostic**, allowing core pattern matching to be used alone or extended via WebAssembly (Wasm) plugins.
+Papagaio is a embeddable text processing engine. It is designed to be highly modular and **script-agnostic**, allowing core pattern matching to be used alone or extended via WebAssembly (Wasm) plugins.
 
 ## Key Features
 
@@ -240,6 +240,77 @@ Result: FOO
 
 ---
 
+## List Operations (`$list`)
+
+Any variable can be treated as a list by accessing it through the `$list` modifier chain. The **separator** can be any string (single character or multi-character) and is itself **processed** before use, allowing dynamic separators.
+
+### Syntax
+
+```
+$VARNAME$list$OPERATION{separator}{...arguments}
+```
+
+### Operations
+
+| Operation | Signature | Emits | Mutates |
+|---|---|---|---|
+| `get` | `$V$list$get{sep}{idx}` | Element at index | No |
+| `set` | `$V$list$set{sep}{idx}{content}` | Nothing | Yes |
+| `push` | `$V$list$push{sep}{content}` | Nothing | Yes |
+| `pop` | `$V$list$pop{sep}` | Last element | Yes |
+| `shift` | `$V$list$shift{sep}` | First element | Yes |
+| `unshift` | `$V$list$unshift{sep}{content}` | Nothing | Yes |
+| `insert` | `$V$list$insert{sep}{idx}{content}` | Nothing | Yes |
+| `remove` | `$V$list$remove{sep}{idx}` | Nothing | Yes |
+| `swap` | `$V$list$swap{sep}{idx_a}{idx_b}` | Nothing | Yes |
+| `reverse` | `$V$list$reverse{sep}` | Nothing | Yes |
+| `count` | `$V$list$count{sep}` | Number of elements | No |
+| `join` | `$V$list$join{sep_orig}{sep_new}` | List with new separator | No |
+
+**Index rules**: zero-based; negative indices count from the end (`-1` = last); out-of-range access emits `""` silently.
+
+### Examples
+
+```text
+$FRUITS$from{apple,banana,orange}
+
+$FRUITS$list$get{,}{0}    → apple
+$FRUITS$list$get{,}{-1}   → orange
+$FRUITS$list$count{,}     → 3
+```
+
+```text
+$L$from{a,b,c}
+$L$list$push{,}{d}
+$L$list$set{,}{1}{B}
+$L                        → a,B,c,d
+```
+
+```text
+$STACK$from{x,y,z}
+Popped: $STACK$list$pop{,}
+Rest: $STACK              → Popped: z  /  Rest: x,y
+```
+
+```text
+$CSV$from{one,two,three}
+$CSV$list$join{,}{ | }    → one | two | three
+```
+
+```text
+$PATH$from{/usr/local/bin}
+$PATH$list$get{/}{-1}     → bin
+```
+
+```text
+/* Dynamic separator from variable */
+$SEP$from{,}
+$L$from{x,y,z}
+$L$list$get{$SEP}{2}      → z
+```
+
+---
+
 ## Plugin Development
 
 Papagaio features a modern, frictionless Wasm plugin system. You can write plugins in standard C using simple naming conventions and compile them into zero-dependency WebAssembly modules using `papagaio` as a preprocessor and `clang` as the WASM compiler.
@@ -313,6 +384,20 @@ make            # Core & CLI
 make wasm       # WebAssembly build (Papagaio in the browser/node)
 make test       # Run comprehensive test suite
 ```
+
+---
+
+## System Limits
+
+| Feature | Limit | Rationale / Detail |
+|---|---|---|
+| **Symbol Length** | 15 characters | Sigils, delimiters (`{`, `}`), and markers are stored in fixed 16-byte buffers. |
+| **String Size** | Unlimited | All internal buffers (`StrBuf`) use dynamic `realloc`. Limited only by available RAM. |
+| **Pattern Count** | Unlimited | Registered rules are stored in a dynamic array. |
+| **Priority Range** | `INT_MIN` to `INT_MAX` | Priorities are handled as standard signed integers. |
+| **Recursion Depth** | Stack-limited | Deeply nested patterns or priority blocks are processed recursively. |
+| **Wasm Memory** | 1 MB (default) | The default `wasm3` runtime is initialized with 1MB. |
+| **Wasm Arguments** | ~64 KB | Arguments are mapped into the Wasm memory space starting at offset 4096. |
 
 ## References
 

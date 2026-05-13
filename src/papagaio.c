@@ -1292,6 +1292,352 @@ static char *apply_replacement_ex(const char *rep, const Match *m,
 }
 
 /* =========================================================================
+ * List Operation Subsystem
+ * ====================================================================== */
+
+/* Lookup the current value of a $NAME variable set via $from / $list$set.
+   Returns a newly malloc'd copy, or NULL if not found. Caller must free(). */
+static char *pap_var_lookup(Papagaio *ctx, const Symbols *sym,
+                             const char *name, size_t nlen)
+{
+    if (!ctx || !name || nlen == 0) return NULL;
+    size_t sl = strlen(sym->sigil);
+    size_t ol = strlen(sym->open);
+    size_t cl = strlen(sym->close);
+    /* Pattern: $$NAME$aliases{NAME}  (same format as $from) */
+    size_t pat_len = sl * 3 + nlen * 2 + 7 + ol + cl;
+    char *pat = (char *)malloc(pat_len + 1);
+    if (!pat) return NULL;
+    char *p = pat;
+    memcpy(p, sym->sigil, sl); p += sl;
+    memcpy(p, sym->sigil, sl); p += sl;
+    memcpy(p, name, nlen);     p += nlen;
+    memcpy(p, sym->sigil, sl); p += sl;
+    memcpy(p, "aliases", 7);   p += 7;
+    memcpy(p, sym->open,  ol); p += ol;
+    memcpy(p, name, nlen);     p += nlen;
+    memcpy(p, sym->close, cl); p += cl;
+    *p = '\0';
+    char *result = NULL;
+    for (int i = 0; i < ctx->rule_count; i++) {
+        if (ctx->rules[i].m && strcmp(ctx->rules[i].m, pat) == 0) {
+            result = strdup(ctx->rules[i].r);
+            break;
+        }
+    }
+    free(pat);
+    return result;
+}
+
+/* Create or update a $NAME variable in ctx->rules (same logic as $from). */
+static void pap_var_update(Papagaio *ctx, const Symbols *sym,
+                            const char *name, size_t nlen,
+                            const char *new_value)
+{
+    if (!ctx || !name || nlen == 0 || !new_value) return;
+    size_t sl = strlen(sym->sigil);
+    size_t ol = strlen(sym->open);
+    size_t cl = strlen(sym->close);
+    size_t pat_len = sl * 3 + nlen * 2 + 7 + ol + cl;
+    char *pat_str = (char *)malloc(pat_len + 1);
+    if (!pat_str) return;
+    char *p = pat_str;
+    memcpy(p, sym->sigil, sl); p += sl;
+    memcpy(p, sym->sigil, sl); p += sl;
+    memcpy(p, name, nlen);     p += nlen;
+    memcpy(p, sym->sigil, sl); p += sl;
+    memcpy(p, "aliases", 7);   p += 7;
+    memcpy(p, sym->open,  ol); p += ol;
+    memcpy(p, name, nlen);     p += nlen;
+    memcpy(p, sym->close, cl); p += cl;
+    *p = '\0';
+    int found_idx = -1;
+    for (int ri = 0; ri < ctx->rule_count; ri++) {
+        if (ctx->rules[ri].m && strcmp(ctx->rules[ri].m, pat_str) == 0) {
+            found_idx = ri; break;
+        }
+    }
+    if (found_idx >= 0) {
+        free(ctx->rules[found_idx].r);
+        ctx->rules[found_idx].r = strdup(new_value);
+        free(pat_str);
+    } else {
+        if (ctx->rule_count + 1 > ctx->rule_cap) {
+            ctx->rule_cap = ctx->rule_cap ? ctx->rule_cap * 2 : 8;
+            ctx->rules = (PatternPair *)realloc(ctx->rules,
+                          sizeof(PatternPair) * ctx->rule_cap);
+        }
+        ctx->rules[ctx->rule_count].m = pat_str;
+        ctx->rules[ctx->rule_count].r = strdup(new_value);
+        ctx->rule_count++;
+    }
+}
+
+/* Split str by sep (multi-char). Returns malloc'd array of strdup'd strings.
+   Empty string or NULL str → returns NULL with *out_count = 0. */
+static char **pap_list_split(const char *str, const char *sep,
+                              size_t seplen, int *out_count)
+{
+    *out_count = 0;
+    if (!str || str[0] == '\0') return NULL;
+    if (seplen == 0) {
+        char **arr = (char **)malloc(sizeof(char *));
+        arr[0] = strdup(str);
+        *out_count = 1;
+        return arr;
+    }
+    size_t len = strlen(str);
+    int count = 1;
+    for (size_t i = 0; i + seplen <= len; ) {
+        if (memcmp(str + i, sep, seplen) == 0) { count++; i += seplen; }
+        else i++;
+    }
+    char **arr = (char **)malloc(sizeof(char *) * count);
+    int idx = 0;
+    const char *start = str;
+    for (size_t i = 0; i <= len; ) {
+        int at_sep = (i + seplen <= len && memcmp(str + i, sep, seplen) == 0);
+        if (i == len || at_sep) {
+            size_t elen = (size_t)((str + i) - start);
+            arr[idx] = (char *)malloc(elen + 1);
+            memcpy(arr[idx], start, elen);
+            arr[idx][elen] = '\0';
+            idx++;
+            if (i == len) break;
+            i += seplen;
+            start = str + i;
+        } else i++;
+    }
+    *out_count = count;
+    return arr;
+}
+
+/* Join parts array with sep into a newly malloc'd string. */
+static char *pap_list_join(char **parts, int count,
+                            const char *sep, size_t seplen)
+{
+    if (!parts || count == 0) return strdup("");
+    size_t total = 0;
+    for (int i = 0; i < count; i++) total += strlen(parts[i]);
+    if (count > 1) total += seplen * (size_t)(count - 1);
+    char *result = (char *)malloc(total + 1);
+    char *p = result;
+    for (int i = 0; i < count; i++) {
+        size_t l = strlen(parts[i]);
+        memcpy(p, parts[i], l); p += l;
+        if (i + 1 < count && seplen > 0) { memcpy(p, sep, seplen); p += seplen; }
+    }
+    *p = '\0';
+    return result;
+}
+
+/* Free a split array. */
+static void pap_list_free(char **parts, int count)
+{
+    if (!parts) return;
+    for (int i = 0; i < count; i++) free(parts[i]);
+    free(parts);
+}
+
+/* Resolve an index string (possibly negative) against count.
+   Returns -1 when out of range. */
+static int pap_list_normalize_idx(const char *idx_str, int count)
+{
+    if (!idx_str || !idx_str[0] || count == 0) return -1;
+    int idx = atoi(idx_str);
+    if (idx < 0) idx = count + idx;
+    if (idx < 0 || idx >= count) return -1;
+    return idx;
+}
+
+/* Helper: process a StrView as text and return malloc'd result (never NULL). */
+static char *pap_process_sv(Papagaio *ctx, StrView sv)
+{
+    char *tmp = (char *)malloc(sv.len + 1);
+    memcpy(tmp, sv.ptr, sv.len); tmp[sv.len] = '\0';
+    char *out = papagaio_process_text(ctx, tmp, sv.len);
+    free(tmp);
+    return out ? out : strdup("");
+}
+
+/* Central dispatcher for $VAR$list$OP{sep}{...} operations.
+   raw_blocks[0] = sep block, raw_blocks[1..] = extra argument blocks.
+   Emitting ops write to sb_out (may be NULL for pure-mutating ops).
+   Mutating ops update ctx->rules via pap_var_update. */
+static void pap_list_op(Papagaio *ctx, const Symbols *sym,
+                         StrBuf *sb_out,
+                         const char *name, size_t nlen,
+                         const char *op,   size_t oplen,
+                         StrView *raw_blocks, int block_count)
+{
+    if (block_count < 1) return;
+
+    /* --- Process separator (always block[0]) --- */
+    char *sep_str = pap_process_sv(ctx, raw_blocks[0]);
+    size_t seplen = strlen(sep_str);
+
+    /* --- Look up current variable value --- */
+    char *var_val = pap_var_lookup(ctx, sym, name, nlen);
+    if (!var_val) var_val = strdup("");
+
+    /* --- Split into parts --- */
+    int count = 0;
+    char **parts = pap_list_split(var_val, sep_str, seplen, &count);
+    free(var_val);
+
+    int mutated = 0;
+
+#define OP_IS(s) (oplen == sizeof(s)-1 && memcmp(op, s, sizeof(s)-1) == 0)
+
+    /* get: emit element at index */
+    if (OP_IS("get")) {
+        if (block_count >= 2 && sb_out) {
+            char *idx_str = pap_process_sv(ctx, raw_blocks[1]);
+            int idx = pap_list_normalize_idx(idx_str, count);
+            if (idx >= 0) sb_append_n(sb_out, parts[idx], strlen(parts[idx]));
+            free(idx_str);
+        }
+    }
+    /* count: emit number of elements */
+    else if (OP_IS("count")) {
+        if (sb_out) {
+            char nbuf[32];
+            snprintf(nbuf, sizeof(nbuf), "%d", count);
+            sb_append_n(sb_out, nbuf, strlen(nbuf));
+        }
+    }
+    /* set: replace element at index */
+    else if (OP_IS("set")) {
+        if (block_count >= 3) {
+            char *idx_str = pap_process_sv(ctx, raw_blocks[1]);
+            int idx = pap_list_normalize_idx(idx_str, count);
+            free(idx_str);
+            if (idx >= 0) {
+                char *content = pap_process_sv(ctx, raw_blocks[2]);
+                free(parts[idx]);
+                parts[idx] = content;
+                mutated = 1;
+            }
+        }
+    }
+    /* push: append to end */
+    else if (OP_IS("push")) {
+        if (block_count >= 2) {
+            char *content = pap_process_sv(ctx, raw_blocks[1]);
+            parts = (char **)realloc(parts, sizeof(char *) * (size_t)(count + 1));
+            parts[count++] = content;
+            mutated = 1;
+        }
+    }
+    /* pop: remove and emit last element */
+    else if (OP_IS("pop")) {
+        if (count > 0) {
+            if (sb_out) sb_append_n(sb_out, parts[count-1], strlen(parts[count-1]));
+            free(parts[count-1]);
+            count--;
+            mutated = 1;
+        }
+    }
+    /* shift: remove and emit first element */
+    else if (OP_IS("shift")) {
+        if (count > 0) {
+            if (sb_out) sb_append_n(sb_out, parts[0], strlen(parts[0]));
+            free(parts[0]);
+            memmove(parts, parts + 1, sizeof(char *) * (size_t)(count - 1));
+            count--;
+            mutated = 1;
+        }
+    }
+    /* unshift: prepend to front */
+    else if (OP_IS("unshift")) {
+        if (block_count >= 2) {
+            char *content = pap_process_sv(ctx, raw_blocks[1]);
+            parts = (char **)realloc(parts, sizeof(char *) * (size_t)(count + 1));
+            memmove(parts + 1, parts, sizeof(char *) * (size_t)count);
+            parts[0] = content;
+            count++;
+            mutated = 1;
+        }
+    }
+    /* insert: insert before index (clamped, allows == count for append) */
+    else if (OP_IS("insert")) {
+        if (block_count >= 3) {
+            char *idx_str = pap_process_sv(ctx, raw_blocks[1]);
+            int raw_idx = atoi(idx_str); free(idx_str);
+            if (raw_idx < 0) raw_idx = count + raw_idx;
+            if (raw_idx < 0) raw_idx = 0;
+            if (raw_idx > count) raw_idx = count;
+            char *content = pap_process_sv(ctx, raw_blocks[2]);
+            parts = (char **)realloc(parts, sizeof(char *) * (size_t)(count + 1));
+            memmove(parts + raw_idx + 1, parts + raw_idx,
+                    sizeof(char *) * (size_t)(count - raw_idx));
+            parts[raw_idx] = content;
+            count++;
+            mutated = 1;
+        }
+    }
+    /* remove: delete element at index */
+    else if (OP_IS("remove")) {
+        if (block_count >= 2 && count > 0) {
+            char *idx_str = pap_process_sv(ctx, raw_blocks[1]);
+            int idx = pap_list_normalize_idx(idx_str, count);
+            free(idx_str);
+            if (idx >= 0) {
+                free(parts[idx]);
+                memmove(parts + idx, parts + idx + 1,
+                        sizeof(char *) * (size_t)(count - idx - 1));
+                count--;
+                mutated = 1;
+            }
+        }
+    }
+    /* swap: exchange two elements */
+    else if (OP_IS("swap")) {
+        if (block_count >= 3 && count > 1) {
+            char *ia_str = pap_process_sv(ctx, raw_blocks[1]);
+            char *ib_str = pap_process_sv(ctx, raw_blocks[2]);
+            int ia = pap_list_normalize_idx(ia_str, count);
+            int ib = pap_list_normalize_idx(ib_str, count);
+            free(ia_str); free(ib_str);
+            if (ia >= 0 && ib >= 0 && ia != ib) {
+                char *tmp = parts[ia]; parts[ia] = parts[ib]; parts[ib] = tmp;
+                mutated = 1;
+            }
+        }
+    }
+    /* reverse: invert element order */
+    else if (OP_IS("reverse")) {
+        if (count > 1) {
+            for (int lo = 0, hi = count - 1; lo < hi; lo++, hi--) {
+                char *tmp = parts[lo]; parts[lo] = parts[hi]; parts[hi] = tmp;
+            }
+            mutated = 1;
+        }
+    }
+    /* join: emit list with a different separator (non-mutating) */
+    else if (OP_IS("join")) {
+        if (block_count >= 2 && sb_out) {
+            char *new_sep = pap_process_sv(ctx, raw_blocks[1]);
+            char *joined  = pap_list_join(parts, count, new_sep, strlen(new_sep));
+            sb_append_n(sb_out, joined, strlen(joined));
+            free(joined); free(new_sep);
+        }
+    }
+
+#undef OP_IS
+
+    /* Persist mutation back to variable */
+    if (mutated) {
+        char *new_val = pap_list_join(parts, count, sep_str, seplen);
+        pap_var_update(ctx, sym, name, nlen, new_val);
+        free(new_val);
+    }
+
+    pap_list_free(parts, count);
+    free(sep_str);
+}
+
+/* =========================================================================
  * Internal process loop
  * ====================================================================== */
 
@@ -1840,6 +2186,48 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                                 free(processed_val);
                             }
                             i = j_next; continue;
+                        }
+                    }
+                }
+
+                /* Check for $NAME$list$OP{sep}{...} list operations */
+                if (j < len && src[j] == '$') {
+                    size_t j2 = j + 1;
+                    size_t ms = j2;
+                    while (j2 < len && (isalnum((unsigned char)src[j2]) || src[j2] == '_')) j2++;
+                    size_t mlen = j2 - ms;
+
+                    if (mlen == 4 && memcmp(src + ms, "list", 4) == 0 &&
+                        j2 < len && src[j2] == '$') {
+                        size_t j3 = j2 + 1;
+                        size_t ops = j3;
+                        while (j3 < len && (isalnum((unsigned char)src[j3]) || src[j3] == '_')) j3++;
+                        size_t oplen = j3 - ops;
+
+                        if (oplen > 0) {
+                            /* Extract up to 4 argument blocks {sep}{a1}{a2}{a3} */
+                            StrView blocks[4];
+                            int block_count = 0;
+                            StrView so = { sym->open,  strlen(sym->open)  };
+                            StrView sc = { sym->close, strlen(sym->close) };
+                            size_t jb = j3;
+                            while (block_count < 4) {
+                                size_t jb_saved = jb; /* save before consuming ws */
+                                while (jb < len && isspace((unsigned char)src[jb])) jb++;
+                                if (jb >= len || !str_pfx(src + jb, sym->open)) {
+                                    jb = jb_saved; /* restore: don't eat trailing ws */
+                                    break;
+                                }
+                                StrView blk;
+                                jb = (size_t)extract_block(src, (int)jb, so, sc, &blk);
+                                blocks[block_count++] = blk;
+                            }
+
+                            pap_list_op(ctx, sym, &out,
+                                        src + ks, klen,
+                                        src + ops, oplen,
+                                        blocks, block_count);
+                            i = jb; continue;
                         }
                     }
                 }

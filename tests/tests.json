@@ -503,6 +503,126 @@
       "name": "$document$current verification",
       "code": "$X$from{VAL} $X - $document$current",
       "expected": "VAL -  VAL - $document$current"
+    },
+    {
+      "id": 85,
+      "name": "$list$get basic",
+      "code": "$L$from{a,b,c} $L$list$get{,}{0}",
+      "expected": "a"
+    },
+    {
+      "id": 86,
+      "name": "$list$get negative index",
+      "code": "$L$from{a,b,c} $L$list$get{,}{-1}",
+      "expected": "c"
+    },
+    {
+      "id": 87,
+      "name": "$list$get out of range",
+      "code": "$L$from{a,b,c} $L$list$get{,}{99}",
+      "expected": ""
+    },
+    {
+      "id": 88,
+      "name": "$list$get empty list",
+      "code": "$L$from{} $L$list$get{,}{0}",
+      "expected": ""
+    },
+    {
+      "id": 89,
+      "name": "$list$count basic",
+      "code": "$L$from{a,b,c} $L$list$count{,}",
+      "expected": "3"
+    },
+    {
+      "id": 90,
+      "name": "$list$count empty",
+      "code": "$L$from{} $L$list$count{,}",
+      "expected": "0"
+    },
+    {
+      "id": 91,
+      "name": "$list$push basic",
+      "code": "$L$from{a,b} $L$list$push{,}{c} $L",
+      "expected": "a,b,c"
+    },
+    {
+      "id": 92,
+      "name": "$list$push onto empty",
+      "code": "$L$from{} $L$list$push{,}{x} $L",
+      "expected": "x"
+    },
+    {
+      "id": 93,
+      "name": "$list$pop emits and mutates",
+      "code": "$L$from{a,b,c} popped:$L$list$pop{,} rest:$L",
+      "expected": "popped:c rest:a,b"
+    },
+    {
+      "id": 94,
+      "name": "$list$shift emits and mutates",
+      "code": "$L$from{a,b,c} first:$L$list$shift{,} rest:$L",
+      "expected": "first:a rest:b,c"
+    },
+    {
+      "id": 95,
+      "name": "$list$unshift basic",
+      "code": "$L$from{b,c} $L$list$unshift{,}{a} $L",
+      "expected": "a,b,c"
+    },
+    {
+      "id": 96,
+      "name": "$list$set replaces element",
+      "code": "$L$from{a,b,c} $L$list$set{,}{1}{B} $L",
+      "expected": "a,B,c"
+    },
+    {
+      "id": 97,
+      "name": "$list$set negative index",
+      "code": "$L$from{a,b,c} $L$list$set{,}{-1}{Z} $L",
+      "expected": "a,b,Z"
+    },
+    {
+      "id": 98,
+      "name": "$list$insert at middle",
+      "code": "$L$from{a,c} $L$list$insert{,}{1}{b} $L",
+      "expected": "a,b,c"
+    },
+    {
+      "id": 99,
+      "name": "$list$remove at index",
+      "code": "$L$from{a,b,c} $L$list$remove{,}{1} $L",
+      "expected": "a,c"
+    },
+    {
+      "id": 100,
+      "name": "$list$swap two elements",
+      "code": "$L$from{a,b,c} $L$list$swap{,}{0}{2} $L",
+      "expected": "c,b,a"
+    },
+    {
+      "id": 101,
+      "name": "$list$reverse basic",
+      "code": "$L$from{a,b,c} $L$list$reverse{,} $L",
+      "expected": "c,b,a"
+    },
+    {
+      "id": 102,
+      "name": "$list$join changes separator",
+      "code": "$L$from{a,b,c} $L$list$join{,}{ | }",
+      "expected": "a | b | c"
+    },
+    {
+      "id": 103,
+      "name": "$list multi-char separator",
+      "code": "$L$from{foo::bar::baz} $L$list$get{::}{1}",
+      "expected": "bar"
+    },
+    {
+      "id": 104,
+      "name": "$list separator processed from variable",
+      "code": "$SEP$from{,} $L$from{x,y,z} $L$list$get{$SEP}{2}",
+      "expected": "z"
     }
   ]
 }
