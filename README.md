@@ -301,6 +301,7 @@ $VAL$else{content}
 | **`else`** | If `$VAL` **is empty**, processes and emits `code`. Otherwise, passes `$VAL` through. |
 | **`repeat`** | `$repeat{N}{code}` | Executes `code` N times. Emits nothing; used for side effects. |
 | **`while`** | `$while{pat}{code}` | Executes `code` while its result matches `pat`. Emits the last successful result. |
+| **`until`** | `$until{pat}{code}` | Executes `code` until its result matches `pat`. Emits the match that caused the break. |
 | **`byte`** | `$byte{code}` | Appends a byte (0-255) to the variable or current stream. |
 
 ### Chaining (If-Then-Else)

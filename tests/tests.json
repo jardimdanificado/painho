@@ -774,6 +774,12 @@
       "name": "$while with list (2 iterations)",
       "code": "$L$from{a,a,b}$while{a}{$L$list$shift{,}}",
       "expected": "a"
+    },
+    {
+      "id": 131,
+      "name": "$until basic list depletion",
+      "code": "$L$from{a,b,stop}$until{stop}{$L$list$shift{,}}",
+      "expected": "stop"
     }
   ]
 }

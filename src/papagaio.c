@@ -2046,9 +2046,10 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                     int cur_is_compare = (klen == 7 && memcmp(src + ks, "compare", 7) == 0);
                     int cur_is_repeat  = (klen == 6 && memcmp(src + ks, "repeat",  6) == 0);
                     int cur_is_while   = (klen == 5 && memcmp(src + ks, "while",   5) == 0);
+                    int cur_is_until   = (klen == 5 && memcmp(src + ks, "until",   5) == 0);
                     int cur_is_byte    = (klen == 4 && memcmp(src + ks, "byte",    4) == 0);
                     int cur_is_flow    = cur_is_then || cur_is_else || cur_is_compare ||
-                                         cur_is_repeat || cur_is_while || cur_is_byte;
+                                         cur_is_repeat || cur_is_while || cur_is_until || cur_is_byte;
 
                     /* Check if current NAME is followed by a flow op */
                     int next_is_flow = 0;
@@ -2061,6 +2062,7 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                             (nfl == 4 && memcmp(src + njs, "else",    4) == 0) ||
                             (nfl == 6 && memcmp(src + njs, "repeat",  6) == 0) ||
                             (nfl == 5 && memcmp(src + njs, "while",   5) == 0) ||
+                            (nfl == 5 && memcmp(src + njs, "until",   5) == 0) ||
                             (nfl == 4 && memcmp(src + njs, "byte",    4) == 0))
                             next_is_flow = 1;
                     }
@@ -2094,8 +2096,9 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                             int is_else   = (opl == 4 && memcmp(src + ops, "else",    4) == 0);
                             int is_repeat = (opl == 6 && memcmp(src + ops, "repeat",  6) == 0);
                             int is_while  = (opl == 5 && memcmp(src + ops, "while",   5) == 0);
+                            int is_until  = (opl == 5 && memcmp(src + ops, "until",   5) == 0);
                             int is_byte   = (opl == 4 && memcmp(src + ops, "byte",    4) == 0);
-                            if (!is_cmp && !is_then && !is_else && !is_repeat && !is_while && !is_byte) break;
+                            if (!is_cmp && !is_then && !is_else && !is_repeat && !is_while && !is_until && !is_byte) break;
 
                             /* Consume optional whitespace, then expect a block */
                             size_t j3 = j2;
@@ -2104,7 +2107,7 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
 
                             StrView blk;
                             j3 = (size_t)extract_block(src, (int)j3, so_f, sc_f, &blk);
-                            char *arg = (is_repeat || is_while) ? NULL : pap_process_sv(ctx, blk);
+                            char *arg = (is_repeat || is_while || is_until) ? NULL : pap_process_sv(ctx, blk);
 
                             if (is_cmp) {
                                 if (strcmp(cur_val, arg) != 0) { free(cur_val); cur_val = strdup(""); }
@@ -2154,6 +2157,33 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                                         if (matches) free_match(&m);
                                         
                                         if (!matches) { free(iter); break; }
+                                        free(last_res); last_res = iter;
+                                    }
+                                    free(cur_val);
+                                    cur_val = last_res;
+                                }
+                                free_pattern(&pat);
+                                free(pat_str);
+                            } else if (is_until) {
+                                StrView pat_blk = blk;
+                                char *pat_str = pap_process_sv(ctx, pat_blk);
+                                Pattern pat; parse_pattern_ex(pat_str, &pat, sym);
+                                
+                                while (j3 < len && isspace((unsigned char)src[j3])) j3++;
+                                if (j3 < len && str_pfx(src + j3, sym->open)) {
+                                    StrView code_blk;
+                                    j3 = (size_t)extract_block(src, (int)j3, so_f, sc_f, &code_blk);
+                                    char *last_res = strdup("");
+                                    while (1) {
+                                        char *iter = pap_process_sv(ctx, code_blk);
+                                        Match m; m.ctx = ctx;
+                                        int matches = match_pattern(ctx, iter, (int)strlen(iter), &pat, 0, &m);
+                                        if (matches) free_match(&m);
+                                        
+                                        if (matches) { 
+                                            free(last_res); last_res = iter;
+                                            break; 
+                                        }
                                         free(last_res); last_res = iter;
                                     }
                                     free(cur_val);
