@@ -25,17 +25,44 @@ int main(int argc, char **argv) {
         return 0;
     }
     if (argc < 2 || (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)) {
-        fprintf(stderr, "Usage: papagaio <file.txt>\n");
+        fprintf(stderr, "Usage: papagaio <file.txt> | -e \"code\" | -\n");
         return 1;
     }
 
     Papagaio *ctx = papagaio_open();
     papagaio_set_args(ctx, argc, argv);
 
+    char *input = NULL;
     size_t len = 0;
-    char *input = read_file(argv[1], &len);
+
+    if (strcmp(argv[1], "-e") == 0) {
+        if (argc < 3) {
+            fprintf(stderr, "Error: -e requires a string argument\n");
+            papagaio_close(ctx);
+            return 1;
+        }
+        input = strdup(argv[2]);
+        len = strlen(input);
+    } else if (strcmp(argv[1], "-") == 0) {
+        /* Read from stdin */
+        size_t cap = 4096;
+        input = malloc(cap);
+        while (1) {
+            size_t r = fread(input + len, 1, cap - len - 1, stdin);
+            len += r;
+            if (r == 0) break;
+            if (len + 1024 >= cap) {
+                cap <<= 1;
+                input = realloc(input, cap);
+            }
+        }
+        input[len] = '\0';
+    } else {
+        input = read_file(argv[1], &len);
+    }
+
     if (!input) {
-        fprintf(stderr, "Error reading file: %s\n", argv[1]);
+        fprintf(stderr, "Error reading input\n");
         papagaio_close(ctx);
         return 1;
     }
@@ -45,8 +72,6 @@ int main(int argc, char **argv) {
     if (output) {
         printf("%s", output);
         free(output);
-    } else {
-        fprintf(stderr, "Error during papagaio processing.\n");
     }
 
     free(input);

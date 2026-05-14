@@ -43,7 +43,6 @@ Modifiers specify the data type or constraints of a match:
 - **Numbers**: `$var$int`, `$var$float`, `$var$number`
 - **Casing**: `$var$upper`, `$var$lower`, `$var$capitalized`
 - **Formats**: `$var$word`, `$var$identifier`, `$var$hex`, `$var$path`, `$var$binary`, `$var$percent`
-- **Regex**: `$id$regex{[0-9]+}`
 - **Block**: `$item$block{[}{]}` (captures everything between delimiters)
 - **Aliases**: `$kind$aliases{cat}{dog}{bird}` (multi-block syntax).
 - **Substrings**: `$var$starts{foo}`, `$var$ends{bar}`, `$var$prefix{p}`, `$var$suffix{s}`, `$var$infix{i}`, `$var$includes{x}`
@@ -298,8 +297,11 @@ $VAL$else{content}
 | Operator | Behavior |
 |---|---|
 | **`compare`** | If `$VAL` matches `target`, emits `$VAL`. Otherwise, emits `""`. |
-| **`then`** | If `$VAL` is **not empty**, processes and emits `content`. Otherwise, emits `""`. |
-| **`else`** | If `$VAL` **is empty**, processes and emits `content`. Otherwise, passes `$VAL` through. |
+| **`then`** | If `$VAL` is **not empty**, processes and emits `code`. Otherwise, emits `""`. |
+| **`else`** | If `$VAL` **is empty**, processes and emits `code`. Otherwise, passes `$VAL` through. |
+| **`repeat`** | `$repeat{N}{code}` | Executes `code` N times. Emits nothing; used for side effects. |
+| **`while`** | `$while{pat}{code}` | Executes `code` while its result matches `pat`. Emits the last successful result. |
+| **`byte`** | `$byte{code}` | Appends a byte (0-255) to the variable or current stream. |
 
 ### Chaining (If-Then-Else)
 

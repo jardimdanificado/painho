@@ -32,15 +32,15 @@
     },
     {
       "id": 6,
-      "name": "Eval expression with arithmetic",
-      "code": "$pattern {sum $a $b} {$lua{return $a + $b}}\nsum 5 3",
-      "expected": "8"
+      "name": "$byte accumulation via repeat",
+      "code": "$A$from{}$repeat{3}{$A$byte{65}}$A",
+      "expected": "AAA"
     },
     {
       "id": 7,
-      "name": "Eval with arithmetic and variable",
-      "code": "$pattern {multiply $n} {Result: $lua{return $n * 3}}\nmultiply 5",
-      "expected": "Result: 15"
+      "name": "$repeat basic list mutation",
+      "code": "$L$from{a}$repeat{3}{$L$list$push{,}{x}}$L",
+      "expected": "a,x,x,x"
     },
     {
       "id": 8,
@@ -98,9 +98,9 @@
     },
     {
       "id": 17,
-      "name": "Eval with division and decimals",
-      "code": "$pattern {div $a $b} {$lua{return $a / $b}}\ndiv 7 2",
-      "expected": "3.5"
+      "name": "$while list depletion",
+      "code": "$L$from{1,1,1}$while{1}{$L$list$pop{,}}",
+      "expected": "1"
     },
     {
       "id": 18,
@@ -188,9 +188,9 @@
     },
     {
       "id": 32,
-      "name": "Multiple eval operations in sequence",
-      "code": "$pattern {calc $x} {$lua{return $x * 2}}\ncalc 3",
-      "expected": "6"
+      "name": "$byte Hello World",
+      "code": "$byte{72}$byte{101}$byte{108}$byte{108}$byte{111}$byte{44}$byte{32}$byte{87}$byte{111}$byte{114}$byte{108}$byte{100}$byte{33}",
+      "expected": "Hello, World!"
     },
     {
       "id": 33,
@@ -212,15 +212,15 @@
     },
     {
       "id": 36,
-      "name": "Regex match capture",
-      "code": "$pattern {$num$regex {[0-9]+}} {Number: $num}\n42 days",
-      "expected": "Number: 42 days"
+      "name": "$while with named aliases",
+      "code": "$L$from{a,b,c}$while{$x$aliases{a}{b}}{$L$list$shift{,}}",
+      "expected": "b"
     },
     {
       "id": 37,
-      "name": "Eval print output is captured and prefixed",
-      "code": "$pattern {$x} {$lua{print('hello'); return 'X'}}\nx",
-      "expected": "X"
+      "name": "$repeat side-effect emission",
+      "code": "$A$from{}$repeat{3}{$A$from{$A.}}$A",
+      "expected": "..."
     },
     {
       "id": 38,
@@ -338,9 +338,9 @@
     },
     {
       "id": 57,
-      "name": "Multi-argument plugins",
-      "code": "$lua{return params[2]}{HELLO}",
-      "expected": "HELLO"
+      "name": "$list with newline separator",
+      "code": "$L$from{line1\nline2\nline3}$L$list$count{\n}",
+      "expected": "3"
     },
     {
       "id": 58,
@@ -732,6 +732,48 @@
       "name": "standalone $then does nothing on empty",
       "code": "$then{should not appear}",
       "expected": ""
+    },
+    {
+      "id": 124,
+      "name": "$repeat basic",
+      "code": "$repeat{3}{A}",
+      "expected": ""
+    },
+    {
+      "id": 125,
+      "name": "$while with list",
+      "code": "$L$from{a,a,a}$while{a}{$L$list$shift{,}}",
+      "expected": "a"
+    },
+    {
+      "id": 126,
+      "name": "$while with pattern mismatch",
+      "code": "$L$from{a,b,c}$while{x}{$L$list$shift{,}}",
+      "expected": ""
+    },
+    {
+      "id": 127,
+      "name": "$byte basic",
+      "code": "$byte{65}$byte{66}$byte{67}",
+      "expected": "ABC"
+    },
+    {
+      "id": 128,
+      "name": "$byte with space",
+      "code": "$byte{32}",
+      "expected": " "
+    },
+    {
+      "id": 129,
+      "name": "complex flow: repeat with list",
+      "code": "$L$from{a,b} $repeat{2}{$L$list$push{,}{x}}$L",
+      "expected": "a,b,x,x"
+    },
+    {
+      "id": 130,
+      "name": "$while with list (2 iterations)",
+      "code": "$L$from{a,a,b}$while{a}{$L$list$shift{,}}",
+      "expected": "a"
     }
   ]
 }

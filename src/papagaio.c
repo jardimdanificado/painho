@@ -8,7 +8,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
-#include <regex.h>
+
 
 
 /* =========================================================================
@@ -19,7 +19,7 @@ typedef struct { const char *ptr; size_t len; } StrView;
 typedef struct { char *data; size_t len; size_t cap; } StrBuf;
 
 typedef enum {
-    TOK_LITERAL, TOK_VAR, TOK_REGEX, TOK_BLOCK, TOK_WS,
+    TOK_LITERAL, TOK_VAR, TOK_BLOCK, TOK_WS,
     TOK_OPTIONS_OBSOLETE, TOK_OPTIONAL_LIT
 } PapTokenType;
 
@@ -30,7 +30,7 @@ typedef enum {
     MOD_BINARY, MOD_PERCENT, MOD_ALIASES,
     MOD_GROUP, MOD_STARTS, MOD_ENDS,
     MOD_PREFIX, MOD_SUFFIX, MOD_INFIX,
-    MOD_INCLUDES
+    MOD_INCLUDES, MOD_REPEAT, MOD_WHILE, MOD_UNTIL, MOD_BYTE
 } VarModifier;
 
 /* Forward declaration for recursive sub-patterns */
@@ -43,7 +43,7 @@ typedef struct {
     StrView     var;
     StrView     open;
     StrView     close;
-    regex_t    *re;       /* compiled POSIX regex */
+
     char       *open_str;
     char       *close_str;
     unsigned    optional    : 1;
@@ -76,13 +76,7 @@ typedef struct {
     int         start;
     int         end;
     const char *src;
-    struct {
-        regmatch_t *capture;
-        int         capture_count;
-        size_t      match_start;
-        size_t      match_end;
-        const char     *src;
-    } regex;
+
     Papagaio *ctx;
 } Match;
 
@@ -254,10 +248,7 @@ static void free_pattern(Pattern *p)
         free(p->t[i].open_str);
         free(p->t[i].close_str);
         free(p->t[i].literal_str);
-        if (p->t[i].re) {
-            regfree(p->t[i].re);
-            free(p->t[i].re);
-        }
+
         if (p->t[i].alts) {
             for (int j = 0; j < p->t[i].alt_count; j++)
                 free(p->t[i].alts[j]);
@@ -289,7 +280,7 @@ static void free_match(Match *m)
             if (m->cap[i].owned) { free(m->cap[i].owned); m->cap[i].owned = NULL; }
         free(m->cap); m->cap = NULL;
     }
-    if (m->regex.capture) { free(m->regex.capture); m->regex.capture = NULL; }
+
     m->count = 0; m->cap_size = 0;
 }
 
@@ -522,20 +513,7 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                 else if (sv_eq(mod, (StrView){"path",        4 })) t->modifier = MOD_PATH;
                 else if (sv_eq(mod, (StrView){"binary",      6 })) t->modifier = MOD_BINARY;
                 else if (sv_eq(mod, (StrView){"percent",     7 })) t->modifier = MOD_PERCENT;
-                else if (sv_eq(mod, (StrView){ sym->regex, strlen(sym->regex) })) {
-                    t->type = TOK_REGEX;
-                    while (i < n && isspace((unsigned char)pat[i])) i++;
-                    if (i < n && str_pfx(pat + i, sym->open)) {
-                        StrView blk;
-                        StrView so = { sym->open,  (size_t)ol };
-                        StrView sc = { sym->close, (size_t)cl };
-                        int next = extract_block(pat, i, so, sc, &blk);
-                        t->value = trim_sv(blk);
-                        i = next;
-                    } else {
-                        t->value = (StrView){ pat + i, 0 };
-                    }
-                }
+
                 else if (sv_eq(mod, (StrView){ sym->block, strlen(sym->block) })) {
                     t->type = TOK_BLOCK;
 
@@ -667,7 +645,7 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                     i += sl2;
                 }
             }
-            if (t->type != TOK_REGEX && t->type != TOK_BLOCK) {
+            if (t->type != TOK_BLOCK) {
                 t->type = TOK_VAR;
             }
             p->count++; continue;
@@ -759,9 +737,7 @@ static int match_pattern(Papagaio *ctx, const char *src, int src_len,
     m->cap_size = 16; m->count = 0;
     m->cap      = (Capture *)malloc(sizeof(Capture) * m->cap_size);
     m->start    = start; m->src = src;
-    m->regex.capture       = NULL; m->regex.capture_count = 0;
-    m->regex.match_start   = start; m->regex.match_end = start;
-    m->regex.src           = src;
+
 
     int pos = start;
 
@@ -824,7 +800,6 @@ static int match_pattern(Papagaio *ctx, const char *src, int src_len,
                             hit = 1;
                             /* Free sub_m but NOT its captures (we moved them) */
                             free(sub_m.cap);
-                            if (sub_m.regex.capture) free((void *)sub_m.regex.capture);
                             break;
                         }
                     }
@@ -850,7 +825,6 @@ static int match_pattern(Papagaio *ctx, const char *src, int src_len,
                     }
                     pos = sub_m.end;
                     free(sub_m.cap);
-                    if (sub_m.regex.capture) free((void *)sub_m.regex.capture);
                 } else {
                     if ((size_t)(src_len-pos) >= t->value.len && t->value.len > 0 &&
                         memcmp(src+pos, t->value.ptr, t->value.len) == 0)
@@ -874,7 +848,6 @@ static int match_pattern(Papagaio *ctx, const char *src, int src_len,
                         m->cap[m->count++] = sub_m.cap[ci];
                     }
                     free(sub_m.cap);
-                    if (sub_m.regex.capture) free((void *)sub_m.regex.capture);
                 } else {
                     if ((size_t)(src_len-pos) < t->value.len ||
                         memcmp(src+pos, t->value.ptr, t->value.len) != 0) {
@@ -1110,53 +1083,6 @@ static int match_pattern(Papagaio *ctx, const char *src, int src_len,
             if (t->ws_consume) { while (src[pos] == ' ' || src[pos] == '\t' || src[pos] == '\n' || src[pos] == '\r') pos++; }
             continue;
             } /* end scope for no-nxt branch */
-        }
-
-        if (t->type == TOK_REGEX) {
-            if (!t->re && t->value.len > 0) {
-                t->re = (regex_t *)malloc(sizeof(regex_t));
-                char *pat = (char *)malloc(t->value.len + 1);
-                if (pat) {
-                    memcpy(pat, t->value.ptr, t->value.len);
-                    pat[t->value.len] = '\0';
-                    if (regcomp(t->re, pat, REG_EXTENDED) != 0) {
-                        free(t->re); t->re = NULL;
-                    }
-                    free(pat);
-                }
-            }
-            if (!t->re) {
-                if (!t->optional) goto fail;
-                ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL };
-                continue;
-            }
-
-            regmatch_t pmatch[10];
-            if (regexec(t->re, src + pos, 10, pmatch, 0) != 0 || pmatch[0].rm_so != 0) {
-                if (!t->optional) goto fail;
-                ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL };
-                continue;
-            }
-
-            size_t match_start = (size_t)pos + pmatch[0].rm_so;
-            size_t match_end   = (size_t)pos + pmatch[0].rm_eo;
-
-            /* keep last regex capture info */
-            if (m->regex.capture) { free(m->regex.capture); m->regex.capture = NULL; }
-            m->regex.capture = (regmatch_t *)malloc(sizeof(regmatch_t) * 10);
-            if (m->regex.capture) {
-                memcpy(m->regex.capture, pmatch, sizeof(regmatch_t) * 10);
-                m->regex.capture_count = 10;
-            }
-            m->regex.match_start = match_start;
-            m->regex.match_end = match_end;
-            m->regex.src = src;
-
-            ensure_cap(m);
-            m->cap[m->count++] = (Capture){ t->var, { src + match_start, (size_t)(match_end - match_start) }, NULL };
-            pos = (int)match_end;
-
-            continue;
         }
 
         if (t->type == TOK_BLOCK) {
@@ -1903,7 +1829,11 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                     size_t nfl = nj - njs;
                     if ((nfl == 7 && memcmp(src + njs, "compare", 7) == 0) ||
                         (nfl == 4 && memcmp(src + njs, "then",    4) == 0) ||
-                        (nfl == 4 && memcmp(src + njs, "else",    4) == 0)) {
+                        (nfl == 4 && memcmp(src + njs, "else",    4) == 0) ||
+                        (nfl == 6 && memcmp(src + njs, "repeat",  6) == 0) ||
+                        (nfl == 5 && memcmp(src + njs, "while",   5) == 0) ||
+                        (nfl == 5 && memcmp(src + njs, "until",   5) == 0) ||
+                        (nfl == 4 && memcmp(src + njs, "byte",    4) == 0)) {
                         /* Process block content as initial value */
                         char *cur_val = pap_process_sv(ctx, blk_b);
                         size_t cp = jb;
@@ -1913,24 +1843,76 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                             size_t j2 = cp + 1, ops = j2;
                             while (j2 < len && (isalnum((unsigned char)src[j2]) || src[j2] == '_')) j2++;
                             size_t opl = j2 - ops;
-                            int is_cmp  = (opl == 7 && memcmp(src + ops, "compare", 7) == 0);
-                            int is_then = (opl == 4 && memcmp(src + ops, "then",    4) == 0);
-                            int is_else = (opl == 4 && memcmp(src + ops, "else",    4) == 0);
-                            if (!is_cmp && !is_then && !is_else) break;
+                            int is_cmp    = (opl == 7 && memcmp(src + ops, "compare", 7) == 0);
+                            int is_then   = (opl == 4 && memcmp(src + ops, "then",    4) == 0);
+                            int is_else   = (opl == 4 && memcmp(src + ops, "else",    4) == 0);
+                            int is_repeat = (opl == 6 && memcmp(src + ops, "repeat",  6) == 0);
+                            int is_while  = (opl == 5 && memcmp(src + ops, "while",   5) == 0);
+                            int is_until  = (opl == 5 && memcmp(src + ops, "until",   5) == 0);
+                            int is_byte   = (opl == 4 && memcmp(src + ops, "byte",    4) == 0);
+                            if (!is_cmp && !is_then && !is_else && !is_repeat && !is_while && !is_until && !is_byte) break;
                             size_t j3 = j2;
                             while (j3 < len && isspace((unsigned char)src[j3])) j3++;
                             if (j3 >= len || !str_pfx(src + j3, sym->open)) break;
                             StrView blk; j3 = (size_t)extract_block(src, (int)j3, so_f, sc_f, &blk);
-                            char *arg = pap_process_sv(ctx, blk);
+                            char *arg = (is_repeat || is_while || is_until) ? NULL : pap_process_sv(ctx, blk);
+
                             if (is_cmp) {
                                 if (strcmp(cur_val, arg) != 0) { free(cur_val); cur_val = strdup(""); }
-                                free(arg);
                             } else if (is_then) {
                                 if (cur_val[0] != '\0') { free(cur_val); cur_val = arg; arg = NULL; }
-                                else free(arg);
-                            } else {
+                                else { free(cur_val); cur_val = strdup(""); }
+                            } else if (is_else) {
                                 if (cur_val[0] == '\0') { free(cur_val); cur_val = arg; arg = NULL; }
-                                else free(arg);
+                            } else if (is_byte) {
+                                int code = atoi(arg);
+                                char b[2] = {(char)code, '\0'};
+                                free(cur_val); cur_val = strdup(b);
+                            } else if (is_repeat) {
+                                char *times_str = pap_process_sv(ctx, blk);
+                                int times = atoi(times_str); free(times_str);
+                                while (j3 < len && isspace((unsigned char)src[j3])) j3++;
+                                if (j3 < len && str_pfx(src + j3, sym->open)) {
+                                    StrView code_blk;
+                                    j3 = (size_t)extract_block(src, (int)j3, so_f, sc_f, &code_blk);
+                                    for (int t = 0; t < times; t++) {
+                                        char *tmp = pap_process_sv(ctx, code_blk);
+                                        free(tmp);
+                                    }
+                                }
+                                free(cur_val); cur_val = strdup("");
+                            } else if (is_while || is_until) {
+                                StrView pat_blk = blk;
+                                char *pat_str = pap_process_sv(ctx, pat_blk);
+                                Pattern pat; parse_pattern_ex(pat_str, &pat, sym);
+                                free(pat_str);
+                                
+                                while (j3 < len && isspace((unsigned char)src[j3])) j3++;
+                                if (j3 < len && str_pfx(src + j3, sym->open)) {
+                                    StrView code_blk;
+                                    j3 = (size_t)extract_block(src, (int)j3, so_f, sc_f, &code_blk);
+                                    StrBuf comb; sb_init(&comb);
+                                    char *last_res = strdup("");
+                                    while (1) {
+                                        char *iter = pap_process_sv(ctx, code_blk);
+                                        Match m; m.ctx = ctx;
+                                        int matches = match_pattern(ctx, iter, (int)strlen(iter), &pat, 0, &m);
+                                        if (matches) free_match(&m);
+                                        
+                                        if (is_while) {
+                                            if (!matches) { free(iter); break; }
+                                            free(last_res); last_res = iter;
+                                        } else { /* until */
+                                            sb_append_n(&comb, iter, strlen(iter));
+                                            if (matches) { free(iter); break; }
+                                            free(iter);
+                                        }
+                                    }
+                                    free(cur_val);
+                                    if (is_while) { cur_val = last_res; sb_free(&comb); }
+                                    else { cur_val = strdup(comb.data); sb_free(&comb); free(last_res); }
+                                }
+                                free_pattern(&pat);
                             }
                             if (arg) free(arg);
                             cp = j3;
@@ -2062,7 +2044,11 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                     int cur_is_then    = (klen == 4 && memcmp(src + ks, "then",    4) == 0);
                     int cur_is_else    = (klen == 4 && memcmp(src + ks, "else",    4) == 0);
                     int cur_is_compare = (klen == 7 && memcmp(src + ks, "compare", 7) == 0);
-                    int cur_is_flow    = cur_is_then || cur_is_else || cur_is_compare;
+                    int cur_is_repeat  = (klen == 6 && memcmp(src + ks, "repeat",  6) == 0);
+                    int cur_is_while   = (klen == 5 && memcmp(src + ks, "while",   5) == 0);
+                    int cur_is_byte    = (klen == 4 && memcmp(src + ks, "byte",    4) == 0);
+                    int cur_is_flow    = cur_is_then || cur_is_else || cur_is_compare ||
+                                         cur_is_repeat || cur_is_while || cur_is_byte;
 
                     /* Check if current NAME is followed by a flow op */
                     int next_is_flow = 0;
@@ -2072,7 +2058,10 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                         size_t nfl = nj - njs;
                         if ((nfl == 7 && memcmp(src + njs, "compare", 7) == 0) ||
                             (nfl == 4 && memcmp(src + njs, "then",    4) == 0) ||
-                            (nfl == 4 && memcmp(src + njs, "else",    4) == 0))
+                            (nfl == 4 && memcmp(src + njs, "else",    4) == 0) ||
+                            (nfl == 6 && memcmp(src + njs, "repeat",  6) == 0) ||
+                            (nfl == 5 && memcmp(src + njs, "while",   5) == 0) ||
+                            (nfl == 4 && memcmp(src + njs, "byte",    4) == 0))
                             next_is_flow = 1;
                     }
 
@@ -2085,26 +2074,28 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                         size_t cp; /* position in src where we scan flow ops */
 
                         if (cur_is_flow) {
-                            /* Standalone: input is empty string, chain starts here */
                             cur_val = strdup("");
-                            cp = i; /* points to '$' of "then"/"else"/"compare" */
+                            cp = i; /* Start from the current $ to pick up the first op */
                         } else {
-                            /* $NAME$op...: resolve NAME via pap_var_lookup */
-                            char *lu = pap_var_lookup(ctx, sym, src + ks, klen);
-                            cur_val = lu ? lu : strdup("");
-                            cp = j; /* points to '$' of first flow op */
+                            cur_val = pap_var_lookup(ctx, sym, src + ks, klen);
+                            if (!cur_val) cur_val = strdup("");
+                            cp = j; /* Start from the $ after the name */
                         }
 
-                        /* Process chain of $compare/$then/$else */
+
+
                         while (cp < len && src[cp] == '$') {
                             size_t j2 = cp + 1, ops = j2;
                             while (j2 < len && (isalnum((unsigned char)src[j2]) || src[j2] == '_')) j2++;
                             size_t opl = j2 - ops;
 
-                            int is_cmp  = (opl == 7 && memcmp(src + ops, "compare", 7) == 0);
-                            int is_then = (opl == 4 && memcmp(src + ops, "then",    4) == 0);
-                            int is_else = (opl == 4 && memcmp(src + ops, "else",    4) == 0);
-                            if (!is_cmp && !is_then && !is_else) break;
+                            int is_cmp    = (opl == 7 && memcmp(src + ops, "compare", 7) == 0);
+                            int is_then   = (opl == 4 && memcmp(src + ops, "then",    4) == 0);
+                            int is_else   = (opl == 4 && memcmp(src + ops, "else",    4) == 0);
+                            int is_repeat = (opl == 6 && memcmp(src + ops, "repeat",  6) == 0);
+                            int is_while  = (opl == 5 && memcmp(src + ops, "while",   5) == 0);
+                            int is_byte   = (opl == 4 && memcmp(src + ops, "byte",    4) == 0);
+                            if (!is_cmp && !is_then && !is_else && !is_repeat && !is_while && !is_byte) break;
 
                             /* Consume optional whitespace, then expect a block */
                             size_t j3 = j2;
@@ -2113,29 +2104,64 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
 
                             StrView blk;
                             j3 = (size_t)extract_block(src, (int)j3, so_f, sc_f, &blk);
-                            char *arg = pap_process_sv(ctx, blk);
+                            char *arg = (is_repeat || is_while) ? NULL : pap_process_sv(ctx, blk);
 
-                             if (is_cmp) {
-                                 /* compare: equal → keep cur_val, unequal → "" */
-                                 if (strcmp(cur_val, arg) != 0) {
-                                     free(cur_val); cur_val = strdup("");
-                                 }
-                                 free(arg); arg = NULL;
-                             } else if (is_then) {
-                                 /* then: non-empty → replace with arg; empty → stay "" */
-                                 if (cur_val[0] != '\0') {
-                                     free(cur_val); cur_val = arg; arg = NULL;
-                                 } else {
-                                     free(arg); arg = NULL;
-                                 }
-                             } else { /* else */
-                                 /* else: empty → replace with arg; non-empty → pass cur through */
-                                 if (cur_val[0] == '\0') {
-                                     free(cur_val); cur_val = arg; arg = NULL;
-                                 } else {
-                                     free(arg); arg = NULL; /* keep cur_val as-is */
-                                 }
-                             }
+                            if (is_cmp) {
+                                if (strcmp(cur_val, arg) != 0) { free(cur_val); cur_val = strdup(""); }
+                            } else if (is_then) {
+                                if (cur_val[0] != '\0') { free(cur_val); cur_val = arg; arg = NULL; }
+                                else { free(cur_val); cur_val = strdup(""); }
+                            } else if (is_else) {
+                                if (cur_val[0] == '\0') { free(cur_val); cur_val = arg; arg = NULL; }
+                            } else if (is_byte) {
+                                int code = atoi(arg);
+                                size_t cl = strlen(cur_val);
+                                char *nv = (char*)realloc(cur_val, cl + 2);
+                                if (nv) { 
+                                    cur_val = nv; cur_val[cl] = (char)code; cur_val[cl+1] = '\0'; 
+                                    /* Persist back to variable if we have a name */
+                                    if (klen > 0) {
+                                        pap_var_update(ctx, sym, src + ks, klen, cur_val);
+                                    }
+                                }
+                            } else if (is_repeat) {
+                                char *times_str = pap_process_sv(ctx, blk);
+                                int times = atoi(times_str); free(times_str);
+                                while (j3 < len && isspace((unsigned char)src[j3])) j3++;
+                                if (j3 < len && str_pfx(src + j3, sym->open)) {
+                                    StrView code_blk;
+                                    j3 = (size_t)extract_block(src, (int)j3, so_f, sc_f, &code_blk);
+                                    for (int t = 0; t < times; t++) {
+                                        char *tmp = pap_process_sv(ctx, code_blk);
+                                        free(tmp);
+                                    }
+                                }
+                                free(cur_val); cur_val = strdup("");
+                            } else if (is_while) {
+                                StrView pat_blk = blk;
+                                char *pat_str = pap_process_sv(ctx, pat_blk);
+                                Pattern pat; parse_pattern_ex(pat_str, &pat, sym);
+                                
+                                while (j3 < len && isspace((unsigned char)src[j3])) j3++;
+                                if (j3 < len && str_pfx(src + j3, sym->open)) {
+                                    StrView code_blk;
+                                    j3 = (size_t)extract_block(src, (int)j3, so_f, sc_f, &code_blk);
+                                    char *last_res = strdup("");
+                                    while (1) {
+                                        char *iter = pap_process_sv(ctx, code_blk);
+                                        Match m; m.ctx = ctx;
+                                        int matches = match_pattern(ctx, iter, (int)strlen(iter), &pat, 0, &m);
+                                        if (matches) free_match(&m);
+                                        
+                                        if (!matches) { free(iter); break; }
+                                        free(last_res); last_res = iter;
+                                    }
+                                    free(cur_val);
+                                    cur_val = last_res;
+                                }
+                                free_pattern(&pat);
+                                free(pat_str);
+                            }
                              if (arg) free(arg);
                             cp = j3;
                         }
