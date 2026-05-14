@@ -39,7 +39,7 @@
     {
       "id": 7,
       "name": "$repeat basic list mutation",
-      "code": "$L$from{a}$repeat{3}{$L$list$push{,}{x}}$L",
+      "code": "$L$from{a}$repeat{3}{$L$list{,}$push{x}}$L",
       "expected": "a,x,x,x"
     },
     {
@@ -99,7 +99,7 @@
     {
       "id": 17,
       "name": "$while list depletion",
-      "code": "$L$from{1,1,1}$while{1}{$L$list$pop{,}}",
+      "code": "$L$from{1,1,1}$while{1}{$L$list{,}$pop}",
       "expected": "1"
     },
     {
@@ -213,7 +213,7 @@
     {
       "id": 36,
       "name": "$while with named aliases",
-      "code": "$L$from{a,b,c}$while{$x$aliases{a}{b}}{$L$list$shift{,}}",
+      "code": "$L$from{a,b,c}$while{$x$aliases{a}{b}}{$L$list{,}$shift}",
       "expected": "b"
     },
     {
@@ -339,7 +339,7 @@
     {
       "id": 57,
       "name": "$list with newline separator",
-      "code": "$L$from{line1\nline2\nline3}$L$list$count{\n}",
+      "code": "$L$from{line1\nline2\nline3}$L$list{\n}$count",
       "expected": "3"
     },
     {
@@ -372,7 +372,6 @@
       "code": "$pattern {$x$group{abc}} {OK-$x}\nabc",
       "expected": " OK-abc"
     },
-
     {
       "id": 64,
       "name": "Braced variable ambiguity resolution",
@@ -502,139 +501,139 @@
     {
       "id": 85,
       "name": "$list$get basic",
-      "code": "$L$from{a,b,c} $L$list$get{,}{0}",
+      "code": "$L$from{a,b,c} $L$list{,}$get{0}",
       "expected": "a"
     },
     {
       "id": 86,
       "name": "$list$get negative index",
-      "code": "$L$from{a,b,c} $L$list$get{,}{-1}",
+      "code": "$L$from{a,b,c} $L$list{,}$get{-1}",
       "expected": "c"
     },
     {
       "id": 87,
       "name": "$list$get out of range",
-      "code": "$L$from{a,b,c} $L$list$get{,}{99}",
+      "code": "$L$from{a,b,c} $L$list{,}$get{99}",
       "expected": ""
     },
     {
       "id": 88,
       "name": "$list$get empty list",
-      "code": "$L$from{} $L$list$get{,}{0}",
+      "code": "$L$from{} $L$list{,}$get{0}",
       "expected": ""
     },
     {
       "id": 89,
       "name": "$list$count basic",
-      "code": "$L$from{a,b,c} $L$list$count{,}",
+      "code": "$L$from{a,b,c} $L$list{,}$count",
       "expected": "3"
     },
     {
       "id": 90,
       "name": "$list$count empty",
-      "code": "$L$from{} $L$list$count{,}",
+      "code": "$L$from{} $L$list{,}$count",
       "expected": "0"
     },
     {
       "id": 91,
       "name": "$list$push basic",
-      "code": "$L$from{a,b} $L$list$push{,}{c} $L",
+      "code": "$L$from{a,b} $L$list{,}$push{c} $L",
       "expected": "a,b,c"
     },
     {
       "id": 92,
       "name": "$list$push onto empty",
-      "code": "$L$from{} $L$list$push{,}{x} $L",
+      "code": "$L$from{} $L$list{,}$push{x} $L",
       "expected": "x"
     },
     {
       "id": 93,
       "name": "$list$pop emits and mutates",
-      "code": "$L$from{a,b,c} popped:$L$list$pop{,} rest:$L",
+      "code": "$L$from{a,b,c} popped:$L$list{,}$pop rest:$L",
       "expected": "popped:c rest:a,b"
     },
     {
       "id": 94,
       "name": "$list$shift emits and mutates",
-      "code": "$L$from{a,b,c} first:$L$list$shift{,} rest:$L",
+      "code": "$L$from{a,b,c} first:$L$list{,}$shift rest:$L",
       "expected": "first:a rest:b,c"
     },
     {
       "id": 95,
       "name": "$list$unshift basic",
-      "code": "$L$from{b,c} $L$list$unshift{,}{a} $L",
+      "code": "$L$from{b,c} $L$list{,}$unshift{a} $L",
       "expected": "a,b,c"
     },
     {
       "id": 96,
       "name": "$list$set replaces element",
-      "code": "$L$from{a,b,c} $L$list$set{,}{1}{B} $L",
+      "code": "$L$from{a,b,c} $L$list{,}$set{1}{B} $L",
       "expected": "a,B,c"
     },
     {
       "id": 97,
       "name": "$list$set negative index",
-      "code": "$L$from{a,b,c} $L$list$set{,}{-1}{Z} $L",
+      "code": "$L$from{a,b,c} $L$list{,}$set{-1}{Z} $L",
       "expected": "a,b,Z"
     },
     {
       "id": 98,
       "name": "$list$insert at middle",
-      "code": "$L$from{a,c} $L$list$insert{,}{1}{b} $L",
+      "code": "$L$from{a,c} $L$list{,}$insert{1}{b} $L",
       "expected": "a,b,c"
     },
     {
       "id": 99,
       "name": "$list$remove at index",
-      "code": "$L$from{a,b,c} $L$list$remove{,}{1} $L",
+      "code": "$L$from{a,b,c} $L$list{,}$remove{1} $L",
       "expected": "a,c"
     },
     {
       "id": 100,
       "name": "$list$swap two elements",
-      "code": "$L$from{a,b,c} $L$list$swap{,}{0}{2} $L",
+      "code": "$L$from{a,b,c} $L$list{,}$swap{0}{2} $L",
       "expected": "c,b,a"
     },
     {
       "id": 101,
       "name": "$list$reverse basic",
-      "code": "$L$from{a,b,c} $L$list$reverse{,} $L",
+      "code": "$L$from{a,b,c} $L$list{,}$reverse $L",
       "expected": "c,b,a"
     },
     {
       "id": 102,
       "name": "$list$join changes separator",
-      "code": "$L$from{a,b,c} $L$list$join{,}{ | }",
+      "code": "$L$from{a,b,c} $L$list{,}$join{ | }",
       "expected": "a | b | c"
     },
     {
       "id": 103,
       "name": "$list multi-char separator",
-      "code": "$L$from{foo::bar::baz} $L$list$get{::}{1}",
+      "code": "$L$from{foo::bar::baz} $L$list{::}$get{1}",
       "expected": "bar"
     },
     {
       "id": 104,
       "name": "$list separator processed from variable",
-      "code": "$SEP$from{,} $L$from{x,y,z} $L$list$get{$SEP}{2}",
+      "code": "$SEP$from{,} $L$from{x,y,z} $L$list{$SEP}$get{2}",
       "expected": "z"
     },
     {
       "id": 105,
       "name": "$list empty sep: char-by-char count",
-      "code": "$L$from{abc} $L$list$count{}",
+      "code": "$L$from{abc} $L$list{}$count",
       "expected": "3"
     },
     {
       "id": 106,
       "name": "$list empty sep: char-by-char get",
-      "code": "$L$from{hello} $L$list$get{}{1}",
+      "code": "$L$from{hello} $L$list{}$get{1}",
       "expected": "e"
     },
     {
       "id": 107,
       "name": "$list empty sep: reverse string",
-      "code": "$L$from{abc} $L$list$reverse{} $L",
+      "code": "$L$from{abc} $L$list{}$reverse $L",
       "expected": "cba"
     },
     {
@@ -712,7 +711,7 @@
     {
       "id": 120,
       "name": "$compare with list$get via variable",
-      "code": "$L$from{a,b,c} $R$from{$L$list$get{,}{0}} $R$compare{a}$then{FIRST}$else{OTHER}",
+      "code": "$L$from{a,b,c} $R$from{$L$list{,}$get{0}} $R$compare{a}$then{FIRST}$else{OTHER}",
       "expected": "FIRST"
     },
     {
@@ -742,13 +741,13 @@
     {
       "id": 125,
       "name": "$while with list",
-      "code": "$L$from{a,a,a}$while{a}{$L$list$shift{,}}",
+      "code": "$L$from{a,a,a}$while{a}{$L$list{,}$shift}",
       "expected": "a"
     },
     {
       "id": 126,
       "name": "$while with pattern mismatch",
-      "code": "$L$from{a,b,c}$while{x}{$L$list$shift{,}}",
+      "code": "$L$from{a,b,c}$while{x}{$L$list{,}$shift}",
       "expected": ""
     },
     {
@@ -766,20 +765,74 @@
     {
       "id": 129,
       "name": "complex flow: repeat with list",
-      "code": "$L$from{a,b} $repeat{2}{$L$list$push{,}{x}}$L",
+      "code": "$L$from{a,b} $repeat{2}{$L$list{,}$push{x}}$L",
       "expected": "a,b,x,x"
     },
     {
       "id": 130,
       "name": "$while with list (2 iterations)",
-      "code": "$L$from{a,a,b}$while{a}{$L$list$shift{,}}",
+      "code": "$L$from{a,a,b}$while{a}{$L$list{,}$shift}",
       "expected": "a"
     },
     {
       "id": 131,
       "name": "$until basic list depletion",
-      "code": "$L$from{a,b,stop}$until{stop}{$L$list$shift{,}}",
+      "code": "$L$from{a,b,stop}$until{stop}{$L$list{,}$shift}",
       "expected": "stop"
+    },
+    {
+      "id": 132,
+      "name": "$find basic",
+      "code": "$A$from{hello123world} $A$find{123}",
+      "expected": "123"
+    },
+    {
+      "id": 133,
+      "name": "$contains basic",
+      "code": "$A$from{hello123world} $A$contains{123}",
+      "expected": "5"
+    },
+    {
+      "id": 134,
+      "name": "$replace basic (returns match, updates var)",
+      "code": "$A$from{hello123world} $A$replace{123}{XXX} $A",
+      "expected": "123 helloXXXworld"
+    },
+    {
+      "id": 135,
+      "name": "$list$find basic",
+      "code": "$L$from{a,b,c} $L$list{,}$find{b}",
+      "expected": "b"
+    },
+    {
+      "id": 136,
+      "name": "$list$contains basic",
+      "code": "$L$from{a,b,c} $L$list{,}$contains{b}",
+      "expected": "0"
+    },
+    {
+      "id": 137,
+      "name": "$list$replace basic",
+      "code": "$L$from{a,b,c} $L$list{,}$replace{b}{X} rest:$L",
+      "expected": "b rest:a,X,c"
+    },
+    {
+      "id": 138,
+      "name": "$find mismatch returns empty",
+      "code": "$A$from{hello} $A$find{123}",
+      "expected": ""
+    },
+    {
+      "id": 139,
+      "name": "$contains mismatch returns empty",
+      "code": "$A$from{hello} $A$contains{123}",
+      "expected": ""
+    },
+    {
+      "id": 140,
+      "name": "$list$find returns whole element",
+      "code": "$L$from{apple,banana,cherry} $L$list{,}$find{ana}",
+      "expected": "banana"
     }
   ]
 }

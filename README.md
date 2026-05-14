@@ -218,25 +218,28 @@ Any variable can be treated as a list by accessing it through the `$list` modifi
 ### Syntax
 
 ```
-$VARNAME$list$OPERATION{separator}{...arguments}
+$VARNAME$list{separator}$OPERATION{...arguments}
 ```
 
 ### Operations
 
 | Operation | Signature | Emits | Mutates |
 |---|---|---|---|
-| `get` | `$V$list$get{sep}{idx}` | Element at index | No |
-| `set` | `$V$list$set{sep}{idx}{content}` | Nothing | Yes |
-| `push` | `$V$list$push{sep}{content}` | Nothing | Yes |
-| `pop` | `$V$list$pop{sep}` | Last element | Yes |
-| `shift` | `$V$list$shift{sep}` | First element | Yes |
-| `unshift` | `$V$list$unshift{sep}{content}` | Nothing | Yes |
-| `insert` | `$V$list$insert{sep}{idx}{content}` | Nothing | Yes |
-| `remove` | `$V$list$remove{sep}{idx}` | Nothing | Yes |
-| `swap` | `$V$list$swap{sep}{idx_a}{idx_b}` | Nothing | Yes |
-| `reverse` | `$V$list$reverse{sep}` | Nothing | Yes |
-| `count` | `$V$list$count{sep}` | Number of elements | No |
-| `join` | `$V$list$join{sep_orig}{sep_new}` | List with new separator | No |
+| `get` | `$V$list{sep}$get{idx}` | Element at index | No |
+| `set` | `$V$list{sep}$set{idx}{content}` | Nothing | Yes |
+| `push` | `$V$list{sep}$push{content}` | Nothing | Yes |
+| `pop` | `$V$list{sep}$pop` | Last element | Yes |
+| `shift` | `$V$list{sep}$shift` | First element | Yes |
+| `unshift` | `$V$list{sep}$unshift{content}` | Nothing | Yes |
+| `insert` | `$V$list{sep}$insert{idx}{content}` | Nothing | Yes |
+| `remove` | `$V$list{sep}$remove{idx}` | Nothing | Yes |
+| `swap` | `$V$list{sep}$swap{idx_a}{idx_b}` | Nothing | Yes |
+| `reverse` | `$V$list{sep}$reverse` | Nothing | Yes |
+| `count` | `$V$list{sep}$count` | Number of elements | No |
+| `join` | `$V$list{sep_orig}$join{sep_new}` | List with new separator | No |
+| `find` | `$V$list{sep}$find{pat}` | First **whole element** matching `pat` | No |
+| `contains` | `$V$list{sep}$contains{pat}` | Index of `pat` **within** matching element | No |
+| `replace` | `$V$list{sep}$replace{pat}{rep}` | First match found; updates the **whole element** | Yes |
 
 **Index rules**: zero-based; negative indices count from the end (`-1` = last); out-of-range access emits `""` silently.
 
@@ -245,39 +248,39 @@ $VARNAME$list$OPERATION{separator}{...arguments}
 ```text
 $FRUITS$from{apple,banana,orange}
 
-$FRUITS$list$get{,}{0}    → apple
-$FRUITS$list$get{,}{-1}   → orange
-$FRUITS$list$count{,}     → 3
+$FRUITS$list{,}$get{0}    → apple
+$FRUITS$list{,}$get{-1}   → orange
+$FRUITS$list{,}$count     → 3
 ```
 
 ```text
 $L$from{a,b,c}
-$L$list$push{,}{d}
-$L$list$set{,}{1}{B}
+$L$list{,}$push{d}
+$L$list{,}$set{1}{B}
 $L                        → a,B,c,d
 ```
 
 ```text
 $STACK$from{x,y,z}
-Popped: $STACK$list$pop{,}
+Popped: $STACK$list{,}$pop
 Rest: $STACK              → Popped: z  /  Rest: x,y
 ```
 
 ```text
 $CSV$from{one,two,three}
-$CSV$list$join{,}{ | }    → one | two | three
+$CSV$list{,}$join{ | }    → one | two | three
 ```
 
 ```text
 $PATH$from{/usr/local/bin}
-$PATH$list$get{/}{-1}     → bin
+$PATH$list{/}$get{-1}     → bin
 ```
 
 ```text
 /* Dynamic separator from variable */
 $SEP$from{,}
 $L$from{x,y,z}
-$L$list$get{$SEP}{2}      → z
+$L$list{$SEP}$get{2}      → z
 ```
 
 ---
@@ -290,6 +293,9 @@ Papagaio provides operators for conditional logic and value chaining. These are 
 
 ```
 $VAL$compare{target}
+$VAL$find{pattern}
+$VAL$contains{pattern}
+$VAL$replace{pattern}{replacement}
 $VAL$then{content}
 $VAL$else{content}
 ```
@@ -297,8 +303,11 @@ $VAL$else{content}
 | Operator | Behavior |
 |---|---|
 | **`compare`** | If `$VAL` matches `target`, emits `$VAL`. Otherwise, emits `""`. |
-| **`then`** | If `$VAL` is **not empty**, processes and emits `code`. Otherwise, emits `""`. |
-| **`else`** | If `$VAL` **is empty**, processes and emits `code`. Otherwise, passes `$VAL` through. |
+| **`find`** | Performs a non-anchored search for `pattern` in `$VAL`. Emits the matched substring. |
+| **`contains`** | Performs a non-anchored search. Emits the character index of the first match (or `""`). |
+| **`replace`** | Replaces the first match of `pattern` with `replacement`. Emits the OLD match. |
+| **`then`** | If `$VAL` is **not empty**, processes and emits `content`. Otherwise, emits `""`. |
+| **`else`** | If `$VAL` **is empty**, processes and emits `content`. Otherwise, passes `$VAL` through. |
 | **`repeat`** | `$repeat{N}{code}` | Executes `code` N times. Emits nothing; used for side effects. |
 | **`while`** | `$while{pat}{code}` | Executes `code` while its result matches `pat`. Emits the last successful result. |
 | **`until`** | `$until{pat}{code}` | Executes `code` until its result matches `pat`. Emits the match that caused the break. |
@@ -320,6 +329,14 @@ $A$compare{world}$then{Matched!}   → (empty)
 $A$from{abc}
 $A$compare{abc}$then{YES}$else{NO} → YES
 $A$compare{xyz}$then{YES}$else{NO} → NO
+
+#### Search and Extract:
+```text
+$A$from{user_id: 12345}
+$A$find{$d+}$                → 12345
+$A$contains{id}             → 5
+$A$replace{$d+}{HIDDEN} $A  → 12345 user_id: HIDDEN
+```
 ```
 
 ### Standalone and Braced Usage
@@ -330,7 +347,7 @@ $A$compare{xyz}$then{YES}$else{NO} → NO
 #### Example:
 ```text
 $L$from{a,b,c}
-$R$from{$L$list$get{,}{0}}
+$R$from{$L$list{,}$get{0}}
 $R$compare{a}$then{Is A}$else{Not A} → Is A
 ```
 

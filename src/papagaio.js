@@ -20,8 +20,6 @@ class Papagaio {
 
   registerCommand(name, handler) {
     // Note: Implementing JS->C callbacks requires addFunction and extra glue.
-    // For now, we warn that this is not yet supported in the pure WASM wrapper.
-    console.warn(`[WASM] Warning: registerCommand('${name}') is not supported in JS wrapper yet.`);
   }
 
   setArgs(argv) {
