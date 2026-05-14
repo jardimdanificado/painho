@@ -66,6 +66,14 @@ jobs:
             os: windows-latest
             target: windows-mingw32
             archive: windows-x86-mingw
+          - name: Windows x64 (MSVC)
+            os: windows-latest
+            target: windows-msvc-x64
+            archive: windows-x64-msvc
+          - name: Windows x86 32-bit (MSVC)
+            os: windows-latest
+            target: windows-msvc-x86
+            archive: windows-x86-msvc
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -146,6 +154,18 @@ jobs:
         run: |
           make all -j2
 
+      - name: Build binary (Windows MSVC)
+        if: startsWith(matrix.target, 'windows-msvc')
+        shell: cmd
+        run: |
+          if "${{ matrix.target }}" == "windows-msvc-x64" (
+            set ARCH=x64
+          ) else (
+            set ARCH=Win32
+          )
+          cmake -B build -A %ARCH%
+          cmake --build build --config Release
+
 
       - name: Package artifact (Linux/macOS)
         if: startsWith(matrix.target, 'linux') || startsWith(matrix.target, 'macos')
@@ -167,6 +187,15 @@ jobs:
           cp papagaio.exe dist_pkg/
           cp README.md dist_pkg/
           powershell -NoProfile -Command "Compress-Archive -Path dist_pkg\\* -DestinationPath papagaio-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force"
+
+      - name: Package artifact (Windows MSVC)
+        if: startsWith(matrix.target, 'windows-msvc')
+        shell: cmd
+        run: |
+          mkdir dist_pkg
+          copy build\Release\papagaio.exe dist_pkg\
+          copy README.md dist_pkg\
+          powershell -NoProfile -Command "Compress-Archive -Path dist_pkg\* -DestinationPath papagaio-v${{ inputs.version }}-${{ matrix.archive }}.zip -Force"
 
 
       - name: Upload artifacts

@@ -362,4 +362,3 @@ make test       # Run comprehensive test suite
 
 - [cpp](https://en.wikipedia.org/wiki/C_preprocessor)
 - [m4](https://www.gnu.org/software/m4/)
-- [tcc](https://bellard.org/tcc/)
