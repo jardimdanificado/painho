@@ -134,6 +134,7 @@ wasm: src/papagaio.c src/papagaio.h
 		-s "EXPORTED_RUNTIME_METHODS=['ccall', 'cwrap', 'getValue', 'setValue', 'UTF8ToString', 'stringToUTF8', 'lengthBytesUTF8', 'addFunction', 'removeFunction']" \
 		-s ALLOW_MEMORY_GROWTH=1 \
 		-s ALLOW_TABLE_GROWTH=1 \
+		-s ENVIRONMENT='web,node' \
 		-s NODEJS_CATCH_EXIT=0 \
 		-s NODEJS_CATCH_REJECTION=0
 	cp src/papagaio.js dist/wasm/papagaio.js

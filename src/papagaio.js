@@ -1,52 +1,69 @@
-import { spawnSync } from 'child_process';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PAP_BIN = path.join(__dirname, '..', 'papagaio');
+import ModuleFactory from './papagaio_wasm.js';
 
 class Papagaio {
   constructor() {
+    this._module = null;
+    this._ctx = null;
     this._initialized = false;
     this._args = [];
   }
 
   async init() {
+    if (this._initialized) return this;
+    
+    // Load WASM module
+    this._module = await ModuleFactory();
+    this._ctx = this._module._papagaio_open();
     this._initialized = true;
     return this;
   }
 
   registerCommand(name, handler) {
-    // Native CLI wrapper doesn't support registering JS commands directly yet.
-    // We'll ignore this for now as the tests use it for 'lua' which is handled by mockEval in test.js
-    console.warn(`[JS] Warning: registerCommand('${name}') is not supported in native CLI wrapper.`);
+    // Note: Implementing JS->C callbacks requires addFunction and extra glue.
+    // For now, we warn that this is not yet supported in the pure WASM wrapper.
+    console.warn(`[WASM] Warning: registerCommand('${name}') is not supported in JS wrapper yet.`);
   }
 
   setArgs(argv) {
+    if (!this._initialized) throw new Error("Papagaio not initialized. Call init() first.");
     this._args = argv;
+
+    const argc = argv.length;
+    const argvPtr = this._module._malloc(argc * 4); 
+    for (let i = 0; i < argc; i++) {
+        const str = argv[i];
+        const strLen = this._module.lengthBytesUTF8(str) + 1;
+        const strPtr = this._module._malloc(strLen);
+        this._module.stringToUTF8(str, strPtr, strLen);
+        this._module.setValue(argvPtr + (i * 4), strPtr, 'i32');
+    }
+
+    this._module._papagaio_set_args(this._ctx, argc, argvPtr);
+    // We don't free argvPtr/strPtr here as Papagaio context might use them.
+    // They will be "leaked" until destroy(), which is fine for a processing session.
   }
 
   process(text) {
-    const args = ['-e', text];
-    if (this._args && this._args.length > 0) {
-        // Papagaio CLI might need to handle args. 
-        // For now, we just pass the text.
-    }
+    if (!this._initialized) throw new Error("Papagaio not initialized. Call init() first.");
 
-    const result = spawnSync(PAP_BIN, args, {
-        input: '', // No stdin for -e mode usually
-        encoding: 'utf-8'
-    });
+    const textLen = this._module.lengthBytesUTF8(text);
+    const textPtr = this._module._malloc(textLen + 1);
+    this._module.stringToUTF8(text, textPtr, textLen + 1);
 
-    if (result.error) {
-        throw new Error(`Failed to run papagaio: ${result.error.message}`);
-    }
+    const outPtr = this._module._papagaio_process_text(this._ctx, textPtr, textLen);
+    const output = this._module.UTF8ToString(outPtr);
 
-    return result.stdout;
+    this._module._free(textPtr);
+    this._module._free(outPtr);
+
+    return output;
   }
 
   destroy() {
-    // Nothing to do for CLI wrapper
+    if (this._ctx) {
+      this._module._papagaio_close(this._ctx);
+      this._ctx = null;
+    }
   }
 }
 
