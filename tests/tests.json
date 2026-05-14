@@ -372,12 +372,7 @@
       "code": "$pattern {$x$group{abc}} {OK-$x}\nabc",
       "expected": " OK-abc"
     },
-    {
-      "id": 63,
-      "name": "Wasm fallback parsing (nonexistent file)",
-      "code": "$wasm{phantom.wasm} $test{123}",
-      "expected": "$wasm{phantom.wasm} $test{123}"
-    },
+
     {
       "id": 64,
       "name": "Braced variable ambiguity resolution",

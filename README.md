@@ -1,12 +1,11 @@
 # Papagaio
 
-Papagaio is a embeddable text processing engine. It is designed to be highly modular and **script-agnostic**, allowing core pattern matching to be used alone or extended via WebAssembly (Wasm) plugins.
+Papagaio is an embeddable text processing engine.
 
 ## Key Features
 
 - **Lightweight Core**: Efficient C engine for pattern matching and transformation.
 - **Pattern-Matching**: Powerful capture system with built-in and custom modifiers.
-- **WebAssembly Plugins**: Highly secure, zero-dependency plugin architecture via an embedded `wasm3` runtime.
 - **Configurable Delimiters**: Redefine sigils, delimiters, and markers at runtime.
 - **Language Bindings**: Native usage in C and Node.js/WebAssembly.
 
@@ -26,17 +25,6 @@ char *out = papagaio_process_text(ctx, input_text, strlen(input_text));
 printf("%s", out);
 free(out);
 papagaio_close(ctx);
-```
-
-### JavaScript / WASM (Node.js)
-```javascript
-import Papagaio from './papagaio.js';
-
-const p = new Papagaio();
-await p.init();
-p.registerCommand("mycmd", (name, ...args) => `Result: ${args[0]}`);
-
-console.log(p.process('$mycmd{Hello}')); // Output: Result: Hello
 ```
 
 ---
@@ -94,17 +82,11 @@ $pattern {$n$aliases{$x$int}{abc}} {VALUE: $n}
 
 ---
 
-## Extensibility (Wasm Plugins)
-
-Papagaio follows a Wasm-first plugin architecture. Core features are limited to pattern matching and transformation, while custom text processing capabilities are provided by WebAssembly plugins.
-
 ### Built-in Operators
 - **`$document`**: Injects the current state of the document (alias for `$document$current`).
 - **`$document$original`**: Injects the initial, unprocessed input text. Useful for referencing the source even after multiple transformations.
 - **`$document$current`**: Injects the current state of the document during the pre-processing pass.
-- **`$wasm{path}`**: Loads a WebAssembly plugin from the file system (CLI only).
-- **$file{path}**: Injects the content of a file from the file system (CLI only).
-- **`$wat{source}`**: Compiles a WebAssembly Text Format (WAT) source string inline and registers all exported `papagaio_*` functions as commands. Useful for embedding lightweight plugins without an external `.wasm` file.
+- **$file{path}**: Injects the content of a file from the file system.
 - **`$NAME$from{value}`**: Dynamically assigns a processed `value` to `$NAME`. The assignment itself is suppressed from the output, and the variable becomes available for exact-match replacement in the remaining document.
 
   ```text
@@ -112,15 +94,6 @@ Papagaio follows a Wasm-first plugin architecture. Core features are limited to 
   Hello, $NAME!
   ```
   *Output: `Hello, Alice!`*
-
-  ```text
-  $wat{
-    (module
-      (func (export "papagaio_hello") (result i32)
-        i32.const 42))
-  }
-  $hello
-  ```
 
 ---
 
@@ -145,12 +118,11 @@ Arguments in the format `key=value` are automatically parsed and can be accessed
 1. **Explicit**: `$args$key`
 2. **Direct**: `$key` (shorthand for `$args$key`)
 
-Direct access (`$key`) will only resolve if `key` does not conflict with a registered command (like `$wasm`) or a built-in directive.
+Direct access (`$key`) will only resolve if `key` does not conflict with a registered command or a built-in directive.
 
 #### Example:
 ```sh
-./papagaio input.c version=1.2.3 target=wasm -O3 > ready.c
-# Then compile ready.c with clang to WASM
+# Then compile ready.c with clang
 ```
 Inside `input.c`:
 ```c
@@ -178,7 +150,7 @@ This changes the sigil to `@`, delimiters to `< >`, and the optional marker to `
 
 ## Recursive Priority System
 
-Papagaio allows you to control the order of execution and side-effects (such as pattern definitions or WASM loading) using the **`$priority$N`** directive.
+Papagaio allows you to control the order of execution and side-effects (such as pattern definitions) using the **`$priority$N`** directive.
 
 - **`$priority$0{...}`**: Maximum priority.
 - **`$priority$max{...}`**: Alias for `INT_MIN + 1` (Absolute highest priority).
@@ -203,7 +175,7 @@ The **`$from`** operator allows you to capture processed content and assign it t
 ### Syntax
 `$NAME$from{...content...}`
 
-1. **Recursive Processing**: The `content` is fully processed (patterns, WASM commands, other assignments) before being stored.
+1. **Recursive Processing**: The `content` is fully processed (patterns, other assignments) before being stored.
 2. **Immediate Registration**: The variable is registered as an exact-match rule as soon as it is parsed. This allows for **chained assignments**.
 3. **Output Suppression**: The entire `$from` directive is removed from the output text.
 
@@ -361,77 +333,13 @@ $R$compare{a}$then{Is A}$else{Not A} → Is A
 
 ---
 
-## Plugin Development
-
-Papagaio features a modern, frictionless Wasm plugin system. You can write plugins in standard C using simple naming conventions and compile them into zero-dependency WebAssembly modules using `papagaio` as a preprocessor and `clang` as the WASM compiler.
-
-### 1. Write your plugin
-Create a file named `greet.c`:
-```c
-// Functions starting with 'papagaio_' are automatically registered as commands
-char* papagaio_greet(int argc, char **argv)
-{
-    if (argc < 1) return "Hello, Stranger!";
-    return argv[0]; // return first argument
-}
-```
-
-To use the Papagaio Wasm SDK (`lib.c`), copy it from `examples/lib.c` into your project and include it explicitly:
-```c
-#include "lib.c"
-
-char* papagaio_greet(int argc, char **argv)
-{
-    if (argc < 1) return "Hello, Stranger!";
-    
-    // lib.c provides standard C functions like malloc and sprintf
-    char *res = (char*)malloc(strlen(argv[0]) + 16);
-    sprintf(res, "Hello, %s!", argv[0]);
-    
-    return res;
-}
-```
-
-### 2. Compile to WebAssembly
-To compile your plugin, first process it with `papagaio` and then compile the result with `clang` using the following flags:
-
-```sh
-# 1. Preprocess with Papagaio
-./papagaio greet.c > greet.ready.c
-
-# 2. Compile to WASM with Clang
-clang --target=wasm32-unknown-unknown -ffreestanding -nostdlib -fvisibility=hidden \
-      -Wl,--no-entry,--export-dynamic,--allow-undefined \
-      greet.ready.c -o greet.wasm
-```
-
-Or simply use the provided Makefile in the `examples/` directory:
-```sh
-cd examples && make
-```
-
-### 3. Use in Papagaio
-Loading the Wasm file automatically registers all exported commands.
-```text
-$wasm{greet.wasm}
-$greet{Papagaio}
-```
-*Output: Hello, Papagaio!*
-
-### Wasm SDK (lib.c)
-The Wasm SDK lives at `examples/lib.c` inside the repository. It provides a curated, zero-dependency C standard library for WebAssembly, including:
-- **Memory Management**: `malloc`, `free`, `realloc`
-- **String Processing**: `strlen`, `strcpy`, `sprintf`, `strrev`, etc.
-- **Formatted I/O**: `printf`, `snprintf`, `sscanf`
-- **Standard Math**: `sin`, `cos`, `pow`, etc.
-
 ---
 
 ## Building
 
 ```sh
 make            # Core & CLI
-make wasm       # WebAssembly build (Papagaio in the browser/node)
+make wasm       # WebAssembly build (via Emscripten)
 make test       # Run comprehensive test suite
 ```
 
@@ -446,15 +354,9 @@ make test       # Run comprehensive test suite
 | **Pattern Count** | Unlimited | Registered rules are stored in a dynamic array. |
 | **Priority Range** | `INT_MIN` to `INT_MAX` | Priorities are handled as standard signed integers. |
 | **Recursion Depth** | Stack-limited | Deeply nested patterns or priority blocks are processed recursively. |
-| **Wasm Memory** | 1 MB (default) | The default `wasm3` runtime is initialized with 1MB. |
-| **Wasm Arguments** | ~64 KB | Arguments are mapped into the Wasm memory space starting at offset 4096. |
 
 ## References
 
 - [cpp](https://en.wikipedia.org/wiki/C_preprocessor)
 - [m4](https://www.gnu.org/software/m4/)
-- [libregexp](https://bellard.org/quickjs/)
-- [quickjs](https://bellard.org/quickjs/)
 - [tcc](https://bellard.org/tcc/)
-- [wasm3](https://github.com/wasm3/wasm3)
-- [watr](https://github.com/dy/watr)

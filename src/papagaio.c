@@ -1,12 +1,6 @@
 #define _DEFAULT_SOURCE
 #include "papagaio.h"
-#include "wasm3.h"
-#include "m3_env.h"
-#include "m3_function.h"
-#include "quickjs.h"
-#include "watr_bundle.h"
 #include <stdbool.h>
-#include "libregexp.h"
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -14,9 +8,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
-
-
-
+#include <regex.h>
 
 
 /* =========================================================================
@@ -51,7 +43,7 @@ typedef struct {
     StrView     var;
     StrView     open;
     StrView     close;
-    uint8_t    *re;       /* compiled regex bytecode */
+    regex_t    *re;       /* compiled POSIX regex */
     char       *open_str;
     char       *close_str;
     unsigned    optional    : 1;
@@ -85,10 +77,10 @@ typedef struct {
     int         end;
     const char *src;
     struct {
-        const uint8_t **capture;
-        int             capture_count;
-        size_t          match_start;
-        size_t          match_end;
+        regmatch_t *capture;
+        int         capture_count;
+        size_t      match_start;
+        size_t      match_end;
         const char     *src;
     } regex;
     Papagaio *ctx;
@@ -98,10 +90,8 @@ typedef struct { Pattern pattern; const char *replacement; } Rule;
 typedef struct { char *m; char *r; } PatternPair;
 
 /* =========================================================================
- * Embedded Papagaio Lua Script
+ * Command Registration
  * ====================================================================== */
-
-#define PAP_MAX_PLUGINS 64
 
 typedef struct {
     PapFinalizer fn;
@@ -112,8 +102,6 @@ typedef struct {
     char        *name;
     PapCommandHandler handler;
     void        *userdata;
-    int          is_wasm;
-    IM3Function  wasm_func;
 } RegisteredCommand;
 
 typedef struct {
@@ -123,18 +111,9 @@ typedef struct {
 } RegisteredModifier;
 
 /* Forward declarations */
-static char *wasm_command_bridge(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
-static char *wasm_file_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
 static char *file_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
-static char *wat_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
 
 struct Papagaio {
-    IM3Environment      env;
-    IM3Runtime          runtime;
-
-    JSRuntime          *js_rt;
-    JSContext          *js_ctx;
-
     RegisteredCommand  *commands;
     int                 cmd_count, cmd_cap;
 
@@ -275,7 +254,10 @@ static void free_pattern(Pattern *p)
         free(p->t[i].open_str);
         free(p->t[i].close_str);
         free(p->t[i].literal_str);
-        free(p->t[i].re);
+        if (p->t[i].re) {
+            regfree(p->t[i].re);
+            free(p->t[i].re);
+        }
         if (p->t[i].alts) {
             for (int j = 0; j < p->t[i].alt_count; j++)
                 free(p->t[i].alts[j]);
@@ -307,7 +289,7 @@ static void free_match(Match *m)
             if (m->cap[i].owned) { free(m->cap[i].owned); m->cap[i].owned = NULL; }
         free(m->cap); m->cap = NULL;
     }
-    if (m->regex.capture) { free((void *)m->regex.capture); m->regex.capture = NULL; }
+    if (m->regex.capture) { free(m->regex.capture); m->regex.capture = NULL; }
     m->count = 0; m->cap_size = 0;
 }
 
@@ -1132,14 +1114,14 @@ static int match_pattern(Papagaio *ctx, const char *src, int src_len,
 
         if (t->type == TOK_REGEX) {
             if (!t->re && t->value.len > 0) {
-                int l = 0;
-                char err[128];
+                t->re = (regex_t *)malloc(sizeof(regex_t));
                 char *pat = (char *)malloc(t->value.len + 1);
                 if (pat) {
                     memcpy(pat, t->value.ptr, t->value.len);
                     pat[t->value.len] = '\0';
-                    t->re = lre_compile(&l, err, sizeof(err), pat, t->value.len, 0, ctx->js_ctx);
-                    (void)err;
+                    if (regcomp(t->re, pat, REG_EXTENDED) != 0) {
+                        free(t->re); t->re = NULL;
+                    }
                     free(pat);
                 }
             }
@@ -1149,28 +1131,23 @@ static int match_pattern(Papagaio *ctx, const char *src, int src_len,
                 continue;
             }
 
-            int cap_count = lre_get_capture_count(t->re);
-            int cap_slots = cap_count * 2;
-            uint8_t **capture = (uint8_t **)malloc(sizeof(uint8_t *) * cap_slots);
-            if (!capture) goto fail;
-            for (int ci = 0; ci < cap_slots; ci++) capture[ci] = NULL;
-
-            int rc = lre_exec(capture, t->re, (const uint8_t *)src, pos, src_len, 0, ctx->js_ctx);
-            if (rc != 1) {
-                free(capture);
+            regmatch_t pmatch[10];
+            if (regexec(t->re, src + pos, 10, pmatch, 0) != 0 || pmatch[0].rm_so != 0) {
                 if (!t->optional) goto fail;
                 ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL };
                 continue;
             }
 
-            size_t match_start = capture[0] ? (size_t)(capture[0] - (uint8_t *)src) : (size_t)pos;
-            size_t match_end   = capture[1] ? (size_t)(capture[1] - (uint8_t *)src) : (size_t)pos;
-            if (match_end < match_start) match_end = match_start;
+            size_t match_start = (size_t)pos + pmatch[0].rm_so;
+            size_t match_end   = (size_t)pos + pmatch[0].rm_eo;
 
-            /* keep last regex capture info for potential introspection */
-            if (m->regex.capture) { free((void *)m->regex.capture); m->regex.capture = NULL; }
-            m->regex.capture = (const uint8_t **)capture;
-            m->regex.capture_count = cap_count;
+            /* keep last regex capture info */
+            if (m->regex.capture) { free(m->regex.capture); m->regex.capture = NULL; }
+            m->regex.capture = (regmatch_t *)malloc(sizeof(regmatch_t) * 10);
+            if (m->regex.capture) {
+                memcpy(m->regex.capture, pmatch, sizeof(regmatch_t) * 10);
+                m->regex.capture_count = 10;
+            }
             m->regex.match_start = match_start;
             m->regex.match_end = match_end;
             m->regex.src = src;
@@ -1722,8 +1699,6 @@ int papagaio_register_command(Papagaio *ctx, const char *name, PapCommandHandler
     ctx->commands[ctx->cmd_count].name = strdup(name);
     ctx->commands[ctx->cmd_count].handler = handler;
     ctx->commands[ctx->cmd_count].userdata = ud;
-    ctx->commands[ctx->cmd_count].is_wasm = 0;
-    ctx->commands[ctx->cmd_count].wasm_func = NULL;
     ctx->cmd_count++;
     return 0;
 }
@@ -1745,39 +1720,6 @@ int papagaio_register_modifier(Papagaio *ctx, const char *name, PapModifierHandl
 }
 
 /* =========================================================================
- * Wasm Host Functions - minimal, only needed for legacy compat
- * The new convention passes args via Wasm memory directly from the bridge.
- * ====================================================================== */
-static Papagaio *g_active_ctx = NULL;
-
-m3ApiRawFunction(host_write) {
-    m3ApiGetArgMem(const char *, buf);
-    m3ApiGetArg(int32_t, len);
-    if (buf) fwrite(buf, 1, (size_t)len, stdout);
-    m3ApiSuccess();
-}
-
-m3ApiRawFunction(host_write_err) {
-    m3ApiGetArgMem(const char *, buf);
-    m3ApiGetArg(int32_t, len);
-    if (buf) fwrite(buf, 1, (size_t)len, stderr);
-    m3ApiSuccess();
-}
-
-m3ApiRawFunction(host_abort) {
-    m3ApiGetArgMem(const char *, msg);
-    fprintf(stderr, "[WASM ABORT] %s\n", msg ? msg : "unknown error");
-    abort();
-}
-
-static void link_host_functions(Papagaio *ctx, IM3Module module) {
-    (void)ctx;
-    m3_LinkRawFunction(module, "env", "__host_write",     "v(*i)", host_write);
-    m3_LinkRawFunction(module, "env", "__host_write_err", "v(*i)", host_write_err);
-    m3_LinkRawFunction(module, "env", "__host_abort",     "v(*)",  host_abort);
-}
-
-/* =========================================================================
  * Public C API
  * ====================================================================== */
 
@@ -1785,32 +1727,6 @@ Papagaio *papagaio_open(void)
 {
     Papagaio *ctx = (Papagaio *)malloc(sizeof(Papagaio));
     if (!ctx) return NULL;
-    ctx->env        = m3_NewEnvironment();
-    ctx->runtime    = m3_NewRuntime(ctx->env, 1024 * 1024, NULL);
-
-    ctx->js_rt      = JS_NewRuntime();
-    JS_SetMaxStackSize(ctx->js_rt, 1024 * 1024);
-    ctx->js_ctx     = JS_NewContext(ctx->js_rt);
-
-    const char *polyfills = 
-        "if (typeof TextEncoder === 'undefined') {"
-        "  globalThis.TextEncoder = class { encode(s) { let a = new Uint8Array(s.length); for(let i=0;i<s.length;i++) a[i]=s.charCodeAt(i); return a; } };"
-        "}"
-        "if (typeof TextDecoder === 'undefined') {"
-        "  globalThis.TextDecoder = class { decode(a) { let s=''; for(let i=0;i<a.length;i++) s+=String.fromCharCode(a[i]); return s; } };"
-        "}";
-    JS_FreeValue(ctx->js_ctx, JS_Eval(ctx->js_ctx, polyfills, strlen(polyfills), "polyfills.js", JS_EVAL_TYPE_GLOBAL));
-
-    /* Load watr bundle into QuickJS */
-    JSValue eval_res = JS_Eval(ctx->js_ctx, (const char *)lib_watr_watr_bundle_js, lib_watr_watr_bundle_js_len, "watr.bundle.js", JS_EVAL_TYPE_GLOBAL);
-    if (JS_IsException(eval_res)) {
-        JSValue exc = JS_GetException(ctx->js_ctx);
-        const char *str = JS_ToCString(ctx->js_ctx, exc);
-        fprintf(stderr, "[QuickJS] Error loading watr: %s\n", str);
-        JS_FreeCString(ctx->js_ctx, str);
-        JS_FreeValue(ctx->js_ctx, exc);
-    }
-    JS_FreeValue(ctx->js_ctx, eval_res);
 
     ctx->commands   = NULL; ctx->cmd_count = 0; ctx->cmd_cap = 0;
     ctx->modifiers  = NULL; ctx->mod_count = 0; ctx->mod_cap = 0;
@@ -1820,11 +1736,8 @@ Papagaio *papagaio_open(void)
     ctx->rules = NULL; ctx->rule_count = 0; ctx->rule_cap = 0;
     ctx->depth = 0;
     ctx->original_doc = NULL; ctx->original_len = 0;
-#ifndef __wasm__
-    papagaio_register_command(ctx, "wasm", wasm_file_handler, NULL);
+
     papagaio_register_command(ctx, "file", file_handler, NULL);
-#endif
-    papagaio_register_command(ctx, "wat", wat_handler, NULL);
     return ctx;
 }
 
@@ -1835,10 +1748,6 @@ void papagaio_close(Papagaio *ctx)
         if (ctx->finalizers[i].fn)
             ctx->finalizers[i].fn(ctx->finalizers[i].userdata);
     }
-    if (ctx->js_ctx) JS_FreeContext(ctx->js_ctx);
-    if (ctx->js_rt)  JS_FreeRuntime(ctx->js_rt);
-    if (ctx->runtime) m3_FreeRuntime(ctx->runtime);
-    if (ctx->env)     m3_FreeEnvironment(ctx->env);
     if (ctx->commands) {
         for (int i = 0; i < ctx->cmd_count; i++) {
             free((void*)ctx->commands[i].name);
@@ -1940,111 +1849,6 @@ char *papagaio_process_pairs(Papagaio *ctx, const char *input,
     sb_free(&out); return result;
 }
 
-static void papagaio_load_wasm_bytes(Papagaio *ctx, uint8_t *bytes, size_t size) {
-    IM3Module module;
-    M3Result result = m3_ParseModule(ctx->env, &module, (bytes_t)bytes, (uint32_t)size);
-    if (result) { fprintf(stderr, "[WASM] Parse Error: %s\n", result); return; }
-    
-    result = m3_LoadModule(ctx->runtime, module);
-    if (result) { fprintf(stderr, "[WASM] Load Error: %s\n", result); return; }
-    
-    /* Link MUST happen after LoadModule */
-    link_host_functions(ctx, module);
-    
-    m3_CompileModule(module);
-
-    /* Intelligent Auto-Registration: Scan module functions for exports */
-    for (uint32_t i = 0; i < module->numFunctions; i++) {
-        M3Function *f_info = &module->functions[i];
-        if (f_info->export_name && strncmp(f_info->export_name, "papagaio_", 9) == 0) {
-            const char *cmd_name = f_info->export_name + 9;
-            
-            /* Must use m3_FindFunction AFTER compile to get JIT-ready handle */
-            IM3Function f_ready = NULL;
-            M3Result fres = m3_FindFunction(&f_ready, ctx->runtime, f_info->export_name);
-            if (fres || !f_ready) {
-                fprintf(stderr, "[WASM] Could not find compiled '%s': %s\n", f_info->export_name, fres ? fres : "null");
-                continue;
-            }
-            
-            int found = -1;
-            for (int ci = 0; ci < ctx->cmd_count; ci++) {
-                if (strcmp(ctx->commands[ci].name, cmd_name) == 0) { found = ci; break; }
-            }
-            if (found >= 0) {
-                ctx->commands[found].wasm_func = f_ready;
-                ctx->commands[found].userdata = (void*)f_ready;
-            } else {
-                papagaio_register_command(ctx, cmd_name, wasm_command_bridge, (void*)f_ready);
-                ctx->commands[ctx->cmd_count-1].is_wasm = 1;
-                ctx->commands[ctx->cmd_count-1].wasm_func = f_ready;
-            }
-        }
-    }
-}
-
-static void papagaio_load_wasm_file(Papagaio *ctx, const char *path) {
-    char trim_path[256]; size_t pl = strlen(path);
-    size_t start = 0; while(start < pl && isspace((unsigned char)path[start])) start++;
-    size_t end = pl; while(end > start && isspace((unsigned char)path[end-1])) end--;
-    size_t len = end - start; if (len >= 255) len = 255;
-    memcpy(trim_path, path + start, len); trim_path[len] = '\0';
-    FILE *f = fopen(trim_path, "rb"); if (!f) { fprintf(stderr, "[ERROR] Could not open Wasm file: '%s'\n", trim_path); return; }
-    fseek(f, 0, SEEK_END); size_t size = ftell(f); fseek(f, 0, SEEK_SET);
-    uint8_t *bytes = malloc(size);
-    if (bytes) { 
-        if (fread(bytes, 1, size, f) == size) papagaio_load_wasm_bytes(ctx, bytes, size); 
-        else fprintf(stderr, "[ERROR] Could not read Wasm file: '%s'\n", trim_path);
-        free(bytes); 
-    }
-    fclose(f);
-}
-
-static char *wasm_command_bridge(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud) {
-    (void)name; (void)argl;
-    IM3Function f = (IM3Function)ud;
-    if (!f) return NULL;
-
-    const uint32_t ARGS_BASE = 4096;
-    uint32_t mem_size = 0;
-    uint8_t *mem = m3_GetMemory(ctx->runtime, &mem_size, 0);
-    if (!mem) return NULL;
-
-    uint32_t table_size = (uint32_t)argc * 4;
-    uint32_t str_base = ARGS_BASE + table_size;
-    uint32_t cur = str_base;
-
-    for (int i = 0; i < argc; i++) {
-        size_t slen = argl[i];
-        if (cur + slen + 1 > mem_size) return NULL;
-        memcpy(mem + cur, argv[i], slen);
-        mem[cur + slen] = '\0';
-        uint32_t off = cur;
-        if (ARGS_BASE + i * 4 + 4 > mem_size) return NULL;
-        memcpy(mem + ARGS_BASE + i * 4, &off, 4);
-        cur += (uint32_t)(slen + 1 + 7) & ~7u;
-    }
-
-    g_active_ctx = ctx;
-    M3Result res = m3_CallV(f, (uint32_t)argc, (uint32_t)ARGS_BASE);
-    g_active_ctx = NULL;
-
-    if (res) { fprintf(stderr, "[WASM] CallV Error: %s\n", res); return NULL; }
-
-    uint32_t wasm_ptr = 0;
-    m3_GetResultsV(f, &wasm_ptr);
-    if (wasm_ptr == 0) return NULL;
-
-    mem = m3_GetMemory(ctx->runtime, &mem_size, 0);
-    if (!mem || wasm_ptr >= mem_size) return NULL;
-
-    return strdup((const char *)(mem + wasm_ptr));
-}
-
-static char *wasm_file_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud) {
-    (void)name; (void)ud; (void)argl; if (argc > 0) papagaio_load_wasm_file(ctx, argv[0]); return strdup("");
-}
-
 static char *file_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud) {
     (void)ctx; (void)name; (void)ud; (void)argl;
     if (argc < 1) return strdup("");
@@ -2071,56 +1875,7 @@ static char *file_handler(Papagaio *ctx, const char *name, int argc, const char 
     return buf;
 }
 
-static char *wat_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud) {
-    (void)name; (void)ud; (void)argl;
-    if (argc > 0) {
-        /* In QuickJS, call watr.compile(argv[0]) */
-        JSValue global = JS_GetGlobalObject(ctx->js_ctx);
-        JSValue watr_obj = JS_GetPropertyStr(ctx->js_ctx, global, "watr");
-        if (JS_IsUndefined(watr_obj)) {
-            fprintf(stderr, "[WAT] Error: 'watr' object not found in global scope.\n");
-            JS_FreeValue(ctx->js_ctx, global);
-            return strdup("");
-        }
-        JSValue compile_func = JS_GetPropertyStr(ctx->js_ctx, watr_obj, "compile");
-        if (!JS_IsFunction(ctx->js_ctx, compile_func)) {
-            fprintf(stderr, "[WAT] Error: 'watr.compile' is not a function.\n");
-            JS_FreeValue(ctx->js_ctx, watr_obj);
-            JS_FreeValue(ctx->js_ctx, global);
-            return strdup("");
-        }
-        
-        JSValue wat_str = JS_NewString(ctx->js_ctx, argv[0]);
-        JSValue wasm_bytes_val = JS_Call(ctx->js_ctx, compile_func, watr_obj, 1, &wat_str);
-        
-        if (JS_IsException(wasm_bytes_val)) {
-            JSValue exc = JS_GetException(ctx->js_ctx);
-            const char *str = JS_ToCString(ctx->js_ctx, exc);
-            fprintf(stderr, "[WAT] Compilation Error: %s\n", str);
-            JS_FreeCString(ctx->js_ctx, str);
-            JS_FreeValue(ctx->js_ctx, exc);
-        } else {
-            /* Result should be a Uint8Array */
-            size_t offset, length, per_element;
-            JSValue buffer = JS_GetTypedArrayBuffer(ctx->js_ctx, wasm_bytes_val, &offset, &length, &per_element);
-            if (!JS_IsException(buffer)) {
-                size_t buf_size;
-                uint8_t *buf_ptr = JS_GetArrayBuffer(ctx->js_ctx, &buf_size, buffer);
-                if (buf_ptr) {
-                    papagaio_load_wasm_bytes(ctx, buf_ptr + offset, length);
-                }
-                JS_FreeValue(ctx->js_ctx, buffer);
-            }
-        }
-        
-        JS_FreeValue(ctx->js_ctx, wasm_bytes_val);
-        JS_FreeValue(ctx->js_ctx, wat_str);
-        JS_FreeValue(ctx->js_ctx, compile_func);
-        JS_FreeValue(ctx->js_ctx, watr_obj);
-        JS_FreeValue(ctx->js_ctx, global);
-    }
-    return strdup("");
-}
+
 
 static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
 {
@@ -2360,28 +2115,28 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                             j3 = (size_t)extract_block(src, (int)j3, so_f, sc_f, &blk);
                             char *arg = pap_process_sv(ctx, blk);
 
-                            if (is_cmp) {
-                                /* compare: equal → keep cur_val, unequal → "" */
-                                if (strcmp(cur_val, arg) != 0) {
-                                    free(cur_val); cur_val = strdup("");
-                                }
-                                free(arg);
-                            } else if (is_then) {
-                                /* then: non-empty → replace with arg; empty → stay "" */
-                                if (cur_val[0] != '\0') {
-                                    free(cur_val); cur_val = arg; arg = NULL;
-                                } else {
-                                    free(arg);
-                                }
-                            } else { /* else */
-                                /* else: empty → replace with arg; non-empty → pass cur through */
-                                if (cur_val[0] == '\0') {
-                                    free(cur_val); cur_val = arg; arg = NULL;
-                                } else {
-                                    free(arg); /* keep cur_val as-is */
-                                }
-                            }
-                            if (arg) free(arg);
+                             if (is_cmp) {
+                                 /* compare: equal → keep cur_val, unequal → "" */
+                                 if (strcmp(cur_val, arg) != 0) {
+                                     free(cur_val); cur_val = strdup("");
+                                 }
+                                 free(arg); arg = NULL;
+                             } else if (is_then) {
+                                 /* then: non-empty → replace with arg; empty → stay "" */
+                                 if (cur_val[0] != '\0') {
+                                     free(cur_val); cur_val = arg; arg = NULL;
+                                 } else {
+                                     free(arg); arg = NULL;
+                                 }
+                             } else { /* else */
+                                 /* else: empty → replace with arg; non-empty → pass cur through */
+                                 if (cur_val[0] == '\0') {
+                                     free(cur_val); cur_val = arg; arg = NULL;
+                                 } else {
+                                     free(arg); arg = NULL; /* keep cur_val as-is */
+                                 }
+                             }
+                             if (arg) free(arg);
                             cp = j3;
                         }
 
