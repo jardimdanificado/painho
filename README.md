@@ -311,6 +311,56 @@ $L$list$get{$SEP}{2}      → z
 
 ---
 
+## Flow Control Operators
+
+Papagaio provides operators for conditional logic and value chaining. These are treated as **suffix modifiers** that can be appended to any variable, list operation, or expression.
+
+### Syntax
+
+```
+$VAL$compare{target}
+$VAL$then{content}
+$VAL$else{content}
+```
+
+| Operator | Behavior |
+|---|---|
+| **`compare`** | If `$VAL` matches `target`, emits `$VAL`. Otherwise, emits `""`. |
+| **`then`** | If `$VAL` is **not empty**, processes and emits `content`. Otherwise, emits `""`. |
+| **`else`** | If `$VAL` **is empty**, processes and emits `content`. Otherwise, passes `$VAL` through. |
+
+### Chaining (If-Then-Else)
+
+Operators can be chained to create complex conditional logic. The output of one operator becomes the input for the next.
+
+#### Basic If-Then:
+```text
+$A$from{hello}
+$A$compare{hello}$then{Matched!}   → Matched!
+$A$compare{world}$then{Matched!}   → (empty)
+```
+
+#### If-Then-Else Pattern:
+```text
+$A$from{abc}
+$A$compare{abc}$then{YES}$else{NO} → YES
+$A$compare{xyz}$then{YES}$else{NO} → NO
+```
+
+### Standalone and Braced Usage
+
+- **Standalone**: If used without a preceding variable (e.g., `$else{default}`), the input is assumed to be an empty string.
+- **Braced**: You can pipe arbitrary braced expressions into flow operators: `${some content}$then{has content!}`.
+
+#### Example:
+```text
+$L$from{a,b,c}
+$R$from{$L$list$get{,}{0}}
+$R$compare{a}$then{Is A}$else{Not A} → Is A
+```
+
+---
+
 ## Plugin Development
 
 Papagaio features a modern, frictionless Wasm plugin system. You can write plugins in standard C using simple naming conventions and compile them into zero-dependency WebAssembly modules using `papagaio` as a preprocessor and `clang` as the WASM compiler.

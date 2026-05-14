@@ -2135,6 +2135,59 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
             while (j < len && (isalnum((unsigned char)src[j]) || src[j] == '_')) j++;
             size_t klen = j - ks;
 
+            /* Handle ${value}$then/$else/$compare -- braced expression as flow input */
+            if (klen == 0 && j < len && str_pfx(src + j, sym->open)) {
+                StrView so_b = { sym->open,  strlen(sym->open)  };
+                StrView sc_b = { sym->close, strlen(sym->close) };
+                StrView blk_b;
+                size_t jb = (size_t)extract_block(src, (int)j, so_b, sc_b, &blk_b);
+                /* Check if followed by a flow op */
+                if (jb < len && src[jb] == '$') {
+                    size_t nj = jb + 1, njs = nj;
+                    while (nj < len && (isalnum((unsigned char)src[nj]) || src[nj] == '_')) nj++;
+                    size_t nfl = nj - njs;
+                    if ((nfl == 7 && memcmp(src + njs, "compare", 7) == 0) ||
+                        (nfl == 4 && memcmp(src + njs, "then",    4) == 0) ||
+                        (nfl == 4 && memcmp(src + njs, "else",    4) == 0)) {
+                        /* Process block content as initial value */
+                        char *cur_val = pap_process_sv(ctx, blk_b);
+                        size_t cp = jb;
+                        StrView so_f = { sym->open,  strlen(sym->open)  };
+                        StrView sc_f = { sym->close, strlen(sym->close) };
+                        while (cp < len && src[cp] == '$') {
+                            size_t j2 = cp + 1, ops = j2;
+                            while (j2 < len && (isalnum((unsigned char)src[j2]) || src[j2] == '_')) j2++;
+                            size_t opl = j2 - ops;
+                            int is_cmp  = (opl == 7 && memcmp(src + ops, "compare", 7) == 0);
+                            int is_then = (opl == 4 && memcmp(src + ops, "then",    4) == 0);
+                            int is_else = (opl == 4 && memcmp(src + ops, "else",    4) == 0);
+                            if (!is_cmp && !is_then && !is_else) break;
+                            size_t j3 = j2;
+                            while (j3 < len && isspace((unsigned char)src[j3])) j3++;
+                            if (j3 >= len || !str_pfx(src + j3, sym->open)) break;
+                            StrView blk; j3 = (size_t)extract_block(src, (int)j3, so_f, sc_f, &blk);
+                            char *arg = pap_process_sv(ctx, blk);
+                            if (is_cmp) {
+                                if (strcmp(cur_val, arg) != 0) { free(cur_val); cur_val = strdup(""); }
+                                free(arg);
+                            } else if (is_then) {
+                                if (cur_val[0] != '\0') { free(cur_val); cur_val = arg; arg = NULL; }
+                                else free(arg);
+                            } else {
+                                if (cur_val[0] == '\0') { free(cur_val); cur_val = arg; arg = NULL; }
+                                else free(arg);
+                            }
+                            if (arg) free(arg);
+                            cp = j3;
+                        }
+                        sb_append_n(&out, cur_val, strlen(cur_val));
+                        free(cur_val);
+                        i = cp;
+                        goto next_char;
+                    }
+                }
+            }
+
             if (klen > 0) {
                 /* Check for $NAME$from{...} assignment syntax */
                 if (j < len && src[j] == '$') {
@@ -2238,6 +2291,106 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                     }
                 }
 
+                /* ---- Flow control: $compare{}, $then{}, $else{} ----
+                 * Two entry points:
+                 *   A) $NAME$compare/then/else{...}  -- NAME is a known variable
+                 *   B) standalone $then{...} / $else{...} / $compare{...} -- input = ""
+                 *
+                 * Semantics:
+                 *   compare{B}: cur==B  → keep cur; cur!=B → cur=""
+                 *   then{Y}   : cur!="" → cur=process(Y); cur=="" → cur=""
+                 *   else{Y}   : cur=="" → cur=process(Y); cur!="" → pass cur through
+                 *
+                 * Multiple ops chain: $A$compare{B}$then{C}$else{D}
+                 */
+                {
+                    int cur_is_then    = (klen == 4 && memcmp(src + ks, "then",    4) == 0);
+                    int cur_is_else    = (klen == 4 && memcmp(src + ks, "else",    4) == 0);
+                    int cur_is_compare = (klen == 7 && memcmp(src + ks, "compare", 7) == 0);
+                    int cur_is_flow    = cur_is_then || cur_is_else || cur_is_compare;
+
+                    /* Check if current NAME is followed by a flow op */
+                    int next_is_flow = 0;
+                    if (!cur_is_flow && j < len && src[j] == '$') {
+                        size_t nj = j + 1, njs = nj;
+                        while (nj < len && (isalnum((unsigned char)src[nj]) || src[nj] == '_')) nj++;
+                        size_t nfl = nj - njs;
+                        if ((nfl == 7 && memcmp(src + njs, "compare", 7) == 0) ||
+                            (nfl == 4 && memcmp(src + njs, "then",    4) == 0) ||
+                            (nfl == 4 && memcmp(src + njs, "else",    4) == 0))
+                            next_is_flow = 1;
+                    }
+
+                    if (cur_is_flow || next_is_flow) {
+                        StrView so_f = { sym->open,  strlen(sym->open)  };
+                        StrView sc_f = { sym->close, strlen(sym->close) };
+
+                        /* Determine initial value and where the chain starts */
+                        char *cur_val;
+                        size_t cp; /* position in src where we scan flow ops */
+
+                        if (cur_is_flow) {
+                            /* Standalone: input is empty string, chain starts here */
+                            cur_val = strdup("");
+                            cp = i; /* points to '$' of "then"/"else"/"compare" */
+                        } else {
+                            /* $NAME$op...: resolve NAME via pap_var_lookup */
+                            char *lu = pap_var_lookup(ctx, sym, src + ks, klen);
+                            cur_val = lu ? lu : strdup("");
+                            cp = j; /* points to '$' of first flow op */
+                        }
+
+                        /* Process chain of $compare/$then/$else */
+                        while (cp < len && src[cp] == '$') {
+                            size_t j2 = cp + 1, ops = j2;
+                            while (j2 < len && (isalnum((unsigned char)src[j2]) || src[j2] == '_')) j2++;
+                            size_t opl = j2 - ops;
+
+                            int is_cmp  = (opl == 7 && memcmp(src + ops, "compare", 7) == 0);
+                            int is_then = (opl == 4 && memcmp(src + ops, "then",    4) == 0);
+                            int is_else = (opl == 4 && memcmp(src + ops, "else",    4) == 0);
+                            if (!is_cmp && !is_then && !is_else) break;
+
+                            /* Consume optional whitespace, then expect a block */
+                            size_t j3 = j2;
+                            while (j3 < len && isspace((unsigned char)src[j3])) j3++;
+                            if (j3 >= len || !str_pfx(src + j3, sym->open)) break;
+
+                            StrView blk;
+                            j3 = (size_t)extract_block(src, (int)j3, so_f, sc_f, &blk);
+                            char *arg = pap_process_sv(ctx, blk);
+
+                            if (is_cmp) {
+                                /* compare: equal → keep cur_val, unequal → "" */
+                                if (strcmp(cur_val, arg) != 0) {
+                                    free(cur_val); cur_val = strdup("");
+                                }
+                                free(arg);
+                            } else if (is_then) {
+                                /* then: non-empty → replace with arg; empty → stay "" */
+                                if (cur_val[0] != '\0') {
+                                    free(cur_val); cur_val = arg; arg = NULL;
+                                } else {
+                                    free(arg);
+                                }
+                            } else { /* else */
+                                /* else: empty → replace with arg; non-empty → pass cur through */
+                                if (cur_val[0] == '\0') {
+                                    free(cur_val); cur_val = arg; arg = NULL;
+                                } else {
+                                    free(arg); /* keep cur_val as-is */
+                                }
+                            }
+                            if (arg) free(arg);
+                            cp = j3;
+                        }
+
+                        sb_append_n(&out, cur_val, strlen(cur_val));
+                        free(cur_val);
+                        i = cp;
+                        goto next_char;
+                    }
+                }
 
                 int is_sym = (klen == 13 && memcmp(src + ks, "changesymbols", 13) == 0);
                 

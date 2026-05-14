@@ -641,6 +641,102 @@
       "name": "$list empty sep: reverse string",
       "code": "$L$from{abc} $L$list$reverse{} $L",
       "expected": "cba"
+    },
+    {
+      "id": 108,
+      "name": "$compare match returns value",
+      "code": "$A$from{hello} $A$compare{hello}",
+      "expected": "hello"
+    },
+    {
+      "id": 109,
+      "name": "$compare mismatch returns empty",
+      "code": "$A$from{hello} $A$compare{world}",
+      "expected": ""
+    },
+    {
+      "id": 110,
+      "name": "$compare both sides variables",
+      "code": "$A$from{x} $B$from{x} $A$compare{$B}",
+      "expected": "x"
+    },
+    {
+      "id": 111,
+      "name": "$compare both sides variables mismatch",
+      "code": "$A$from{x} $B$from{y} $A$compare{$B}",
+      "expected": ""
+    },
+    {
+      "id": 112,
+      "name": "$then with non-empty value emits content",
+      "code": "$A$from{hello} $A$then{world}",
+      "expected": "world"
+    },
+    {
+      "id": 113,
+      "name": "$then with empty value emits empty",
+      "code": "${}$then{world}",
+      "expected": ""
+    },
+    {
+      "id": 114,
+      "name": "$else with empty value emits content",
+      "code": "${}$else{fallback}",
+      "expected": "fallback"
+    },
+    {
+      "id": 115,
+      "name": "$else with non-empty value passes through",
+      "code": "$A$from{hello} $A$else{fallback}",
+      "expected": "hello"
+    },
+    {
+      "id": 116,
+      "name": "$compare$then match",
+      "code": "$A$from{abc} $A$compare{abc}$then{YES}",
+      "expected": "YES"
+    },
+    {
+      "id": 117,
+      "name": "$compare$then mismatch gives empty",
+      "code": "$A$from{abc} $A$compare{xyz}$then{YES}",
+      "expected": ""
+    },
+    {
+      "id": 118,
+      "name": "$compare$then$else full if-else (true branch)",
+      "code": "$A$from{abc} $A$compare{abc}$then{YES}$else{NO}",
+      "expected": "YES"
+    },
+    {
+      "id": 119,
+      "name": "$compare$then$else full if-else (false branch)",
+      "code": "$A$from{abc} $A$compare{xyz}$then{YES}$else{NO}",
+      "expected": "NO"
+    },
+    {
+      "id": 120,
+      "name": "$compare with list$get via variable",
+      "code": "$L$from{a,b,c} $R$from{$L$list$get{,}{0}} $R$compare{a}$then{FIRST}$else{OTHER}",
+      "expected": "FIRST"
+    },
+    {
+      "id": 121,
+      "name": "$then content uses variables",
+      "code": "$A$from{val} $B$from{ok} $A$compare{val}$then{$B}",
+      "expected": "ok"
+    },
+    {
+      "id": 122,
+      "name": "standalone $else fires on empty",
+      "code": "$else{default}",
+      "expected": "default"
+    },
+    {
+      "id": 123,
+      "name": "standalone $then does nothing on empty",
+      "code": "$then{should not appear}",
+      "expected": ""
     }
   ]
 }
