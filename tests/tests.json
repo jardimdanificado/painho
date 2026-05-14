@@ -623,6 +623,24 @@
       "name": "$list separator processed from variable",
       "code": "$SEP$from{,} $L$from{x,y,z} $L$list$get{$SEP}{2}",
       "expected": "z"
+    },
+    {
+      "id": 105,
+      "name": "$list empty sep: char-by-char count",
+      "code": "$L$from{abc} $L$list$count{}",
+      "expected": "3"
+    },
+    {
+      "id": 106,
+      "name": "$list empty sep: char-by-char get",
+      "code": "$L$from{hello} $L$list$get{}{1}",
+      "expected": "e"
+    },
+    {
+      "id": 107,
+      "name": "$list empty sep: reverse string",
+      "code": "$L$from{abc} $L$list$reverse{} $L",
+      "expected": "cba"
     }
   ]
 }

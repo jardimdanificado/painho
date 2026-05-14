@@ -1381,9 +1381,15 @@ static char **pap_list_split(const char *str, const char *sep,
     *out_count = 0;
     if (!str || str[0] == '\0') return NULL;
     if (seplen == 0) {
-        char **arr = (char **)malloc(sizeof(char *));
-        arr[0] = strdup(str);
-        *out_count = 1;
+        /* Empty separator: split char by char */
+        int n = (int)strlen(str);
+        char **arr = (char **)malloc(sizeof(char *) * (size_t)n);
+        for (int ci = 0; ci < n; ci++) {
+            arr[ci] = (char *)malloc(2);
+            arr[ci][0] = str[ci];
+            arr[ci][1] = '\0';
+        }
+        *out_count = n;
         return arr;
     }
     size_t len = strlen(str);
