@@ -3,6 +3,12 @@ project(papagaio C)
 
 set(CMAKE_C_STANDARD 99)
 
+# Parse version from package.json
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/package.json" PACKAGE_JSON_CONTENT)
+string(REGEX MATCH "\"version\": \"([0-9.]+)\"" _ "${PACKAGE_JSON_CONTENT}")
+set(PAPAGAIO_VERSION ${CMAKE_MATCH_1})
+add_definitions(-DCONFIG_VERSION="${PAPAGAIO_VERSION}")
+
 include_directories(. src)
 
 # Main library (static)

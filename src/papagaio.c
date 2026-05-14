@@ -336,7 +336,7 @@ static int extract_block(const char *src, int pos,
 {
     if (o.len == c.len && o.len > 0 && memcmp(o.ptr, c.ptr, o.len) == 0) {
         if (!sv_pfx(src + pos, o)) return pos;
-        pos += o.len;
+        pos += (int)o.len;
         int start = pos;
         while (src[pos]) {
             if (sv_pfx(src + pos, c)) {
@@ -349,16 +349,16 @@ static int extract_block(const char *src, int pos,
         return (int)strlen(src);
     }
     if (!sv_pfx(src + pos, o)) return pos;
-    pos += o.len;
+    pos += (int)o.len;
     int start = pos, depth = 1;
     while (src[pos] && depth) {
-        if      (sv_pfx(src + pos, o)) { depth++; pos += o.len; }
+        if      (sv_pfx(src + pos, o)) { depth++; pos += (int)o.len; }
         else if (sv_pfx(src + pos, c)) {
             if (!--depth) {
                 out->ptr = src + start; out->len = (size_t)(pos - start);
                 return pos + (int)c.len;
             }
-            pos += c.len;
+            pos += (int)c.len;
         } else pos++;
     }
     out->ptr = src + start; out->len = strlen(src + start);
@@ -634,7 +634,7 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                 }
             }
 
-            if (i < n && str_pfx(pat + i, sym->optional)) { t->optional = 1; i += strlen(sym->optional); }
+            if (i < n && str_pfx(pat + i, sym->optional)) { t->optional = 1; i += (int)strlen(sym->optional); }
             /* Trailing sigil after var/modifier: next whitespace is consumed (optional) */
             if (i < n && str_pfx(pat + i, sym->sigil)) {
                 size_t sl2 = strlen(sym->sigil);
@@ -642,7 +642,7 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                 /* Only treat as ws_consume if NOT followed by alphanum (would start new var) */
                 if (j2 >= (size_t)n || (!isalnum((unsigned char)pat[j2]) && pat[j2] != '_')) {
                     t->ws_consume = 1;
-                    i += sl2;
+                    i += (int)sl2;
                 }
             }
             if (t->type != TOK_BLOCK) {
@@ -657,14 +657,14 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
         t->type  = TOK_LITERAL;
         t->value = (StrView){ pat + l, (size_t)(i - l) };
         p->count++;
-        if (i < n && str_pfx(pat + i, sym->optional)) { p->t[p->count-1].optional = 1; i += strlen(sym->optional); }
+        if (i < n && str_pfx(pat + i, sym->optional)) { p->t[p->count-1].optional = 1; i += (int)strlen(sym->optional); }
         /* Trailing sigil on literal: consume whitespace after match */
         if (i < n && str_pfx(pat + i, sym->sigil)) {
             size_t sl2 = strlen(sym->sigil);
             size_t j2 = i + sl2;
             if (j2 >= (size_t)n || (!isalnum((unsigned char)pat[j2]) && pat[j2] != '_')) {
                 p->t[p->count-1].ws_consume = 1;
-                i += sl2;
+                i += (int)sl2;
             }
         }
     }
