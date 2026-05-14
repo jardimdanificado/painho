@@ -833,6 +833,36 @@
       "name": "$list$find returns whole element",
       "code": "$L$from{apple,banana,cherry} $L$list{,}$find{ana}",
       "expected": "banana"
+    },
+    {
+      "id": 141,
+      "name": "$slice basic",
+      "code": "$A$from{hello world} $A$slice{0}{5}",
+      "expected": "hello"
+    },
+    {
+      "id": 142,
+      "name": "$slice to end",
+      "code": "$A$from{hello world} $A$slice{6}",
+      "expected": "world"
+    },
+    {
+      "id": 143,
+      "name": "$slice negative",
+      "code": "$A$from{hello world} $A$slice{-5}",
+      "expected": "world"
+    },
+    {
+      "id": 144,
+      "name": "$list$slice basic",
+      "code": "$L$from{a,b,c,d,e} $L$list{,}$slice{1}{4}",
+      "expected": "b,c,d"
+    },
+    {
+      "id": 145,
+      "name": "$list$slice negative",
+      "code": "$L$from{a,b,c} $L$list{,}$slice{-2}",
+      "expected": "b,c"
     }
   ]
 }

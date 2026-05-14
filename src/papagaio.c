@@ -1601,6 +1601,28 @@ static void pap_list_op(Papagaio *ctx, const Symbols *sym,
         }
     }
 
+    /* slice: returns sub-list from start to end */
+    else if (OP_IS("slice")) {
+        if (block_count >= 1 && sb_out) {
+            char *s1 = pap_process_sv(ctx, raw_blocks[0]);
+            int start = atoi(s1); free(s1);
+            int end = count;
+            if (block_count >= 2) {
+                char *s2 = pap_process_sv(ctx, raw_blocks[1]);
+                end = atoi(s2); free(s2);
+            }
+            if (start < 0) start = count + start;
+            if (end < 0) end = count + end;
+            if (start < 0) start = 0;
+            if (end > count) end = count;
+            if (start < end) {
+                char *res = pap_list_join(parts + start, end - start, sep_str, seplen);
+                sb_append_n(sb_out, res, strlen(res));
+                free(res);
+            }
+        }
+    }
+
 done:
     /* Persist mutation back to variable */
     if (mutated) {
@@ -2202,9 +2224,11 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                     int cur_is_find     = (klen == 4 && memcmp(src + ks, "find",     4) == 0);
                     int cur_is_contains = (klen == 8 && memcmp(src + ks, "contains", 8) == 0);
                     int cur_is_replace  = (klen == 7 && memcmp(src + ks, "replace",  7) == 0);
+                    int cur_is_slice    = (klen == 5 && memcmp(src + ks, "slice",    5) == 0);
                     int cur_is_flow     = cur_is_then || cur_is_else || cur_is_compare ||
                                           cur_is_repeat || cur_is_while || cur_is_until || 
-                                          cur_is_byte || cur_is_find || cur_is_contains || cur_is_replace;
+                                          cur_is_byte || cur_is_find || cur_is_contains || 
+                                          cur_is_replace || cur_is_slice;
 
                     /* Check if current NAME is followed by a flow op */
                     int next_is_flow = 0;
@@ -2224,7 +2248,8 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                             is_flow = 1;
                         } else if ((nfl == 4 && memcmp(src + njs, "find",     4) == 0) ||
                                    (nfl == 8 && memcmp(src + njs, "contains", 8) == 0) ||
-                                   (nfl == 7 && memcmp(src + njs, "replace",  7) == 0)) {
+                                   (nfl == 7 && memcmp(src + njs, "replace",  7) == 0) ||
+                                   (nfl == 5 && memcmp(src + njs, "slice",    5) == 0)) {
                             is_flow = 1; is_conflicting = 1;
                         }
                         
@@ -2272,9 +2297,10 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                             int is_find     = (opl == 4 && memcmp(src + ops, "find",     4) == 0);
                             int is_contains = (opl == 8 && memcmp(src + ops, "contains", 8) == 0);
                             int is_replace  = (opl == 7 && memcmp(src + ops, "replace",  7) == 0);
+                            int is_slice    = (opl == 5 && memcmp(src + ops, "slice",    5) == 0);
                             
                             if (!is_cmp && !is_then && !is_else && !is_repeat && !is_while && 
-                                !is_until && !is_byte && !is_find && !is_contains && !is_replace) break;
+                                !is_until && !is_byte && !is_find && !is_contains && !is_replace && !is_slice) break;
 
                             /* Consume optional whitespace, then expect a block */
                             size_t j3 = j2;
@@ -2283,7 +2309,7 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
 
                             StrView blk;
                             j3 = (size_t)extract_block(src, (int)j3, so_f, sc_f, &blk);
-                            char *arg = (is_repeat || is_while || is_until || is_find || is_contains || is_replace) ? NULL : pap_process_sv(ctx, blk);
+                            char *arg = (is_repeat || is_while || is_until || is_find || is_contains || is_replace || is_slice) ? NULL : pap_process_sv(ctx, blk);
 
                             if (is_cmp) {
                                 if (strcmp(cur_val, arg) != 0) { free(cur_val); cur_val = strdup(""); }
@@ -2320,6 +2346,33 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                                 }
                                 free(cur_val); cur_val = match_res;
                                 free_pattern(&p); free(pat_str);
+                            } else if (is_slice) {
+                                char *s1 = pap_process_sv(ctx, blk);
+                                int start = atoi(s1); free(s1);
+                                int end = (int)strlen(cur_val);
+
+                                /* Look for second block {end} */
+                                size_t j2_sl = j3;
+                                while (j2_sl < len && isspace((unsigned char)src[j2_sl])) j2_sl++;
+                                if (j2_sl < len && str_pfx(src + j2_sl, sym->open)) {
+                                    StrView blk2;
+                                    j3 = (size_t)extract_block(src, (int)j2_sl, so_f, sc_f, &blk2);
+                                    char *s2 = pap_process_sv(ctx, blk2);
+                                    end = atoi(s2); free(s2);
+                                }
+
+                                int len_cv = (int)strlen(cur_val);
+                                if (start < 0) start = len_cv + start;
+                                if (end < 0) end = len_cv + end;
+                                if (start < 0) start = 0;
+                                if (end > len_cv) end = len_cv;
+                                char *slice_res = strdup("");
+                                if (start < end) {
+                                    slice_res = (char*)malloc((size_t)(end - start + 1));
+                                    memcpy(slice_res, cur_val + start, (size_t)(end - start));
+                                    slice_res[end - start] = '\0';
+                                }
+                                free(cur_val); cur_val = slice_res;
                             } else if (is_contains) {
                                 char *pat_str = pap_process_sv(ctx, blk);
                                 Pattern p; memset(&p, 0, sizeof(p)); parse_pattern_ex(pat_str, &p, sym);

@@ -237,6 +237,7 @@ $VARNAME$list{separator}$OPERATION{...arguments}
 | `reverse` | `$V$list{sep}$reverse` | Nothing | Yes |
 | `count` | `$V$list{sep}$count` | Number of elements | No |
 | `join` | `$V$list{sep_orig}$join{sep_new}` | List with new separator | No |
+| `slice` | `$V$list{sep}$slice{start}{end}` | Sub-list from start to end | No |
 | `find` | `$V$list{sep}$find{pat}` | First **whole element** matching `pat` | No |
 | `contains` | `$V$list{sep}$contains{pat}` | Index of `pat` **within** matching element | No |
 | `replace` | `$V$list{sep}$replace{pat}{rep}` | First match found; updates the **whole element** | Yes |
@@ -281,6 +282,9 @@ $PATH$list{/}$get{-1}     → bin
 $SEP$from{,}
 $L$from{x,y,z}
 $L$list{$SEP}$get{2}      → z
+
+$L$from{a,b,c,d,e}
+$L$list{,}$slice{1}{4}    → b,c,d
 ```
 
 ---
@@ -296,6 +300,7 @@ $VAL$compare{target}
 $VAL$find{pattern}
 $VAL$contains{pattern}
 $VAL$replace{pattern}{replacement}
+$VAL$slice{start}{end}
 $VAL$then{content}
 $VAL$else{content}
 ```
@@ -306,6 +311,7 @@ $VAL$else{content}
 | **`find`** | Performs a non-anchored search for `pattern` in `$VAL`. Emits the matched substring. |
 | **`contains`** | Performs a non-anchored search. Emits the character index of the first match (or `""`). |
 | **`replace`** | Replaces the first match of `pattern` with `replacement`. Emits the OLD match. |
+| **`slice`** | Returns a substring from `start` to `end`. Supports negative indices. |
 | **`then`** | If `$VAL` is **not empty**, processes and emits `content`. Otherwise, emits `""`. |
 | **`else`** | If `$VAL` **is empty**, processes and emits `content`. Otherwise, passes `$VAL` through. |
 | **`repeat`** | `$repeat{N}{code}` | Executes `code` N times. Emits nothing; used for side effects. |
@@ -336,6 +342,13 @@ $A$from{user_id: 12345}
 $A$find{$d+}$                → 12345
 $A$contains{id}             → 5
 $A$replace{$d+}{HIDDEN} $A  → 12345 user_id: HIDDEN
+
+#### Slicing:
+```text
+$A$from{hello world}
+$A$slice{0}{5}              → hello
+$A$slice{-5}                → world
+```
 ```
 ```
 
