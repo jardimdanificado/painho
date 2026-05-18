@@ -1,0 +1,40 @@
+============================================================
+             UNARY CALCULATOR IN PAPAGAIO
+============================================================
+
+$OP$from{DIV}
+$A$from{......}
+$B$from{...}
+
+$R$from{}
+
+$IS_ADD$from{$OP$compare{ADD}$then{1}$else{0}}
+$IS_SUB$from{$OP$compare{SUB}$then{1}$else{0}}
+$IS_MUL$from{$OP$compare{MUL}$then{1}$else{0}}
+$IS_DIV$from{$OP$compare{DIV}$then{1}$else{0}}
+
+$repeat{$IS_ADD}{
+  $R$from{$A$B}
+}
+
+$repeat{$IS_SUB}{
+  $R$from{$A$slice{$B$list{}$count}}
+}
+
+$repeat{$IS_MUL}{
+  $repeat{$B$list{}$count}{$L$from{$R,$A}$R$from{$L$list{,}$join{}}}
+}
+
+$repeat{$IS_DIV}{
+  $X$from{$A}
+  $Y$from{$B}
+  $while{.}{$IS_NOT_EMPTY$from{$X$then{1}$else{0}}$repeat{$IS_NOT_EMPTY}{$X$from{$X$slice{$Y$list{}$count}}$R$from{$R.}}$X$then{.}$else{STOP}}
+}
+
+------------------------------------------------------------
+OPERATOR: $OP
+VALUE A:  $A$list{}$count ($A)
+VALUE B:  $B$list{}$count ($B)
+------------------------------------------------------------
+RESULT:   $R$list{}$count ($R)
+============================================================

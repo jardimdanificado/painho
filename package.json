@@ -26,7 +26,6 @@
     "eval",
     "parser",
     "codegen",
-    "regex",
     "syntax",
     "easy"
   ],
