@@ -37,11 +37,6 @@ int main(void)
     printf("Test 8 [Braced] - %s (esperado: foox)\n", o);
     free(o);
 
-    o = papagaio_process("42 days", "$num$regex {[0-9]+}", "Number: $num", NULL);
-    printf("Test 17 - %s (esperado: Number: 42 days)\n", o);
-    free(o);
-
-
     /* Test multi-char optional marker */
     const char *in20 = "$changesymbols{$}{[}{]}{MAYBE} $pattern{[fooMAYBE]}{[MATCH]}\nfoo";
     o = papagaio_process_text(ctx, in20, strlen(in20));

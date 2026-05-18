@@ -63,7 +63,7 @@ typedef struct {
     char open[16];
     char close[16];
     char optional[16]; 
-    const char *pattern, *regex, *block, *changequote;
+    const char *pattern, *block, *changequote;
 } Symbols;
 
 struct Pattern_s { PapToken *t; int count; int cap; Symbols sym; };
@@ -107,6 +107,12 @@ typedef struct {
 /* Forward declarations */
 static char *file_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
 
+typedef struct Scope {
+    PatternPair *rules;
+    int rule_count, rule_cap;
+    struct Scope *parent;
+} Scope;
+
 struct Papagaio {
     RegisteredCommand  *commands;
     int                 cmd_count, cmd_cap;
@@ -125,9 +131,10 @@ struct Papagaio {
     int    auto_export;
 
     /* patterns - persistent within one top-level call */
-    PatternPair *rules;
-    int          rule_count, rule_cap;
+    Scope *global_scope;
+    Scope *current_scope;
     int          depth;
+    int          disable_sandbox;
 
     /* original document for $document$original */
     char        *original_doc;
@@ -142,7 +149,6 @@ struct Papagaio {
 #define PAP_OPEN     "{"
 #define PAP_CLOSE    "}"
 #define PAP_PATTERN  "pattern"
-#define PAP_REGEX    "regex"
 #define PAP_BLOCK    "block"
 #define PAP_OPTIONAL "optional"
 #define PAP_CHANGEQUOTE "changequote"
@@ -198,7 +204,7 @@ static Symbols make_symbols(const char *sigil, const char *open, const char *clo
     if (open)  { strncpy(s.open,  open,  15); s.open[15]  = '\0'; }
     if (close) { strncpy(s.close, close, 15); s.close[15] = '\0'; }
     strcpy(s.optional, "?");
-    s.pattern  = PAP_PATTERN; s.regex   = PAP_REGEX;
+    s.pattern  = PAP_PATTERN;
     s.block    = PAP_BLOCK;
     s.changequote = PAP_CHANGEQUOTE;
     return s;
@@ -1222,17 +1228,53 @@ static char *pap_var_lookup(Papagaio *ctx, const Symbols *sym,
     memcpy(p, sym->close, cl); p += cl;
     *p = '\0';
     char *result = NULL;
-    for (int i = 0; i < ctx->rule_count; i++) {
-        if (ctx->rules[i].m && strcmp(ctx->rules[i].m, pat) == 0) {
-            result = strdup(ctx->rules[i].r);
-            break;
+    Scope *s = ctx->current_scope;
+    while (s) {
+        for (int i = 0; i < s->rule_count; i++) {
+            if (s->rules[i].m && strcmp(s->rules[i].m, pat) == 0) {
+                result = strdup(s->rules[i].r);
+                break;
+            }
         }
+        if (result) break;
+        s = s->parent;
     }
     free(pat);
     return result;
 }
 
-/* Create or update a $NAME variable in ctx->rules (same logic as $from). */
+
+static void push_scope(Papagaio *ctx) {
+    Scope *s = (Scope *)malloc(sizeof(Scope));
+    s->rules = NULL;
+    s->rule_count = 0;
+    s->rule_cap = 0;
+    s->parent = ctx->current_scope;
+    ctx->current_scope = s;
+}
+
+static void clear_scope(Scope *s) {
+    if (s && s->rules) {
+        for (int i = 0; i < s->rule_count; i++) {
+            free(s->rules[i].m);
+            free(s->rules[i].r);
+        }
+        free(s->rules);
+        s->rules = NULL;
+        s->rule_count = 0;
+        s->rule_cap = 0;
+    }
+}
+
+static void pop_scope(Papagaio *ctx) {
+    if (!ctx->current_scope) return;
+    Scope *s = ctx->current_scope;
+    clear_scope(s);
+    ctx->current_scope = s->parent;
+    free(s);
+}
+
+/* Create or update a $NAME variable in ctx->current_scope->rules (same logic as $from). */
 static void pap_var_update(Papagaio *ctx, const Symbols *sym,
                             const char *name, size_t nlen,
                             const char *new_value)
@@ -1254,25 +1296,32 @@ static void pap_var_update(Papagaio *ctx, const Symbols *sym,
     memcpy(p, name, nlen);     p += nlen;
     memcpy(p, sym->close, cl); p += cl;
     *p = '\0';
+Scope *found_scope = NULL;
     int found_idx = -1;
-    for (int ri = 0; ri < ctx->rule_count; ri++) {
-        if (ctx->rules[ri].m && strcmp(ctx->rules[ri].m, pat_str) == 0) {
-            found_idx = ri; break;
+    for (Scope *s = ctx->current_scope; s; s = s->parent) {
+        for (int ri = 0; ri < s->rule_count; ri++) {
+            if (s->rules[ri].m && strcmp(s->rules[ri].m, pat_str) == 0) {
+                found_scope = s;
+                found_idx = ri;
+                break;
+            }
         }
+        if (found_scope) break;
     }
-    if (found_idx >= 0) {
-        free(ctx->rules[found_idx].r);
-        ctx->rules[found_idx].r = strdup(new_value);
+
+    if (found_scope) {
+        free(found_scope->rules[found_idx].r);
+        found_scope->rules[found_idx].r = strdup(new_value);
         free(pat_str);
     } else {
-        if (ctx->rule_count + 1 > ctx->rule_cap) {
-            ctx->rule_cap = ctx->rule_cap ? ctx->rule_cap * 2 : 8;
-            ctx->rules = (PatternPair *)realloc(ctx->rules,
-                          sizeof(PatternPair) * ctx->rule_cap);
+        if (ctx->current_scope->rule_count + 1 > ctx->current_scope->rule_cap) {
+            ctx->current_scope->rule_cap = ctx->current_scope->rule_cap ? ctx->current_scope->rule_cap * 2 : 8;
+            ctx->current_scope->rules = (PatternPair *)realloc(ctx->current_scope->rules,
+                          sizeof(PatternPair) * ctx->current_scope->rule_cap);
         }
-        ctx->rules[ctx->rule_count].m = pat_str;
-        ctx->rules[ctx->rule_count].r = strdup(new_value);
-        ctx->rule_count++;
+        ctx->current_scope->rules[ctx->current_scope->rule_count].m = pat_str;
+        ctx->current_scope->rules[ctx->current_scope->rule_count].r = strdup(new_value);
+        ctx->current_scope->rule_count++;
     }
 }
 
@@ -1372,7 +1421,7 @@ static char *pap_process_sv(Papagaio *ctx, StrView sv)
 /* Central dispatcher for $VAR$list$OP{sep}{...} operations.
    raw_blocks[0] = sep block, raw_blocks[1..] = extra argument blocks.
    Emitting ops write to sb_out (may be NULL for pure-mutating ops).
-   Mutating ops update ctx->rules via pap_var_update. */
+   Mutating ops update ctx->current_scope->rules via pap_var_update. */
 static void pap_list_op(Papagaio *ctx, const Symbols *sym,
                          StrBuf *sb_out,
                          const char *name, size_t nlen,
@@ -1747,7 +1796,12 @@ Papagaio *papagaio_open(void)
     ctx->finalizers = NULL; ctx->fin_count = 0; ctx->fin_cap = 0;
     ctx->argc       = 0;    ctx->argv      = NULL;
     ctx->auto_export = 1;
-    ctx->rules = NULL; ctx->rule_count = 0; ctx->rule_cap = 0;
+    ctx->global_scope = (Scope *)malloc(sizeof(Scope));
+    ctx->global_scope->rules = NULL;
+    ctx->global_scope->rule_count = 0;
+    ctx->global_scope->rule_cap = 0;
+    ctx->global_scope->parent = NULL;
+    ctx->current_scope = ctx->global_scope;
     ctx->depth = 0;
     ctx->original_doc = NULL; ctx->original_len = 0;
 
@@ -1775,12 +1829,11 @@ void papagaio_close(Papagaio *ctx)
         free(ctx->modifiers);
     }
     free(ctx->finalizers);
-    if (ctx->rules) {
-        for (int i = 0; i < ctx->rule_count; i++) {
-            free(ctx->rules[i].m);
-            free(ctx->rules[i].r);
-        }
-        free(ctx->rules);
+    while (ctx->current_scope) {
+        Scope *parent = ctx->current_scope->parent;
+        clear_scope(ctx->current_scope);
+        free(ctx->current_scope);
+        ctx->current_scope = parent;
     }
     if (ctx->original_doc) free(ctx->original_doc);
     free(ctx);
@@ -1895,7 +1948,6 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
 {
     StrBuf out; sb_init(&out);
     size_t i = 0, len = strlen(src);
-    size_t sl = strlen(sym->sigil);
 
     while (i < len) {
         if (src[i] == '$') { /* FIXED SIGIL for preprocessor */
@@ -2109,43 +2161,12 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                             j_next = (size_t)extract_block(src, (int)j_next, so, sc, &val_blk);
                             char *processed_val = papagaio_process_text(ctx, val_blk.ptr, val_blk.len);
                             if (processed_val) {
-                                /* Pattern: $$NAME$aliases{NAME} for exact literal match */
-                                size_t pat_len = sl * 3 + name_len + 7 + strlen(sym->open) + name_len + strlen(sym->close);
-                                char *pat_str = (char *)malloc(pat_len + 1);
-                                if (pat_str) {
-                                    char *p = pat_str;
-                                    memcpy(p, sym->sigil, sl); p += sl;
-                                    memcpy(p, sym->sigil, sl); p += sl;
-                                    memcpy(p, src + ks_name, name_len); p += name_len;
-                                    memcpy(p, sym->sigil, sl); p += sl;
-                                    memcpy(p, "aliases", 7); p += 7;
-                                    memcpy(p, sym->open, strlen(sym->open)); p += strlen(sym->open);
-                                    memcpy(p, src + ks_name, name_len); p += name_len;
-                                    memcpy(p, sym->close, strlen(sym->close)); p += strlen(sym->close);
-                                    *p = '\0';
-                                    
-                                    /* Check for redefinition */
-                                    int found_idx = -1;
-                                    for (int ri = 0; ri < ctx->rule_count; ri++) {
-                                        if (strcmp(ctx->rules[ri].m, pat_str) == 0) {
-                                            found_idx = ri; break;
-                                        }
-                                    }
-                                    
-                                    if (found_idx >= 0) {
-                                        free(ctx->rules[found_idx].r);
-                                        ctx->rules[found_idx].r = strdup(processed_val);
-                                        free(pat_str);
-                                    } else {
-                                        if (ctx->rule_count + 1 > ctx->rule_cap) {
-                                            ctx->rule_cap = ctx->rule_cap ? ctx->rule_cap * 2 : 8;
-                                            ctx->rules = (PatternPair *)realloc(ctx->rules, sizeof(PatternPair) * ctx->rule_cap);
-                                        }
-                                        ctx->rules[ctx->rule_count].m = pat_str;
-                                        ctx->rules[ctx->rule_count].r = strdup(processed_val);
-                                        ctx->rule_count++;
-                                    }
-                                }
+                                char var_name[256];
+                                size_t len_to_copy = name_len < 255 ? name_len : 255;
+                                strncpy(var_name, src + ks_name, len_to_copy);
+                                var_name[len_to_copy] = '\0';
+                                
+                                pap_var_update(ctx, sym, var_name, name_len, processed_val);
                                 free(processed_val);
                             }
                             i = j_next; continue;
@@ -2884,6 +2905,7 @@ static char *handle_priorities(Papagaio *ctx, const char *src, size_t len, const
     qsort(chunks, chunk_count, sizeof(PChunk), compare_pchunks_priority);
 
     /* Process in priority order */
+    ctx->disable_sandbox++;
     for (int j = 0; j < chunk_count; j++) {
         if (chunks[j].is_priority_block) {
             chunks[j].result = papagaio_process_text(ctx, chunks[j].content, strlen(chunks[j].content));
@@ -2893,6 +2915,7 @@ static char *handle_priorities(Papagaio *ctx, const char *src, size_t len, const
             chunks[j].result = papagaio_process_text(ctx, chunk_text, chunk_len);
         }
     }
+    ctx->disable_sandbox--;
 
     /* Sort back to original order for reassembly */
     qsort(chunks, chunk_count, sizeof(PChunk), compare_pchunks_original);
@@ -2919,13 +2942,7 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
 
     ctx->depth++;
     if (ctx->depth == 1) {
-        if (ctx->rules) {
-            for (int i = 0; i < ctx->rule_count; i++) {
-                free(ctx->rules[i].m);
-                free(ctx->rules[i].r);
-            }
-            ctx->rule_count = 0;
-        }
+        clear_scope(ctx->current_scope);
         if (ctx->original_doc) free(ctx->original_doc);
         ctx->original_doc = (char*)malloc(len + 1);
         if (ctx->original_doc) {
@@ -2935,69 +2952,101 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
         } else {
             ctx->original_len = 0;
         }
+    } else if (!ctx->disable_sandbox) {
+        push_scope(ctx);
     }
 
     /* 0. Handle Priorities */
     char *prio_res = handle_priorities(ctx, input, len, &sym);
     if (prio_res) {
+        if (ctx->depth > 1 && !ctx->disable_sandbox) pop_scope(ctx);
         ctx->depth--;
         return prio_res;
     }
 
     char *buf = (char *)malloc(len + 1);
-    if (!buf) return NULL;
+    if (!buf) {
+        if (ctx->depth > 1 && !ctx->disable_sandbox) pop_scope(ctx);
+        ctx->depth--;
+        return NULL;
+    }
     memcpy(buf, input, len); buf[len] = '\0';
 
     char *preprocessed = resolve_preprocessor(ctx, buf, &sym); free(buf);
-    if (!preprocessed) return NULL;
+    if (!preprocessed) {
+        if (ctx->depth > 1 && !ctx->disable_sandbox) pop_scope(ctx);
+        ctx->depth--;
+        return NULL;
+    }
     
-    /* A. Resolve Patterns - Now adds to persistent ctx->rules */
+    /* A. Resolve Patterns - Now adds to persistent ctx->current_scope->rules */
     PatternPair *new_pairs = NULL; int new_pc = 0;
     char *text_no_patterns = extract_nested(preprocessed, &sym, &new_pairs, &new_pc);
     free(preprocessed);
-    if (!text_no_patterns) { free_pairs(new_pairs, new_pc); return NULL; }
+    if (!text_no_patterns) {
+        free_pairs(new_pairs, new_pc);
+        if (ctx->depth > 1 && !ctx->disable_sandbox) pop_scope(ctx);
+        ctx->depth--;
+        return NULL;
+    }
 
     if (new_pc > 0) {
-        if (ctx->rule_count + new_pc > ctx->rule_cap) {
-            ctx->rule_cap = ctx->rule_cap ? (ctx->rule_cap + new_pc) * 2 : (new_pc + 8);
-            ctx->rules = (PatternPair *)realloc(ctx->rules, sizeof(PatternPair) * ctx->rule_cap);
+        if (ctx->current_scope->rule_count + new_pc > ctx->current_scope->rule_cap) {
+            ctx->current_scope->rule_cap = ctx->current_scope->rule_cap ? (ctx->current_scope->rule_cap + new_pc) * 2 : (new_pc + 8);
+            ctx->current_scope->rules = (PatternPair *)realloc(ctx->current_scope->rules, sizeof(PatternPair) * ctx->current_scope->rule_cap);
         }
         for (int i = 0; i < new_pc; i++) {
-            ctx->rules[ctx->rule_count++] = new_pairs[i];
+            ctx->current_scope->rules[ctx->current_scope->rule_count++] = new_pairs[i];
         }
         free(new_pairs); /* Don't use free_pairs as we moved the strings */
     }
     
     char *cur = text_no_patterns;
-    /* Apply ALL rules (both just found and previous persistent ones) */
-    for (int i = 0; i < ctx->rule_count; i++) {
-        StrBuf out; sb_init(&out);
-        size_t clen = strlen(cur), pos = 0;
-        Pattern pat;
-        parse_pattern_ex(ctx->rules[i].m, &pat, &sym);
+    // Collect all scopes from global to current
+    int scope_count = 0;
+    for (Scope *s = ctx->current_scope; s; s = s->parent) scope_count++;
+    Scope **scopes = (Scope **)malloc(sizeof(Scope*) * scope_count);
+    int s_idx = scope_count - 1;
+    for (Scope *s = ctx->current_scope; s; s = s->parent) scopes[s_idx--] = s;
+
+    // Apply ALL rules from all scopes (Global -> Local)
+
+        for (int si = 0; si < scope_count; si++) {
+        Scope *s = scopes[si];
         
-        while (pos < clen) {
-            Match m; m.ctx = ctx;
-            if (match_pattern(ctx, cur, (int)clen, &pat, (int)pos, &m)) {
-                char *r = apply_replacement_ex(ctx->rules[i].r, &m, &sym);
-                sb_append_n(&out, r, strlen(r));
-                free(r);
-                pos = (size_t)m.end;
-                free_match(&m);
-            } else {
-                sb_append_char(&out, cur[pos++]);
+        for (int i = 0; i < s->rule_count; i++) {
+            StrBuf out; sb_init(&out);
+            size_t clen = strlen(cur), pos = 0;
+            Pattern pat;
+            parse_pattern_ex(s->rules[i].m, &pat, &sym);
+            
+            while (pos < clen) {
+                Match m; m.ctx = ctx;
+                if (match_pattern(ctx, cur, (int)clen, &pat, (int)pos, &m)) {
+                    char *r = apply_replacement_ex(s->rules[i].r, &m, &sym);
+                    sb_append_n(&out, r, strlen(r));
+                    free(r);
+                    pos = (size_t)m.end;
+                    free_match(&m);
+                } else {
+                    sb_append_char(&out, cur[pos++]);
+                }
             }
+            free_pattern(&pat);
+            char *next_cur = strdup(out.data);
+            sb_free(&out);
+            free(cur);
+            cur = next_cur;
         }
-        free_pattern(&pat);
-        char *next_cur = strdup(out.data);
-        sb_free(&out);
-        free(cur);
-        cur = next_cur;
     }
+    free(scopes);
 
     char *final = dispatch_commands(ctx, cur, &sym);
     free(cur);
     
+    if (ctx->depth > 1 && !ctx->disable_sandbox) {
+        pop_scope(ctx);
+    }
     ctx->depth--;
     return final;
 }

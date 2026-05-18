@@ -863,6 +863,36 @@
       "name": "$list$slice negative",
       "code": "$L$from{a,b,c} $L$list{,}$slice{-2}",
       "expected": "b,c"
+    },
+    {
+      "id": 146,
+      "name": "Nested local scope shadowing / upward update",
+      "code": "$X$from{1} $A$from{$X$from{2}$X} $X $A",
+      "expected": "  2 2"
+    },
+    {
+      "id": 147,
+      "name": "Nested local scope local variable destruction",
+      "code": "$A$from{$B$from{local}val} $A $B",
+      "expected": " val $B"
+    },
+    {
+      "id": 148,
+      "name": "Nested local scope in $then operator",
+      "code": "$A$from{1} $A$then{$B$from{nested} $B} $B",
+      "expected": " nested $B"
+    },
+    {
+      "id": 149,
+      "name": "Nested local scope in $else operator",
+      "code": "${}$else{$B$from{else_nested} $B} $B",
+      "expected": " else_nested $B"
+    },
+    {
+      "id": 150,
+      "name": "Multi-level nested scopes recursion",
+      "code": "$X$from{global} $A$from{$X$from{outer} $B$from{$X$from{inner} $X} $X $B} $X $A",
+      "expected": "  inner   inner  inner"
     }
   ]
 }

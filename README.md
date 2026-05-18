@@ -178,6 +178,14 @@ The **`$from`** operator allows you to capture processed content and assign it t
 2. **Immediate Registration**: The variable is registered as an exact-match rule as soon as it is parsed. This allows for **chained assignments**.
 3. **Output Suppression**: The entire `$from` directive is removed from the output text.
 
+### Lexical Scopes and Sandboxing
+
+Every block operator or preprocessing field evaluated dynamically (such as inside `$from`, `$then`, `$else`, `$while`, `$repeat`, and `$until`) is executed in its own **local nested scope**.
+
+- **Sandboxing**: Any variable declared inside a local scope (e.g. `$B$from{local_val}` inside `$A$from{...}`) that does *not* exist in a parent scope is treated as a local variable. It will be completely destroyed and freed when the block finishes evaluating (sandboxed).
+- **Shadowing & Upward Updates**: If a variable updated inside a local scope already exists in a parent/ancestor scope, Papagaio avoids shadowing it. Instead, it propagates the update upwards, modifying the existing variable in the parent scope.
+- **Recursive Nesting**: Local scopes can be nested arbitrarily. Each child scope has full read/write access to variables in parent scopes, but parent or sibling scopes do not have access to variables declared exclusively in child scopes.
+
 ### Examples
 
 #### Chained Assignments
