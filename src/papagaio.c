@@ -1803,6 +1803,7 @@ Papagaio *papagaio_open(void)
     ctx->global_scope->parent = NULL;
     ctx->current_scope = ctx->global_scope;
     ctx->depth = 0;
+    ctx->disable_sandbox = 0;
     ctx->original_doc = NULL; ctx->original_len = 0;
 
     papagaio_register_command(ctx, "file", file_handler, NULL);
