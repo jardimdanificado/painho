@@ -45,7 +45,7 @@ LDFLAGS += -lm
 TARGET_SO = papagaio$(SO_EXT)
 TARGET_A  = libpapagaio.a
 TARGET_BIN = papagaio$(EXE_EXT)
-SRC       = src/papagaio.c
+SRC       = src/papagaio.c src/tinyexpr.c
 OBJ       = $(SRC:.c=.o)
 
 LUA_BIN    ?= lua
@@ -123,7 +123,7 @@ clean:
 	rm -f $(TARGET_SO) $(TARGET_A) $(TARGET_BIN) $(OBJ)
 	rm -rf dist/
 
-wasm: src/papagaio.c src/papagaio.h
+wasm: src/papagaio.c src/papagaio.h src/tinyexpr.c src/tinyexpr.h
 	mkdir -p dist/wasm
 	emcc -O3 $(CFLAGS) $(SRC) -o dist/wasm/papagaio_wasm.js \
 		-s WASM=1 \

@@ -929,6 +929,66 @@
       "name": "Whitespace operators in pattern matching",
       "code": "$pattern {a$space b} {c}\na b",
       "expected": "c"
+    },
+    {
+      "id": 157,
+      "name": "Basic Math Addition",
+      "code": "$math{2 + 2}",
+      "expected": "4"
+    },
+    {
+      "id": 158,
+      "name": "Math Precedence",
+      "code": "$math{2 + 3 * 4}",
+      "expected": "14"
+    },
+    {
+      "id": 159,
+      "name": "Math Variable Injection",
+      "code": "$A$from{5}$math{$A * $A}",
+      "expected": "25"
+    },
+    {
+      "id": 160,
+      "name": "Math Advanced Function",
+      "code": "$math{sqrt(9)}",
+      "expected": "3"
+    },
+    {
+      "id": 161,
+      "name": "Math Comparison",
+      "code": "$math{10 > 5}",
+      "expected": "1"
+    },
+    {
+      "id": 162,
+      "name": "Math Complex Precedence and Parentheses",
+      "code": "$math{((10 + 5) * (3 - 1)) / (2 ^ 2)}",
+      "expected": "7.5"
+    },
+    {
+      "id": 163,
+      "name": "Math Functions and Negative Numbers",
+      "code": "$math{abs(-10) + sin(0) * cos(0) == 10}",
+      "expected": "1"
+    },
+    {
+      "id": 164,
+      "name": "Math Floating Point Variable Injection",
+      "code": "$X$from{5.5}$Y$from{4.5}$math{sqrt($X^2 + $Y^2 - 0.5)}",
+      "expected": "7.07107"
+    },
+    {
+      "id": 165,
+      "name": "Math Logic Gates Chaining",
+      "code": "$math{(1 < 2) + (3 > 1) + (5 == 5) + (10 != 10)}",
+      "expected": "3"
+    },
+    {
+      "id": 166,
+      "name": "Math Silent Error Handling",
+      "code": "X$math{5 + *}Y",
+      "expected": "XY"
     }
   ]
 }

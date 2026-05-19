@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
+#include "tinyexpr.h"
 
 
 
@@ -2199,6 +2200,30 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                             sb_append_char(&out, (char)code);
                             i = (size_t)next; continue;
                         }
+                    }
+                }
+                
+                if (klen == 4 && memcmp(src + ks, "math", 4) == 0) {
+                    while(j < len && isspace((unsigned char)src[j])) j++;
+                    if (j < len && str_pfx(src + j, sym->open)) {
+                        StrView blk;
+                        int next = extract_block(src, (int)j, (StrView){sym->open, strlen(sym->open)}, (StrView){sym->close, strlen(sym->close)}, &blk);
+                        char *arg = pap_process_sv(ctx, blk);
+                        int err = 0;
+                        double result = te_interp(arg, &err);
+                        free(arg);
+                        if (err == 0) {
+                            char res_buf[64];
+                            if (result == (long long)result) {
+                                snprintf(res_buf, sizeof(res_buf), "%lld", (long long)result);
+                            } else {
+                                snprintf(res_buf, sizeof(res_buf), "%g", result);
+                            }
+                            sb_append_n(&out, res_buf, strlen(res_buf));
+                        }
+                        j = (size_t)next;
+                        if (j < len && src[j] == '$') { j++; while (j < len && isspace((unsigned char)src[j])) j++; }
+                        i = j; continue;
                     }
                 }
 
