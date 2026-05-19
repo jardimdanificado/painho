@@ -36,7 +36,6 @@ Patterns are composed of whitespace-separated tokens. The engine uses a "flex-ma
 - **Literal**: Matches exact text.
 - **Variable**: `$name` (captures a sequence up to the next pattern match).
 - **Optional**: `$name?` or `literal?` (marker is configurable, e.g., `MAYBE`, via `$changesymbols`).
-- **Escaping**: Use `$$` to match a literal `$`.
 
 ### Modifiers
 Modifiers specify the data type or constraints of a match:
@@ -177,6 +176,23 @@ For precise layout control, especially inside flex-matched `$pattern` rules that
 To generate specific binary characters (such as null bytes) or handle complex ASCII injection:
 - **`$ascii$code`** (Inline): E.g., `$ascii$65` outputs `A`
 - **`$ascii{code}`** (Block): E.g., `$ascii{0}` outputs a binary null byte (`\0`)
+
+### Mathematical Evaluation
+The **`$math{...}`** operator allows native numerical processing and comparison directly on the preprocessor pipeline. Powered internally by `tinyexpr`, it supports floating point arithmetic, trigonometric functions, exponents, and logical evaluations. The mathematical string is processed recursively by Papagaio before being evaluated, meaning you can easily inject your workflow variables.
+
+```text
+$X$from{5.5}
+$Y$from{4.5}
+$math{sqrt($X^2 + $Y^2 - 0.5)}
+```
+*Output: `7.07107`*
+
+**Comparisons and Logic Gates**
+Since comparison operators (`<`, `>`, `==`, `!=`) evaluate to `1` (true) or `0` (false), `$math` is perfect for chained conditionals when paired with Papagaio's flow controllers:
+```text
+$math{10 > 5}$compare{1}$then{ Math confirms 10 is greater than 5! }
+```
+*(Note: If the expression contains syntax errors like `$math{5 + *}`, the operator fails silently and emits an empty string to maintain engine stability).*
 
 ---
 
