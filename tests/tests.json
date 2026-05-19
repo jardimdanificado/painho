@@ -75,7 +75,7 @@
     {
       "id": 13,
       "name": "Sigil escaping in replacement",
-      "code": "$pattern {foo} {$$foo}\nfoo",
+      "code": "$pattern {foo} {$sigil$foo}\nfoo",
       "expected": "$foo"
     },
     {
@@ -893,6 +893,42 @@
       "name": "Multi-level nested scopes recursion",
       "code": "$X$from{global} $A$from{$X$from{outer} $B$from{$X$from{inner} $X} $X $B} $X $A",
       "expected": "  inner   inner  inner"
+    },
+    {
+      "id": 151,
+      "name": "Dynamic symbol operators",
+      "code": "$changesymbols{@}{<}{>}{!}$sigil $open $close $marker",
+      "expected": "@ < > !"
+    },
+    {
+      "id": 152,
+      "name": "Infinite interpretation resolution",
+      "code": "$pattern {hello} {world $sigil$A$sigil$from{X}}\nhello",
+      "expected": "world $A$from{X}"
+    },
+    {
+      "id": 153,
+      "name": "Whitespace operators space newline tab",
+      "code": "a$space b$newline c$tab d",
+      "expected": "a  b\n c\t d"
+    },
+    {
+      "id": 154,
+      "name": "ASCII operator inline",
+      "code": "$ascii$65$ascii$66$ascii$67",
+      "expected": "ABC"
+    },
+    {
+      "id": 155,
+      "name": "ASCII operator block",
+      "code": "$ascii{65}$ascii{66}$ascii{67}",
+      "expected": "ABC"
+    },
+    {
+      "id": 156,
+      "name": "Whitespace operators in pattern matching",
+      "code": "$pattern {a$space b} {c}\na b",
+      "expected": "c"
     }
   ]
 }

@@ -147,6 +147,39 @@ This changes the sigil to `@`, delimiters to `< >`, and the optional marker to `
 
 ---
 
+## Dynamic Built-in Operators
+
+Papagaio provides several built-in operators that give you access to the engine's internal syntax configuration and allow you to precisely inject unrepresentable characters (such as whitespace and binary ASCII) directly into patterns or output text. 
+
+> [!NOTE]
+> All built-in operators support the **trailing sigil** syntax (e.g., `$sigil$`). This allows the operator to immediately consume all following whitespace or safely concatenate with adjacent alphanumeric text, exactly like standard variables.
+
+### Reserved Symbol Emitters
+When generating macros or writing complex rules, you may need to emit a literal sigil without it being evaluated. Instead of complex double-escaping, you can use:
+- **`$sigil`**: Emits the current sigil (e.g., `$`)
+- **`$open`**: Emits the current open delimiter (e.g., `{`)
+- **`$close`**: Emits the current close delimiter (e.g., `}`)
+- **`$marker`**: Emits the current optional marker (e.g., `?`)
+
+**Solving the Infinite Interpretation Problem:**
+```text
+$pattern {hello} {world $sigil$A$sigil$from{X}}
+hello
+```
+*Output: `world $A$from{X}`* — Since `$sigil` is processed during the single initial pass, it emits a literal `$` that safely bypasses any subsequent evaluation.
+
+### Formatting and Binary Control
+For precise layout control, especially inside flex-matched `$pattern` rules that normally skip extra whitespace:
+- **`$space`**: Emits a literal space character (`' '`)
+- **`$newline`**: Emits a literal newline (`\n`)
+- **`$tab`**: Emits a literal tab character (`\t`)
+
+To generate specific binary characters (such as null bytes) or handle complex ASCII injection:
+- **`$ascii$code`** (Inline): E.g., `$ascii$65` outputs `A`
+- **`$ascii{code}`** (Block): E.g., `$ascii{0}` outputs a binary null byte (`\0`)
+
+---
+
 ## Recursive Priority System
 
 Papagaio allows you to control the order of execution and side-effects (such as pattern definitions) using the **`$priority$N`** directive.

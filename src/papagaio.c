@@ -1126,12 +1126,7 @@ static char *apply_replacement_ex(const char *rep, const Match *m,
 
     while (i < n) {
         if (str_pfx(rep + i, sym->sigil)) {
-            /* Case 1: Escaped sigil (e.g., $$ -> $) */
-            if (i + sl < n && str_pfx(rep + i + sl, sym->sigil)) {
-                sb_append_n(&out, sym->sigil, sl);
-                i += sl * 2;
-                continue;
-            }
+
             /* Case 2: Braced variable (e.g., ${n}suffix) */
             size_t ol = strlen(sym->open), cl = strlen(sym->close);
             if (ol > 0 && i + sl + ol <= n && str_pfx(rep + i + sl, sym->open)) {
@@ -2146,6 +2141,67 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
             }
 
             if (klen > 0) {
+                /* 1. Dynamic Symbol Operators */
+                if (klen == 5 && memcmp(src + ks, "sigil", 5) == 0) {
+                    sb_append_n(&out, sym->sigil, strlen(sym->sigil));
+                    if (j < len && src[j] == '$') { j++; while (j < len && isspace((unsigned char)src[j])) j++; }
+                    i = j; continue;
+                }
+                if (klen == 4 && memcmp(src + ks, "open", 4) == 0) {
+                    sb_append_n(&out, sym->open, strlen(sym->open));
+                    if (j < len && src[j] == '$') { j++; while (j < len && isspace((unsigned char)src[j])) j++; }
+                    i = j; continue;
+                }
+                if (klen == 5 && memcmp(src + ks, "close", 5) == 0) {
+                    sb_append_n(&out, sym->close, strlen(sym->close));
+                    if (j < len && src[j] == '$') { j++; while (j < len && isspace((unsigned char)src[j])) j++; }
+                    i = j; continue;
+                }
+                if (klen == 6 && memcmp(src + ks, "marker", 6) == 0) {
+                    sb_append_n(&out, sym->optional, strlen(sym->optional));
+                    if (j < len && src[j] == '$') { j++; while (j < len && isspace((unsigned char)src[j])) j++; }
+                    i = j; continue;
+                }
+
+                /* 2. Whitespace and Special Characters */
+                if (klen == 5 && memcmp(src + ks, "space", 5) == 0) {
+                    sb_append_char(&out, ' ');
+                    if (j < len && src[j] == '$') { j++; while (j < len && isspace((unsigned char)src[j])) j++; }
+                    i = j; continue;
+                }
+                if (klen == 7 && memcmp(src + ks, "newline", 7) == 0) {
+                    sb_append_char(&out, '\n');
+                    if (j < len && src[j] == '$') { j++; while (j < len && isspace((unsigned char)src[j])) j++; }
+                    i = j; continue;
+                }
+                if (klen == 3 && memcmp(src + ks, "tab", 3) == 0) {
+                    sb_append_char(&out, '\t');
+                    if (j < len && src[j] == '$') { j++; while (j < len && isspace((unsigned char)src[j])) j++; }
+                    i = j; continue;
+                }
+                if (klen == 5 && memcmp(src + ks, "ascii", 5) == 0) {
+                    if (j < len && src[j] == '$') {
+                        size_t ns = j + 1, ne = ns;
+                        while (ne < len && isdigit((unsigned char)src[ne])) ne++;
+                        if (ne > ns) {
+                            int code = atoi(src + ns);
+                            sb_append_char(&out, (char)code);
+                            i = ne; continue;
+                        }
+                    } else {
+                        while(j < len && isspace((unsigned char)src[j])) j++;
+                        if (j < len && str_pfx(src + j, sym->open)) {
+                            StrView blk;
+                            int next = extract_block(src, (int)j, (StrView){sym->open, strlen(sym->open)}, (StrView){sym->close, strlen(sym->close)}, &blk);
+                            char *arg = pap_process_sv(ctx, blk);
+                            int code = atoi(arg);
+                            free(arg);
+                            sb_append_char(&out, (char)code);
+                            i = (size_t)next; continue;
+                        }
+                    }
+                }
+
                 /* Check for $NAME$from{...} assignment syntax */
                 if (j < len && src[j] == '$') {
                     size_t j2 = j + 1;
