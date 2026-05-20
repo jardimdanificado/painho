@@ -136,6 +136,7 @@ struct Papagaio {
     Scope *current_scope;
     int          depth;
     int          disable_sandbox;
+    int          disable_patterns;
 
     /* original document for $document$original */
     char        *original_doc;
@@ -1409,7 +1410,9 @@ static char *pap_process_sv(Papagaio *ctx, StrView sv)
 {
     char *tmp = (char *)malloc(sv.len + 1);
     memcpy(tmp, sv.ptr, sv.len); tmp[sv.len] = '\0';
+    ctx->disable_patterns++;
     char *out = papagaio_process_text(ctx, tmp, sv.len);
+    ctx->disable_patterns--;
     free(tmp);
     return out ? out : strdup("");
 }
@@ -1800,6 +1803,7 @@ Papagaio *papagaio_open(void)
     ctx->current_scope = ctx->global_scope;
     ctx->depth = 0;
     ctx->disable_sandbox = 0;
+    ctx->disable_patterns = 0;
     ctx->original_doc = NULL; ctx->original_len = 0;
 
     papagaio_register_command(ctx, "file", file_handler, NULL);
@@ -1952,6 +1956,42 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
             size_t ks = j;
             while (j < len && (isalnum((unsigned char)src[j]) || src[j] == '_')) j++;
             size_t klen = j - ks;
+
+            if (klen == 7 && memcmp(src + ks, "pattern", 7) == 0) {
+                /* Preprocess match block, skip/copy raw replacement block */
+                size_t j_pat = j;
+                while (j_pat < len && isspace((unsigned char)src[j_pat])) j_pat++;
+                StrView so = { sym->open, strlen(sym->open) };
+                StrView sc = { sym->close, strlen(sym->close) };
+                if (j_pat < len && str_pfx(src + j_pat, sym->open)) {
+                    StrView match_blk;
+                    int next1 = extract_block(src, (int)j_pat, so, sc, &match_blk);
+                    size_t k_pat = (size_t)next1;
+                    while (k_pat < len && isspace((unsigned char)src[k_pat])) k_pat++;
+                    if (k_pat < len && str_pfx(src + k_pat, sym->open)) {
+                        StrView repl_blk;
+                        int next2 = extract_block(src, (int)k_pat, so, sc, &repl_blk);
+                        
+                        /* Preprocess the match block recursively (preprocessor only, no rules) */
+                        char *match_str = (char *)malloc(match_blk.len + 1);
+                        memcpy(match_str, match_blk.ptr, match_blk.len);
+                        match_str[match_blk.len] = '\0';
+                        char *proc_match = resolve_preprocessor(ctx, match_str, sym);
+                        free(match_str);
+                        
+                        /* Output: sigil + "pattern" + whitespace + open + proc_match + close + anything between blocks + second block raw */
+                        sb_append_n(&out, src + i, j_pat - i);
+                        sb_append_n(&out, sym->open, strlen(sym->open));
+                        sb_append_n(&out, proc_match, strlen(proc_match));
+                        sb_append_n(&out, sym->close, strlen(sym->close));
+                        free(proc_match);
+                        
+                        sb_append_n(&out, src + next1, (size_t)next2 - (size_t)next1);
+                        i = (size_t)next2;
+                        continue;
+                    }
+                }
+            }
 
             /* Handle ${value}$then/$else/$compare -- braced expression as flow input */
             if (klen == 0 && j < len && str_pfx(src + j, sym->open)) {
@@ -3092,11 +3132,19 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
     for (Scope *s = ctx->current_scope; s; s = s->parent) scopes[s_idx--] = s;
 
     // Apply ALL rules from all scopes (Global -> Local)
-
-        for (int si = 0; si < scope_count; si++) {
+    for (int si = 0; si < scope_count; si++) {
         Scope *s = scopes[si];
         
         for (int i = 0; i < s->rule_count; i++) {
+            /* If patterns are disabled, we ONLY allow aliases/variable rules */
+            if (ctx->disable_patterns) {
+                int is_aliases_rule = (s->rules[i].m && 
+                                       s->rules[i].m[0] == '$' && 
+                                       s->rules[i].m[1] == '$' && 
+                                       strstr(s->rules[i].m, "$aliases{") != NULL);
+                if (!is_aliases_rule) continue;
+            }
+
             StrBuf out; sb_init(&out);
             size_t clen = strlen(cur), pos = 0;
             Pattern pat;
@@ -3106,7 +3154,19 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
                 Match m; m.ctx = ctx;
                 if (match_pattern(ctx, cur, (int)clen, &pat, (int)pos, &m)) {
                     char *r = apply_replacement_ex(s->rules[i].r, &m, &sym);
-                    sb_append_n(&out, r, strlen(r));
+                    int is_aliases_rule = (s->rules[i].m && 
+                                           s->rules[i].m[0] == '$' && 
+                                           s->rules[i].m[1] == '$' && 
+                                           strstr(s->rules[i].m, "$aliases{") != NULL);
+                    if (is_aliases_rule) {
+                        sb_append_n(&out, r, strlen(r));
+                    } else {
+                        ctx->disable_patterns++;
+                        char *evaluated_r = papagaio_process_text(ctx, r, strlen(r));
+                        ctx->disable_patterns--;
+                        sb_append_n(&out, evaluated_r, strlen(evaluated_r));
+                        free(evaluated_r);
+                    }
                     free(r);
                     pos = (size_t)m.end;
                     free_match(&m);

@@ -989,6 +989,42 @@
       "name": "Math Silent Error Handling",
       "code": "X$math{5 + *}Y",
       "expected": "XY"
+    },
+    {
+      "id": 167,
+      "name": "Lazy evaluation inside pattern replacement block",
+      "code": "$pattern{$a + $b}{$math{$a + $b}} 2 + 3",
+      "expected": " 5"
+    },
+    {
+      "id": 168,
+      "name": "Lazy evaluation with variable lookup inside pattern replacement",
+      "code": "$x$from{10} $pattern{CALC}{$math{$x + 5}} CALC",
+      "expected": " 15"
+    },
+    {
+      "id": 169,
+      "name": "Lazy evaluation of flow control ($repeat) inside pattern replacement",
+      "code": "$x$from{}$pattern{REP{$n}}{$x$from{}$repeat{$n}{$x$from{$x*}}$x} REP{4}",
+      "expected": " ****"
+    },
+    {
+      "id": 170,
+      "name": "Nested pattern matching with lazy mathematical evaluation",
+      "code": "$pattern{Y}{X} $pattern{X}{$math{10 + 10}} Y",
+      "expected": "20"
+    },
+    {
+      "id": 171,
+      "name": "Lazy comparison and flow control inside pattern",
+      "code": "$pattern{CHECK{$v}}{$v_var$from{$v}$v_var$compare{5}$then{YES}$else{NO}} CHECK{5} and CHECK{3}",
+      "expected": " YES and NO"
+    },
+    {
+      "id": 172,
+      "name": "Lazy evaluation within custom delimiters",
+      "code": "$changesymbols{$}{[}{]}{?}$pattern[$a + $b][$math{$a + $b}] 10 + 20",
+      "expected": "30"
     }
   ]
 }
