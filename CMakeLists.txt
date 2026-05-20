@@ -18,6 +18,7 @@ endif()
 
 add_library(libpapagaio STATIC
   src/papagaio.c
+  src/tinyexpr.c
 )
 
 if(NOT MSVC)
