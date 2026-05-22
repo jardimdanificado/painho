@@ -34,7 +34,7 @@ else
 endif
 
 PAP_VERSION = $(shell grep '"version":' package.json | cut -d '"' -f 4)
-CFLAGS  ?= -O2 -Wall -Wextra -std=gnu99 -D_CRT_SECURE_NO_WARNINGS -D_GNU_SOURCE -DCONFIG_VERSION=\"$(PAP_VERSION)\"
+CFLAGS  ?= -O2 -Wall -Wextra -std=gnu11 -D_CRT_SECURE_NO_WARNINGS -D_GNU_SOURCE -DCONFIG_VERSION=\"$(PAP_VERSION)\"
 ifneq (,$(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S)))
   LDFLAGS = 
 else
@@ -45,7 +45,7 @@ LDFLAGS += -lm
 TARGET_SO = papagaio$(SO_EXT)
 TARGET_A  = libpapagaio.a
 TARGET_BIN = papagaio$(EXE_EXT)
-SRC       = src/papagaio.c src/tinyexpr.c
+SRC       = src/papagaio.c
 OBJ       = $(SRC:.c=.o)
 
 LUA_BIN    ?= lua
@@ -123,7 +123,7 @@ clean:
 	rm -f $(TARGET_SO) $(TARGET_A) $(TARGET_BIN) $(OBJ)
 	rm -rf dist/
 
-wasm: src/papagaio.c src/papagaio.h src/tinyexpr.c src/tinyexpr.h
+wasm: src/papagaio.c src/papagaio.h
 	mkdir -p dist/wasm
 	emcc -O3 $(CFLAGS) $(SRC) -o dist/wasm/papagaio_wasm.js \
 		-s WASM=1 \

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(papagaio C)
 
-set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD 11)
 
 # Parse version from package.json
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/package.json" PACKAGE_JSON_CONTENT)
@@ -18,7 +18,6 @@ endif()
 
 add_library(libpapagaio STATIC
   src/papagaio.c
-  src/tinyexpr.c
 )
 
 if(NOT MSVC)

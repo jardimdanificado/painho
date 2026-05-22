@@ -8,7 +8,9 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
-#include "tinyexpr.h"
+#include "louro/louro.h"
+#include "louro/libs/louro_std.h"
+#include "louro/libs/louro_math.h"
 
 
 
@@ -2250,9 +2252,13 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                         int next = extract_block(src, (int)j, (StrView){sym->open, strlen(sym->open)}, (StrView){sym->close, strlen(sym->close)}, &blk);
                         char *arg = pap_process_sv(ctx, blk);
                         int err = 0;
-                        double result = te_interp(arg, &err);
+                        LouroVariable scope[] = { LOURO_STD, LOURO_MATH };
+                        int count = sizeof(scope) / sizeof(scope[0]);
+                        LouroExpression *expr = louro_compile(arg, scope, count, &err);
                         free(arg);
-                        if (err == 0) {
+                        if (expr) {
+                            double result = louro_evaluate(expr);
+                            louro_free(expr);
                             char res_buf[64];
                             if (result == (long long)result) {
                                 snprintf(res_buf, sizeof(res_buf), "%lld", (long long)result);
