@@ -1,0 +1,97 @@
+$priority$max{
+  $pattern{TITLE}{Papagaio & Louro Kitchen Sink}
+}
+$never{
+========================================================================
+  Welcome to $TITLE
+  This file demonstrates ALL features of the Papagaio language engine!
+========================================================================
+}
+
+$GLOBAL_NAME$from{Kitchen Sink Processor}
+
+// 1. Math and Logical Evaluation
+Math Simple:     $math{10 + 20 * 2}
+Math Logic:      $math{if 10 > 5 && 3 < 4 then 100 else 0 end}
+Math Built-in:   $math{floor(sqrt(16) * pi())}
+Math Quaternary: $math{if 1 == 0 then 5 else if 1 == 1 then 10 else 20 end end}
+
+// 2. Variables and State Mutation
+$COUNTER$from{0}
+Initial Counter: $COUNTER
+Incrementing:    $COUNTER$from{$math{$COUNTER + 1}}
+Updated Counter: $COUNTER
+
+// 3. Conditional Flow Control
+Flow True:       $COUNTER$compare{1}$then{Counter is 1!}$else{Counter is not 1!}
+Flow False:      $COUNTER$compare{99}$then{Counter is 99!}$else{Counter is not 99!}
+Flow Fallback:   $EMPTY_VAR$from{}
+                 $EMPTY_VAR$then{I have data!}$else{I am empty!}
+
+// 4. String Operations
+$MY_STR$from{papagaio_is_awesome}
+Replace:         $MY_STR$replace{_}{ }
+Find:            $MY_STR$find{is}
+Contains Index:  $MY_STR$contains{awe}
+Slice:           $MY_STR$slice{0}{8}
+Slice Neg:       $MY_STR$slice{-7}
+
+// 5. List Operations
+$MY_LIST$from{apple,banana,orange}
+List Get 0:      $MY_LIST$list{,}$get{0}
+List Get Last:   $MY_LIST$list{,}$get{-1}
+List Count:      $MY_LIST$list{,}$count
+
+Pushing item:    $MY_LIST$list{,}$push{grape}
+New List:        $MY_LIST
+Set item:        $MY_LIST$list{,}$set{1}{mango}
+Replaced List:   $MY_LIST
+Popped Item:     $MY_LIST$list{,}$pop
+List after Pop:  $MY_LIST
+Join with pipe:  $MY_LIST$list{,}$join{ | }
+
+// 6. Loops (Repeat, While, Until)
+$ITER$from{1}
+Repeat 3x:
+$repeat{3}{
+  - Item $ITER
+  $ITER$from{$math{$ITER + 1}}
+}
+
+Repeat Loop 2:
+$repeat{3}{ Hello }
+
+Repeat Loop 3:
+$repeat{3}{ World }
+
+// 7. Scoping and Aliases
+$pattern{ALIASES_DEMO}{
+  $aliases{
+    $A -> Alpha
+    $B -> Beta
+  }
+  Using aliases: $A and $B
+}
+$ALIASES_DEMO
+
+// 8. Evaluation Control ($once and $normalize)
+$pattern{CODE_GEN}{
+  $pattern{DYNAMIC_VAR}{42}
+  The dynamic var is DYNAMIC_VAR.
+}
+
+Normal Call:     $CODE_GEN (The pattern is not processed recursively by default)
+$normalize Call: $normalize{CODE_GEN}
+
+$once Barrier:
+$once{
+  $pattern{LOCAL_MACRO}{This stays inside!}
+  Evaluated inside: LOCAL_MACRO
+}
+Outside: LOCAL_MACRO (Leaked! Patterns are hoisted before $once runs)
+
+$priority$min{
+------------------------------------------------------------------------
+Kitchen Sink Execution Complete!
+------------------------------------------------------------------------
+}
