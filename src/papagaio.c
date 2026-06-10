@@ -126,6 +126,9 @@ struct Papagaio {
     RegisteredFinalizer *finalizers;
     int                  fin_count, fin_cap;
 
+    LouroVariable       *math_funcs;
+    int                  math_count, math_cap;
+
     /* host arguments */
     int    argc;
     char **argv;
@@ -1752,6 +1755,152 @@ static char *pap_process_impl(const char *input,
  * Plugin Implementation Helpers
  * ====================================================================== */
 
+static LouroVariable papagaio_louro_lookup(void *context, const char *name, int len) {
+    Papagaio *ctx = (Papagaio*)context;
+    for (int i = 0; i < ctx->math_count; ++i) {
+        if (strlen(ctx->math_funcs[i].name) == (size_t)len && strncmp(ctx->math_funcs[i].name, name, len) == 0) {
+            return ctx->math_funcs[i];
+        }
+    }
+    LouroVariable null_var = {0};
+    return null_var;
+}
+
+int papagaio_register_math_generic(Papagaio *ctx, const char *name, void *func, int arity, int is_closure, int is_pure, ...) {
+    void *userdata = NULL;
+    if (is_closure) {
+        va_list args;
+        va_start(args, is_pure);
+        userdata = va_arg(args, void*);
+        va_end(args);
+    }
+    if (!ctx || !name || !func) return -1;
+    if (ctx->math_count >= ctx->math_cap) {
+        ctx->math_cap = ctx->math_cap ? ctx->math_cap << 1 : 8;
+        ctx->math_funcs = (LouroVariable *)realloc(ctx->math_funcs, sizeof(LouroVariable) * ctx->math_cap);
+    }
+    LouroVariable *v = &ctx->math_funcs[ctx->math_count++];
+    memset(v, 0, sizeof(LouroVariable));
+    v->name = strdup(name);
+    v->address = func;
+    if (is_closure) {
+        v->type = LOURO_CLOSURE0 + arity;
+        if (is_pure) v->type |= LOURO_FLAG_PURE;
+        v->context = userdata;
+    } else {
+        v->type = LOURO_FUNCTION0 + arity;
+        if (is_pure) v->type |= LOURO_FLAG_PURE;
+    }
+    return 0;
+}
+
+int papagaio_register_math_infix(Papagaio *ctx, const char *name, void *func, int precedence, int is_closure, ...) {
+    void *userdata = NULL;
+    if (is_closure) { va_list args; va_start(args, is_closure); userdata = va_arg(args, void*); va_end(args); }
+    if (!ctx || !name || !func) return -1;
+    if (ctx->math_count >= ctx->math_cap) {
+        ctx->math_cap = ctx->math_cap ? ctx->math_cap << 1 : 8;
+        ctx->math_funcs = (LouroVariable *)realloc(ctx->math_funcs, sizeof(LouroVariable) * ctx->math_cap);
+    }
+    LouroVariable *v = &ctx->math_funcs[ctx->math_count++];
+    memset(v, 0, sizeof(LouroVariable));
+    v->name = strdup(name);
+    v->address = func;
+    v->type = LOURO_OPERATOR | LOURO_FLAG_INFIX | (is_closure ? LOURO_CLOSURE2 : (LOURO_FUNCTION2 | LOURO_FLAG_PURE)) | (precedence << 16);
+    v->context = userdata;
+    return 0;
+}
+
+int papagaio_register_math_prefix(Papagaio *ctx, const char *name, void *func, int precedence, int is_closure, ...) {
+    void *userdata = NULL;
+    if (is_closure) { va_list args; va_start(args, is_closure); userdata = va_arg(args, void*); va_end(args); }
+    if (!ctx || !name || !func) return -1;
+    if (ctx->math_count >= ctx->math_cap) {
+        ctx->math_cap = ctx->math_cap ? ctx->math_cap << 1 : 8;
+        ctx->math_funcs = (LouroVariable *)realloc(ctx->math_funcs, sizeof(LouroVariable) * ctx->math_cap);
+    }
+    LouroVariable *v = &ctx->math_funcs[ctx->math_count++];
+    memset(v, 0, sizeof(LouroVariable));
+    v->name = strdup(name);
+    v->address = func;
+    v->type = LOURO_OPERATOR | LOURO_FLAG_PREFIX | (is_closure ? LOURO_CLOSURE1 : (LOURO_FUNCTION1 | LOURO_FLAG_PURE)) | (precedence << 16);
+    v->context = userdata;
+    return 0;
+}
+
+int papagaio_register_math_postfix(Papagaio *ctx, const char *name, void *func, int precedence, int is_closure, ...) {
+    void *userdata = NULL;
+    if (is_closure) { va_list args; va_start(args, is_closure); userdata = va_arg(args, void*); va_end(args); }
+    if (!ctx || !name || !func) return -1;
+    if (ctx->math_count >= ctx->math_cap) {
+        ctx->math_cap = ctx->math_cap ? ctx->math_cap << 1 : 8;
+        ctx->math_funcs = (LouroVariable *)realloc(ctx->math_funcs, sizeof(LouroVariable) * ctx->math_cap);
+    }
+    LouroVariable *v = &ctx->math_funcs[ctx->math_count++];
+    memset(v, 0, sizeof(LouroVariable));
+    v->name = strdup(name);
+    v->address = func;
+    v->type = LOURO_OPERATOR | LOURO_FLAG_POSTFIX | (is_closure ? LOURO_CLOSURE1 : (LOURO_FUNCTION1 | LOURO_FLAG_PURE)) | (precedence << 16);
+    v->context = userdata;
+    return 0;
+}
+
+int papagaio_register_math_infix_right(Papagaio *ctx, const char *name, void *func, int precedence, int is_closure, ...) {
+    void *userdata = NULL;
+    if (is_closure) { va_list args; va_start(args, is_closure); userdata = va_arg(args, void*); va_end(args); }
+    if (!ctx || !name || !func) return -1;
+    if (ctx->math_count >= ctx->math_cap) {
+        ctx->math_cap = ctx->math_cap ? ctx->math_cap << 1 : 8;
+        ctx->math_funcs = (LouroVariable *)realloc(ctx->math_funcs, sizeof(LouroVariable) * ctx->math_cap);
+    }
+    LouroVariable *v = &ctx->math_funcs[ctx->math_count++];
+    memset(v, 0, sizeof(LouroVariable));
+    v->name = strdup(name);
+    v->address = func;
+    v->type = LOURO_OPERATOR | LOURO_FLAG_INFIX | LOURO_FLAG_RIGHT_ASSOC | (is_closure ? LOURO_CLOSURE2 : (LOURO_FUNCTION2 | LOURO_FLAG_PURE)) | (precedence << 16);
+    v->context = userdata;
+    return 0;
+}
+
+int papagaio_register_math_ternary(Papagaio *ctx, const char *name, const char *sep2, void *func, int precedence, int is_closure, ...) {
+    void *userdata = NULL;
+    if (is_closure) { va_list args; va_start(args, is_closure); userdata = va_arg(args, void*); va_end(args); }
+    if (!ctx || !name || !func) return -1;
+    if (ctx->math_count >= ctx->math_cap) {
+        ctx->math_cap = ctx->math_cap ? ctx->math_cap << 1 : 8;
+        ctx->math_funcs = (LouroVariable *)realloc(ctx->math_funcs, sizeof(LouroVariable) * ctx->math_cap);
+    }
+    LouroVariable *v = &ctx->math_funcs[ctx->math_count++];
+    memset(v, 0, sizeof(LouroVariable));
+    v->name = strdup(name);
+    v->address = func;
+    v->type = LOURO_OPERATOR | LOURO_FLAG_TERNARY | LOURO_FLAG_INFIX | (is_closure ? LOURO_CLOSURE3 : (LOURO_FUNCTION3 | LOURO_FLAG_PURE)) | (precedence << 16);
+    v->separator = v->name;
+    v->separator2 = sep2 ? strdup(sep2) : NULL;
+    v->context = userdata;
+    return 0;
+}
+
+int papagaio_register_math_quaternary(Papagaio *ctx, const char *name, const char *sep2, const char *sep3, void *func, int precedence, int is_closure, ...) {
+    void *userdata = NULL;
+    if (is_closure) { va_list args; va_start(args, is_closure); userdata = va_arg(args, void*); va_end(args); }
+    if (!ctx || !name || !func) return -1;
+    if (ctx->math_count >= ctx->math_cap) {
+        ctx->math_cap = ctx->math_cap ? ctx->math_cap << 1 : 8;
+        ctx->math_funcs = (LouroVariable *)realloc(ctx->math_funcs, sizeof(LouroVariable) * ctx->math_cap);
+    }
+    LouroVariable *v = &ctx->math_funcs[ctx->math_count++];
+    memset(v, 0, sizeof(LouroVariable));
+    v->name = strdup(name);
+    v->address = func;
+    v->type = LOURO_OPERATOR | LOURO_FLAG_QUATERNARY | LOURO_FLAG_PREFIX | (is_closure ? LOURO_CLOSURE3 : (LOURO_FUNCTION3 | LOURO_FLAG_PURE)) | (precedence << 16);
+    v->separator = v->name;
+    v->separator2 = sep2 ? strdup(sep2) : NULL;
+    v->separator3 = sep3 ? strdup(sep3) : NULL;
+    v->context = userdata;
+    return 0;
+}
+
 int papagaio_register_command(Papagaio *ctx, const char *name, PapCommandHandler handler, void *ud)
 {
     if (!ctx) return -1;
@@ -1795,6 +1944,7 @@ Papagaio *papagaio_open(void)
     ctx->commands   = NULL; ctx->cmd_count = 0; ctx->cmd_cap = 0;
     ctx->modifiers  = NULL; ctx->mod_count = 0; ctx->mod_cap = 0;
     ctx->finalizers = NULL; ctx->fin_count = 0; ctx->fin_cap = 0;
+    ctx->math_funcs = NULL; ctx->math_count = 0; ctx->math_cap = 0;
     ctx->argc       = 0;    ctx->argv      = NULL;
     ctx->auto_export = 1;
     ctx->global_scope = (Scope *)malloc(sizeof(Scope));
@@ -1830,6 +1980,14 @@ void papagaio_close(Papagaio *ctx)
             free((void*)ctx->modifiers[i].name);
         }
         free(ctx->modifiers);
+    }
+    if (ctx->math_funcs) {
+        for (int i = 0; i < ctx->math_count; i++) {
+            free((void*)ctx->math_funcs[i].name);
+            if (ctx->math_funcs[i].separator2) free((void*)ctx->math_funcs[i].separator2);
+            if (ctx->math_funcs[i].separator3) free((void*)ctx->math_funcs[i].separator3);
+        }
+        free(ctx->math_funcs);
     }
     free(ctx->finalizers);
     while (ctx->current_scope) {
@@ -2254,7 +2412,7 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                         int err = 0;
                         LouroVariable scope[] = { LOURO_STD, LOURO_MATH };
                         int count = sizeof(scope) / sizeof(scope[0]);
-                        LouroExpression *expr = louro_compile(arg, scope, count, &err);
+                        LouroExpression *expr = louro_compile_ex(arg, scope, count, papagaio_louro_lookup, ctx, &err);
                         free(arg);
                         if (expr) {
                             double result = louro_evaluate(expr);
