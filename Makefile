@@ -34,11 +34,13 @@ else
 endif
 
 PAP_VERSION = $(shell grep '"version":' package.json | cut -d '"' -f 4)
-CFLAGS  ?= -O2 -Wall -Wextra -std=gnu11 -D_CRT_SECURE_NO_WARNINGS -D_GNU_SOURCE -DCONFIG_VERSION=\"$(PAP_VERSION)\"
+CFLAGS  ?= -O2 -Wall -Wextra -std=gnu11 -D_CRT_SECURE_NO_WARNINGS -D_GNU_SOURCE -DCONFIG_VERSION=\"$(PAP_VERSION)\" -DPAPAGAIO_NO_DL
 ifneq (,$(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S)))
   LDFLAGS = 
-else
+else ifeq ($(UNAME_S),Darwin)
   LDFLAGS = -ldl
+else
+  LDFLAGS = -ldl -rdynamic
 endif
 LDFLAGS += -lm
 
@@ -70,8 +72,15 @@ $(TARGET_A): $(OBJ)
 	$(AR) rcs $@ $(OBJ)
 	$(RANLIB) $@
 
-$(TARGET_BIN): src/main.c $(TARGET_A)
-	$(CC) $(CFLAGS) -o $@ src/main.c $(TARGET_A) $(LDFLAGS)
+src/papagaio_dl.o: src/papagaio.c
+	$(CC) -c $(CFLAGS) -UPAPAGAIO_NO_DL -fPIC -o $@ $<
+
+libpapagaio_dl.a: src/papagaio_dl.o
+	$(AR) rcs $@ src/papagaio_dl.o
+	$(RANLIB) $@
+
+$(TARGET_BIN): src/main.c libpapagaio_dl.a
+	$(CC) $(CFLAGS) -UPAPAGAIO_NO_DL -o $@ src/main.c libpapagaio_dl.a $(LDFLAGS)
 
 static: $(TARGET_A)
 
@@ -117,7 +126,7 @@ install: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 
 
 clean:
-	rm -f $(TARGET_SO) $(TARGET_A) $(TARGET_BIN) $(OBJ)
+	rm -f $(TARGET_SO) $(TARGET_A) libpapagaio_dl.a $(TARGET_BIN) $(OBJ) src/papagaio_dl.o
 	rm -rf dist/
 
 wasm: src/papagaio.c src/papagaio.h

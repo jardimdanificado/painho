@@ -1,0 +1,10 @@
+$c{
+char *hello(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *userdata) {
+    return strdup("HELLO FROM JIT C!!!");
+}
+int init(Papagaio *ctx) {
+    papagaio_register_command(ctx, "hello", hello, NULL);
+    return 0;
+}
+}
+Testing JIT: $hello{}

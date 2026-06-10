@@ -13,7 +13,8 @@ typedef struct Papagaio Papagaio;
  * Papagaio — Modular Plugin-Based Text Processing & Pattern Matching Engine (C-First)
  *
  * This is a C library which uses a plugin architecture to support various
- * scripting languages (Lua, QuickJS, etc) and custom commands via $import{}.
+ * scripting languages (Lua, QuickJS, etc) and custom commands via $include{}.
+ * $import{} is a CLI-only directive to dynamically load plugins at runtime.
  *
  * ---------------------------------------------------------------------
  * C API
@@ -35,17 +36,21 @@ Papagaio  *papagaio_open(void);
 void       papagaio_close(Papagaio *ctx);
 void       papagaio_set_args(Papagaio *ctx, int argc, char **argv);
 void       papagaio_get_args(Papagaio *ctx, int *argc, char ***argv);
+void       papagaio_set_cli_mode(Papagaio *ctx, int enabled);
 
 /* Extensibility Definitions */
 typedef char *(*PapCommandHandler)(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *userdata);
 typedef char *(*PapModifierHandler)(const char *match, const char *modifier, size_t match_len, size_t mod_len, void *userdata);
 typedef void (*PapFinalizer)(void *userdata);
+typedef int (*PapagaioPluginInit)(Papagaio *ctx);
 
 int   papagaio_has_command(Papagaio *ctx, const char *name);
 int   papagaio_register_command(Papagaio *ctx, const char *name, PapCommandHandler handler, void *ud);
 int   papagaio_register_modifier(Papagaio *ctx, const char *name, PapModifierHandler handler, void *ud);
+void  papagaio_add_finalizer(Papagaio *ctx, PapFinalizer fn, void *userdata);
 
 /* Math Extensibility */
+void papagaio_clear_math(Papagaio *ctx);
 int papagaio_register_math_generic(Papagaio *ctx, const char *name, void *func, int arity, int is_closure, int is_pure, ...);
 int papagaio_register_math_infix(Papagaio *ctx, const char *name, void *func, int precedence, int is_closure, ...);
 int papagaio_register_math_infix_right(Papagaio *ctx, const char *name, void *func, int precedence, int is_closure, ...);

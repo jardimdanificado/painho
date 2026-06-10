@@ -31,6 +31,7 @@ int main(int argc, char **argv) {
 
     Papagaio *ctx = papagaio_open();
     papagaio_set_args(ctx, argc, argv);
+    papagaio_set_cli_mode(ctx, 1);
 
     char *input = NULL;
     size_t len = 0;

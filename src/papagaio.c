@@ -11,12 +11,15 @@
 #include "louro/louro.h"
 #include "louro/libs/louro_std.h"
 #include "louro/libs/louro_math.h"
-
-
-
-/* =========================================================================
- * Internal types (previously in papagaio_internal.h)
- * ====================================================================== */
+#ifndef PAPAGAIO_NO_DL
+#if defined(_WIN32)
+#define PAPAGAIO_USE_WINDOWS_DL
+#include <windows.h>
+#elif (defined(__unix__) || defined(__APPLE__) || defined(__HAIKU__)) && !defined(__EMSCRIPTEN__)
+#define PAPAGAIO_USE_POSIX_DL
+#include <dlfcn.h>
+#endif
+#endif
 
 typedef struct { const char *ptr; size_t len; } StrView;
 typedef struct { char *data; size_t len; size_t cap; } StrBuf;
@@ -108,7 +111,7 @@ typedef struct {
 } RegisteredModifier;
 
 /* Forward declarations */
-static char *file_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
+static char *include_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
 
 typedef struct Scope {
     PatternPair *rules;
@@ -147,6 +150,13 @@ struct Papagaio {
     /* original document for $document$original */
     char        *original_doc;
     size_t       original_len;
+
+    /* dynamic libraries */
+    void       **dl_handles;
+    int          dl_count, dl_cap;
+
+    /* CLI-only features */
+    int          cli_mode;
 };
 
 /* =========================================================================
@@ -1756,7 +1766,7 @@ static char *pap_process_impl(const char *input,
  * Plugin Implementation Helpers
  * ====================================================================== */
 
-static LouroVariable papagaio_louro_lookup(void *context, const char *name, int len) {
+static LouroVariable papagaio_louro_lookup(void *context, const char *name, int len) { printf("LOOKUP: %.*s\n", len, name);
     Papagaio *ctx = (Papagaio*)context;
     for (int i = 0; i < ctx->math_count; ++i) {
         if (strlen(ctx->math_funcs[i].name) == (size_t)len && strncmp(ctx->math_funcs[i].name, name, len) == 0) {
@@ -1793,6 +1803,17 @@ int papagaio_register_math_generic(Papagaio *ctx, const char *name, void *func, 
         if (is_pure) v->type |= LOURO_FLAG_PURE;
     }
     return 0;
+}
+
+void papagaio_clear_math(Papagaio *ctx) {
+    if (!ctx) return;
+    for (int i = 0; i < ctx->math_count; i++) {
+        if (ctx->math_funcs[i].name) {
+            free(ctx->math_funcs[i].name);
+            ctx->math_funcs[i].name = NULL;
+        }
+    }
+    ctx->math_count = 0;
 }
 
 int papagaio_register_math_infix(Papagaio *ctx, const char *name, void *func, int precedence, int is_closure, ...) {
@@ -1933,6 +1954,18 @@ int papagaio_register_modifier(Papagaio *ctx, const char *name, PapModifierHandl
     return 0;
 }
 
+void papagaio_add_finalizer(Papagaio *ctx, PapFinalizer fn, void *userdata) {
+    if (!ctx || !fn) return;
+    if (ctx->fin_count >= ctx->fin_cap) {
+        ctx->fin_cap = ctx->fin_cap ? ctx->fin_cap * 2 : 4;
+        ctx->finalizers = realloc(ctx->finalizers, ctx->fin_cap * sizeof(RegisteredFinalizer));
+    }
+    RegisteredFinalizer f;
+    f.fn = fn;
+    f.userdata = userdata;
+    ctx->finalizers[ctx->fin_count++] = f;
+}
+
 /* =========================================================================
  * Public C API
  * ====================================================================== */
@@ -1959,8 +1992,9 @@ Papagaio *papagaio_open(void)
     ctx->disable_patterns = 0;
     ctx->normalize_mode = 0;
     ctx->original_doc = NULL; ctx->original_len = 0;
+    ctx->dl_handles = NULL; ctx->dl_count = 0; ctx->dl_cap = 0;
 
-    papagaio_register_command(ctx, "file", file_handler, NULL);
+    papagaio_register_command(ctx, "include", include_handler, NULL);
     return ctx;
 }
 
@@ -1999,6 +2033,21 @@ void papagaio_close(Papagaio *ctx)
         ctx->current_scope = parent;
     }
     if (ctx->original_doc) free(ctx->original_doc);
+#if defined(PAPAGAIO_USE_WINDOWS_DL)
+    if (ctx->dl_handles) {
+        for (int i = 0; i < ctx->dl_count; i++) {
+            if (ctx->dl_handles[i]) FreeLibrary((HMODULE)ctx->dl_handles[i]);
+        }
+        free(ctx->dl_handles);
+    }
+#elif defined(PAPAGAIO_USE_POSIX_DL)
+    if (ctx->dl_handles) {
+        for (int i = 0; i < ctx->dl_count; i++) {
+            if (ctx->dl_handles[i]) dlclose(ctx->dl_handles[i]);
+        }
+        free(ctx->dl_handles);
+    }
+#endif
     free(ctx);
 }
 
@@ -2014,6 +2063,12 @@ void papagaio_get_args(Papagaio *ctx, int *argc, char ***argv)
     if (!ctx) { if (argc) *argc = 0; if (argv) *argv = NULL; return; }
     if (argc) *argc = ctx->argc;
     if (argv) *argv = ctx->argv;
+}
+
+void papagaio_set_cli_mode(Papagaio *ctx, int enabled)
+{
+    if (!ctx) return;
+    ctx->cli_mode = enabled;
 }
 
 int papagaio_has_command(Papagaio *ctx, const char *name)
@@ -2079,7 +2134,7 @@ char *papagaio_process_pairs(Papagaio *ctx, const char *input,
     sb_free(&out); return result;
 }
 
-static char *file_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud) {
+static char *include_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud) {
     (void)ctx; (void)name; (void)ud; (void)argl;
     if (argc < 1) return strdup("");
     
@@ -3026,6 +3081,62 @@ static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sy
                             char *res = papagaio_process_text(ctx, arg, blk.len);
                             ctx->normalize_mode = old_norm;
                             if (res) { sb_append_n(&out, res, strlen(res)); free(res); }
+                            free(arg);
+                        }
+                        i = j; continue;
+                    }
+                    j = sj;
+                }
+
+                /* $import logic — CLI-only (ctx->cli_mode must be set) */
+                if (klen == 6 && memcmp(src + ks, "import", 6) == 0) {
+                    if (!ctx->cli_mode) {
+                        /* Not in CLI mode: emit literally and move on */
+                        sb_append_n(&out, src + i, j - i);
+                        i = j; continue;
+                    }
+                    size_t sj = j;
+                    while(j < len && isspace((unsigned char)src[j])) j++;
+                    if (j < len && sv_pfx(src + j, so)) {
+                        StrView blk; j = (size_t)extract_block(src, (int)j, so, sc, &blk);
+                        char *arg = (char*)malloc(blk.len + 1);
+                        if (arg) {
+                            memcpy(arg, blk.ptr, blk.len); arg[blk.len] = '\0';
+                            char *libname = papagaio_process_text(ctx, arg, blk.len);
+                            if (libname) {
+#if defined(PAPAGAIO_USE_WINDOWS_DL)
+                                void *handle = (void*)LoadLibraryA(libname);
+                                if (handle) {
+                                    PapagaioPluginInit init_fn = (PapagaioPluginInit)GetProcAddress((HMODULE)handle, "papagaio_plugin_init");
+                                    if (init_fn) {
+                                        init_fn(ctx);
+                                        if (ctx->dl_count >= ctx->dl_cap) {
+                                            ctx->dl_cap = ctx->dl_cap ? ctx->dl_cap * 2 : 4;
+                                            ctx->dl_handles = realloc(ctx->dl_handles, ctx->dl_cap * sizeof(void*));
+                                        }
+                                        ctx->dl_handles[ctx->dl_count++] = handle;
+                                    } else {
+                                        FreeLibrary((HMODULE)handle);
+                                    }
+                                }
+#elif defined(PAPAGAIO_USE_POSIX_DL)
+                                void *handle = dlopen(libname, RTLD_NOW | RTLD_LOCAL);
+                                if (handle) {
+                                    PapagaioPluginInit init_fn = (PapagaioPluginInit)dlsym(handle, "papagaio_plugin_init");
+                                    if (init_fn) {
+                                        init_fn(ctx);
+                                        if (ctx->dl_count >= ctx->dl_cap) {
+                                            ctx->dl_cap = ctx->dl_cap ? ctx->dl_cap * 2 : 4;
+                                            ctx->dl_handles = realloc(ctx->dl_handles, ctx->dl_cap * sizeof(void*));
+                                        }
+                                        ctx->dl_handles[ctx->dl_count++] = handle;
+                                    } else {
+                                        dlclose(handle);
+                                    }
+                                }
+#endif
+                                free(libname);
+                            }
                             free(arg);
                         }
                         i = j; continue;
