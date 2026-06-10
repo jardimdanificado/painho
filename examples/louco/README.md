@@ -1,4 +1,4 @@
-# Louco AOT Transpiler Example
+# Louco Transpiler Example
 
 This example demonstrates how to use Papagaio's plugin system to build an Ahead-Of-Time (AOT) transpiler for Louro math expressions directly into C code, without modifying Papagaio's core.
 

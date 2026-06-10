@@ -1,10 +1,10 @@
 PAPAGAIO = ../papagaio
 
-.PHONY: all test test_scripts test_plugins test_louco_aot clean
+.PHONY: all test test_scripts test_plugins test_louco clean
 
 all: test
 
-test: test_scripts test_plugins test_louco_aot
+test: test_scripts test_plugins test_louco
 	@echo "All examples tested successfully!"
 
 test_scripts:
@@ -19,12 +19,12 @@ test_plugins:
 	@echo "--- Building tcc plugin ---"
 	$(MAKE) -C tcc
 
-test_louco_aot:
-	@echo "--- Building and testing louco_aot ---"
-	$(MAKE) -C louco_aot
-	cd louco_aot && ../$(PAPAGAIO) aot_template.pap "$$(cat script.txt)" > /dev/null
+test_louco:
+	@echo "--- Building and testing louco ---"
+	$(MAKE) -C louco
+	cd louco && ../$(PAPAGAIO) aot_template.pap "$$(cat script.txt)" > /dev/null
 
 clean:
 	$(MAKE) -C modifiers clean
 	$(MAKE) -C tcc clean
-	$(MAKE) -C louco_aot clean
+	$(MAKE) -C louco clean
