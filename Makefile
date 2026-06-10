@@ -111,7 +111,7 @@ bench: $(TARGET_BIN) wasm
 	@echo "=== Running Benchmark (Native C) ==="
 	@bash -c "time ./papagaio tests/benchmark.pap > /dev/null"
 	@echo "=== Running Benchmark (Node.js WASM) ==="
-	@bash -c "time ./bin/cli.js tests/benchmark.pap > /dev/null"
+	@bash -c "time ./src/cli.js tests/benchmark.pap > /dev/null"
 
 install: $(TARGET_SO) $(TARGET_A) $(TARGET_BIN)
 	install -d $(BINDIR)

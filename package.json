@@ -1,10 +1,10 @@
 {
   "name": "papagaio",
-  "version": "0.44.2",
+  "version": "0.44.3",
   "description": "easy yet powerful preprocessor",
   "main": "dist/wasm/papagaio.js",
   "bin": {
-    "papagaio": "bin/cli.js"
+    "papagaio": "src/cli.js"
   },
   "files": [
     "dist/wasm/",

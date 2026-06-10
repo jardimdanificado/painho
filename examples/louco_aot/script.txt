@@ -1,0 +1,5 @@
+if dist(player_x, player_y, 200, 200) < 50 then
+    speed * 2
+else
+    speed
+end
