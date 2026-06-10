@@ -46,7 +46,10 @@ typedef int (*PapagaioPluginInit)(Papagaio *ctx);
 
 int   papagaio_has_command(Papagaio *ctx, const char *name);
 int   papagaio_register_command(Papagaio *ctx, const char *name, PapCommandHandler handler, void *ud);
+void  papagaio_clear_commands(Papagaio *ctx);
 int   papagaio_register_modifier(Papagaio *ctx, const char *name, PapModifierHandler handler, void *ud);
+int   papagaio_has_modifier(Papagaio *ctx, const char *name);
+void  papagaio_clear_modifiers(Papagaio *ctx);
 void  papagaio_add_finalizer(Papagaio *ctx, PapFinalizer fn, void *userdata);
 
 /* Math Extensibility */

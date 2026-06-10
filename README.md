@@ -54,6 +54,75 @@ Modifiers specify the data type or constraints of a match:
   ```
   The trailing `$` after `$a` collapses any run of spaces/tabs/newlines between `$a` and `$b`.
 
+### Custom Modifiers
+
+Custom modifiers extend the pattern engine with user-defined validation and transformation logic. They are registered via `papagaio_register_modifier()`:
+
+```c
+typedef char *(*PapModifierHandler)(const char *match, const char *modifier,
+                                     size_t match_len, size_t mod_len,
+                                     void *userdata);
+
+int papagaio_register_modifier(Papagaio *ctx, const char *name,
+                                PapModifierHandler handler, void *ud);
+```
+
+**Handler contract:**
+- `match` — the raw captured text; return `NULL` to reject the match
+- `modifier` — the full modifier name as written in the pattern (e.g. `"len_3_8"`)
+- Return a **heap-allocated** string to store as the capture value (freed by the engine)
+- Return `NULL` or an empty string to fail the match (like a typed modifier mismatch)
+
+**Example plugin** (`plugins/modifiers/papagaio_mod_alpha.c`):
+```c
+#include "papagaio.h"
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+
+static char *alpha_modifier(const char *match, const char *modifier,
+                            size_t match_len, size_t mod_len, void *ud)
+{
+    (void)modifier; (void)mod_len; (void)ud;
+    if (!match || match_len == 0) return NULL;
+    for (size_t i = 0; i < match_len; i++)
+        if (!isalpha((unsigned char)match[i])) return NULL;
+    char *res = malloc(match_len + 1);
+    for (size_t i = 0; i < match_len; i++)
+        res[i] = toupper((unsigned char)match[i]);
+    res[match_len] = '\0';
+    return res;
+}
+
+int papagaio_plugin_init(Papagaio *ctx)
+{
+    return papagaio_register_modifier(ctx, "alpha", alpha_modifier, NULL);
+}
+```
+
+Build as a shared library and load via `$import`:
+```sh
+cc -shared -fPIC -I/path/to/papagaio/src -o alpha.so alpha.c
+```
+```text
+$import{./alpha.so}
+$pattern {$v$alpha} {[$v]}
+Hello
+```
+*Output: `[HELLO]`*
+
+Modifier names support alphanumeric characters and underscores, enabling argument-passing through the name itself. The length-modifier plugin (`plugins/modifiers/papagaio_mod_len.c`) uses this to encode min/max bounds:
+```text
+$import{./mod_len.so}
+$pattern {$p$len_3_8} {[$p]}
+abcdefg
+```
+*Output: `[abcdefg]`* (length 7 is within bounds)
+
+Related C API functions:
+- `papagaio_has_modifier(ctx, "name")` — check if a modifier is registered
+- `papagaio_clear_modifiers(ctx)` — remove all registered modifiers
+
 ### Braced Variables
 
 When a captured variable name needs to be immediately followed by literal text (e.g., a suffix), wrap the name in `${...}` to prevent ambiguity:
@@ -84,7 +153,7 @@ $pattern {$n$aliases{$x$int}{abc}} {VALUE: $n}
 - **`$document`**: Injects the current state of the document (alias for `$document$current`).
 - **`$document$original`**: Injects the initial, unprocessed input text. Useful for referencing the source even after multiple transformations.
 - **`$document$current`**: Injects the current state of the document during the pre-processing pass.
-- **$file{path}**: Injects the content of a file from the file system.
+- **$include{path}**: Injects the content of a file from the file system. Path is relative to the working directory.
 - **`$NAME$from{value}`**: Dynamically assigns a processed `value` to `$NAME`. The assignment itself is suppressed from the output, and the variable becomes available for exact-match replacement in the remaining document.
 
   ```text
@@ -127,6 +196,78 @@ Inside `input.c`:
 const char *v = "$version"; // "1.2.3"
 const char *t = "$target";  // "wasm"
 const char *f = "$args$1";  // "-O3"
+```
+
+---
+
+## Plugin System (`$import`)
+
+Papagaio supports native shared-library plugins loaded at runtime via the **`$import{path}`** directive. This is a **CLI-only** feature (requires `./papagaio` or a program that calls `papagaio_set_cli_mode(ctx, 1)`). When used outside of CLI mode, `$import` emits literally.
+
+### How it works
+
+1. The engine calls `dlopen()` (POSIX) or `LoadLibrary()` (Windows) to load the specified `.so`/`.dll`.
+2. It looks up the symbol `papagaio_plugin_init` and calls it with the current `Papagaio *ctx`.
+3. The plugin can then register custom commands, modifiers, and finalizers using the C API.
+
+### Plugin entry point
+
+```c
+#include "papagaio.h"
+
+int papagaio_plugin_init(Papagaio *ctx);
+```
+
+### Building a plugin
+
+```sh
+cc -shared -fPIC -I/path/to/papagaio/src -o my_plugin.so my_plugin.c
+```
+
+### Usage in a template
+
+```text
+$import{./plugins/modifiers/alpha.so}
+$pattern {$v$alpha} {[$v]}
+Hello
+```
+*Output: `[HELLO]`*
+
+The path argument is **processed recursively** before loading, so you can use variables:
+
+```text
+$PLUGIN_DIR$from{./plugins}
+$import{$PLUGIN_DIR/modifiers/alpha.so}
+```
+
+### Plugin capabilities
+
+Plugins can call any API function on the provided `ctx`:
+
+| Function | Purpose |
+|---|---|
+| `papagaio_register_command(ctx, name, handler, ud)` | Register a `$name{args}` command |
+| `papagaio_register_modifier(ctx, name, handler, ud)` | Register a `$var$name` modifier |
+| `papagaio_register_math_generic(ctx, name, func, arity, ...)` | Register a `$math` function |
+| `papagaio_add_finalizer(ctx, fn, ud)` | Register cleanup called at `papagaio_close` |
+| `papagaio_clear_commands(ctx)` | Remove all registered commands |
+| `papagaio_clear_modifiers(ctx)` | Remove all registered modifiers |
+
+### Built-in plugins
+
+Example plugins live in `plugins/`:
+
+| Plugin | Description |
+|---|---|
+| `plugins/modifiers/alpha.so` | Matches only alphabetic text, uppercases |
+| `plugins/modifiers/alphanum.so` | Matches only alphanumeric text |
+| `plugins/modifiers/email.so` | Validates and extracts email addresses |
+| `plugins/modifiers/len.so` | Validates text length with min/max bounds |
+| `plugins/tcc/tcc.so` | JIT-compile C code at runtime via TCC |
+
+Build all modifier plugins:
+```sh
+make -C plugins/modifiers clean all
 ```
 
 ---

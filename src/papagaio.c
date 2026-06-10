@@ -36,7 +36,7 @@ typedef enum {
     MOD_BINARY, MOD_PERCENT, MOD_ALIASES,
     MOD_GROUP, MOD_STARTS, MOD_ENDS,
     MOD_PREFIX, MOD_SUFFIX, MOD_INFIX,
-    MOD_INCLUDES, MOD_REPEAT, MOD_WHILE, MOD_UNTIL, MOD_BYTE
+    MOD_INCLUDES, MOD_REPEAT, MOD_WHILE, MOD_UNTIL, MOD_BYTE, MOD_CUSTOM
 } VarModifier;
 
 /* Forward declaration for recursive sub-patterns */
@@ -62,6 +62,7 @@ typedef struct {
     Pattern    *sub_pattern;      /* for optional/starts/ends/etc: recursive sub-pattern */
     Pattern   **alt_patterns;     /* for aliases: one sub-pattern per alternative */
     int         alt_pattern_count;
+    char       *custom_mod_name;  /* for MOD_CUSTOM: name of registered modifier */
 } PapToken;
 
 typedef struct {
@@ -272,6 +273,7 @@ static void free_pattern(Pattern *p)
         free(p->t[i].open_str);
         free(p->t[i].close_str);
         free(p->t[i].literal_str);
+        free(p->t[i].custom_mod_name);
 
         if (p->t[i].alts) {
             for (int j = 0; j < p->t[i].alt_count; j++)
@@ -525,7 +527,11 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                 while (i < n && (isalnum((unsigned char)pat[i]) || pat[i] == '_')) i++;
                 StrView mod = { pat + ms, (size_t)(i - ms) };
 
-                if      (sv_eq(mod, (StrView){"int",         3 })) t->modifier = MOD_INT;
+                /* Empty modifier name: treat as trailing sigil (ws_consume) */
+                if (mod.len == 0) {
+                    i -= sl;  /* back up so trailing sigil handler can process it */
+                }
+                else if (sv_eq(mod, (StrView){"int",         3 })) t->modifier = MOD_INT;
                 else if (sv_eq(mod, (StrView){"float",       5 })) t->modifier = MOD_FLOAT;
                 else if (sv_eq(mod, (StrView){"number",      6 })) t->modifier = MOD_NUMBER;
                 else if (sv_eq(mod, (StrView){"upper",       5 })) t->modifier = MOD_UPPER;
@@ -655,6 +661,13 @@ static void parse_pattern_ex(const char *pat, Pattern *p, const Symbols *sym)
                         }
                         i = next;
                     }
+                }
+                else {
+                    /* unrecognized modifier: treat as custom */
+                    t->modifier = MOD_CUSTOM;
+                    t->custom_mod_name = (char *)malloc(mod.len + 1);
+                    memcpy(t->custom_mod_name, mod.ptr, mod.len);
+                    t->custom_mod_name[mod.len] = '\0';
                 }
             }
 
@@ -857,6 +870,60 @@ static int match_pattern(Papagaio *ctx, const char *src, int src_len,
                 }
                 ensure_cap(m);
                 m->cap[m->count++] = (Capture){ t->var, { src+s, (size_t)(pos-s) }, NULL };
+                continue;
+            }
+            if (t->modifier == MOD_CUSTOM) {
+                int s = pos;
+                if (nx && (nx->type == TOK_LITERAL || nx->type == TOK_BLOCK)) {
+                    while (src[pos]) {
+                        if (src[pos] == '\n') break;
+                        if (nx->type == TOK_LITERAL && sv_pfx(src+pos, nx->value)) break;
+                        if (nx->type == TOK_BLOCK && sv_pfx(src+pos, nx->open)) break;
+                        pos++;
+                    }
+                } else {
+                    while (src[pos]) {
+                        if (nx && isspace((unsigned char)src[pos])) break;
+                        if (nx) {
+                            if (nx->type == TOK_LITERAL && sv_pfx(src+pos, nx->value)) break;
+                            if (nx->type == TOK_BLOCK && sv_pfx(src+pos, nx->open)) break;
+                        } else if (src[pos] == '\n') break;
+                        pos++;
+                    }
+                }
+                int end = pos;
+                while (end > s && isspace((unsigned char)src[end-1])) end--;
+                size_t clen = (size_t)(end - s);
+                if (clen == 0) {
+                    if (!t->optional) goto fail;
+                    ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL };
+                    pos = s; continue;
+                }
+                RegisteredModifier *rm = NULL;
+                if (ctx && t->custom_mod_name) {
+                    for (int mi = 0; mi < ctx->mod_count; mi++) {
+                        if (strcmp(ctx->modifiers[mi].name, t->custom_mod_name) == 0) {
+                            rm = &ctx->modifiers[mi];
+                            break;
+                        }
+                    }
+                }
+                if (!rm) {
+                    if (!t->optional) goto fail;
+                    ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL };
+                    pos = s; continue;
+                }
+                char *res = rm->handler(src + s, rm->name, clen, strlen(rm->name), rm->userdata);
+                if (!res || !res[0]) {
+                    free(res);
+                    if (!t->optional) goto fail;
+                    ensure_cap(m); m->cap[m->count++] = (Capture){ t->var, { "", 0 }, NULL };
+                    pos = s; continue;
+                }
+                ensure_cap(m);
+                m->cap[m->count++] = (Capture){ t->var, { res, strlen(res) }, res };
+                pos = end;
+                if (t->ws_consume) { while (src[pos] == ' ' || src[pos] == '\t' || src[pos] == '\n' || src[pos] == '\r') pos++; }
                 continue;
             }
             if (t->modifier == MOD_STARTS || t->modifier == MOD_PREFIX) {
@@ -1816,6 +1883,27 @@ void papagaio_clear_math(Papagaio *ctx) {
     ctx->math_count = 0;
 }
 
+int papagaio_has_modifier(Papagaio *ctx, const char *name)
+{
+    if (!ctx || !name) return 0;
+    for (int i = 0; i < ctx->mod_count; i++) {
+        if (strcmp(ctx->modifiers[i].name, name) == 0) return 1;
+    }
+    return 0;
+}
+
+void papagaio_clear_modifiers(Papagaio *ctx)
+{
+    if (!ctx) return;
+    for (int i = 0; i < ctx->mod_count; i++) {
+        if (ctx->modifiers[i].name) {
+            free(ctx->modifiers[i].name);
+            ctx->modifiers[i].name = NULL;
+        }
+    }
+    ctx->mod_count = 0;
+}
+
 int papagaio_register_math_infix(Papagaio *ctx, const char *name, void *func, int precedence, int is_closure, ...) {
     void *userdata = NULL;
     if (is_closure) { va_list args; va_start(args, is_closure); userdata = va_arg(args, void*); va_end(args); }
@@ -1939,6 +2027,18 @@ int papagaio_register_command(Papagaio *ctx, const char *name, PapCommandHandler
 }
 
 
+
+void papagaio_clear_commands(Papagaio *ctx)
+{
+    if (!ctx) return;
+    for (int i = 0; i < ctx->cmd_count; i++) {
+        if (ctx->commands[i].name) {
+            free(ctx->commands[i].name);
+            ctx->commands[i].name = NULL;
+        }
+    }
+    ctx->cmd_count = 0;
+}
 
 int papagaio_register_modifier(Papagaio *ctx, const char *name, PapModifierHandler handler, void *ud)
 {

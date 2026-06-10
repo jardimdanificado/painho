@@ -45,9 +45,11 @@ char *res = papagaio_process("Hello $USER!", "$USER", "Alice", NULL);
 char *res2 = papagaio_process_ex("Hello ?USER!", "?", "[", "]", "?USER", "Bob", NULL);
 ```
 
-### Extending Papagaio (Commands & Modifiers)
+### Extending Papagaio (Commands, Modifiers & Plugins)
 
 You can register custom text-processing commands (e.g. `$mycmd{...}`) and modifiers (e.g. `$VAR$mymod{...}`).
+
+#### Commands
 
 ```c
 // Command Handler Signature
@@ -58,6 +60,53 @@ char *my_command(Papagaio *ctx, const char *name, int argc, const char **argv, c
 
 // Registering the command
 papagaio_register_command(ctx, "mycmd", my_command, NULL);
+```
+
+#### Modifiers
+
+```c
+// Modifier Handler Signature
+// Return a heap-allocated string on success, NULL to reject the match.
+char *my_modifier(const char *match, const char *modifier,
+                   size_t match_len, size_t mod_len, void *userdata);
+
+// Registering the modifier — usable in patterns as $var$mymod
+papagaio_register_modifier(ctx, "mymod", my_modifier, NULL);
+
+// Query and cleanup
+papagaio_has_modifier(ctx, "mymod");   // → 1 (true)
+papagaio_clear_modifiers(ctx);         // Remove all modifiers
+```
+
+#### Plugins
+
+Papagaio supports loading native shared libraries at runtime via the `$import{path}` directive (**CLI-only**). The library must export:
+
+```c
+int papagaio_plugin_init(Papagaio *ctx);
+```
+
+Inside `init`, the plugin can register commands, modifiers, and finalizers:
+
+```c
+int papagaio_plugin_init(Papagaio *ctx) {
+    papagaio_register_command(ctx, "mycmd", my_command, NULL);
+    papagaio_register_modifier(ctx, "mymod", my_modifier, NULL);
+    papagaio_add_finalizer(ctx, my_cleanup, NULL);
+    return 0;
+}
+```
+
+Build with:
+```sh
+cc -shared -fPIC -I/path/to/papagaio/src -o my_plugin.so my_plugin.c
+```
+
+Use in a template:
+```text
+$import{./my_plugin.so}
+$pattern {$v$mymod} {[$v]}
+Hello
 ```
 
 ### Extending Louro (Mathematical and Logical Operations)
