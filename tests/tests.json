@@ -1151,6 +1151,18 @@
       "code": "$pattern{DEF($n, $v)}{let $n = $v;} $pattern{VARS}{$once{DEF(x, 10) DEF(y, 20)}} VARS",
       "expected": "DEF(x, 10) DEF(y, 20)",
       "id": 193
+    },
+    {
+      "id": 194,
+      "name": "Execution Control: $never escapes evaluation completely",
+      "code": "$pattern{MACRO}{10} MACRO $never{ $pattern{OTHER}{20} $math{2+3} MACRO }",
+      "expected": "10  $pattern{OTHER}{20} $math{2+3} MACRO "
+    },
+    {
+      "id": 195,
+      "name": "Code Generation: $normalize evaluating generated Papagaio code",
+      "code": "$pattern{GENERATE_CODE}{$pattern{MACRO}{10} MACRO} $normalize{GENERATE_CODE}",
+      "expected": "10"
     }
   ]
 }

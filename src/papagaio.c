@@ -3129,37 +3129,48 @@ static char *handle_priorities(Papagaio *ctx, const char *src, size_t len, const
     int found_any = 0;
 
     while (i < len) {
-        if (i + sl + 8 + sl < len && 
-            memcmp(src + i, sym->sigil, sl) == 0 &&
-            memcmp(src + i + sl, "priority", 8) == 0 &&
-            memcmp(src + i + sl + 8, sym->sigil, sl) == 0) {
-            
+        int is_prio = (i + sl + 8 + sl < len && 
+                       memcmp(src + i, sym->sigil, sl) == 0 &&
+                       memcmp(src + i + sl, "priority", 8) == 0 &&
+                       memcmp(src + i + sl + 8, sym->sigil, sl) == 0);
+        int is_never = (i + sl + 5 < len && 
+                        memcmp(src + i, sym->sigil, sl) == 0 &&
+                        memcmp(src + i + sl, "never", 5) == 0);
+
+        if (is_prio || is_never) {
             size_t ps = i;
-            size_t j = i + sl + 8 + sl;
+            size_t j = i + sl + (is_prio ? 8 + sl : 5);
             int prio = 0;
-            int has_prio_val = 0;
-            if (j + 3 <= len && memcmp(src + j, "max", 3) == 0) {
-                prio = INT_MIN + 1;
-                j += 3;
-                has_prio_val = 1;
-            } else if (j + 3 <= len && memcmp(src + j, "min", 3) == 0) {
-                prio = INT_MAX - 1;
-                j += 3;
-                has_prio_val = 1;
+            int valid_syntax = 0;
+            
+            if (is_prio) {
+                if (j + 3 <= len && memcmp(src + j, "max", 3) == 0) {
+                    prio = INT_MIN + 1;
+                    j += 3;
+                    valid_syntax = 1;
+                } else if (j + 3 <= len && memcmp(src + j, "min", 3) == 0) {
+                    prio = INT_MAX - 1;
+                    j += 3;
+                    valid_syntax = 1;
+                } else {
+                    int sign = 1;
+                    if (j < len && src[j] == '-') {
+                        sign = -1;
+                        j++;
+                    }
+                    while (j < len && isdigit((unsigned char)src[j])) {
+                        prio = prio * 10 + (src[j] - '0');
+                        j++;
+                        valid_syntax = 1;
+                    }
+                    prio *= sign;
+                }
             } else {
-                int sign = 1;
-                if (j < len && src[j] == '-') {
-                    sign = -1;
-                    j++;
-                }
-                while (j < len && isdigit((unsigned char)src[j])) {
-                    prio = prio * 10 + (src[j] - '0');
-                    j++;
-                    has_prio_val = 1;
-                }
-                prio *= sign;
+                valid_syntax = 1; // never doesn't require arguments
+                prio = INT_MAX - 1; // normal priority
             }
-            if (has_prio_val) {
+
+            if (valid_syntax) {
                 while (j < len && isspace((unsigned char)src[j])) j++;
                 if (j < len && str_pfx(src + j, sym->open)) {
                     found_any = 1;
@@ -3196,7 +3207,7 @@ static char *handle_priorities(Papagaio *ctx, const char *src, size_t len, const
                     memcpy(chunks[chunk_count].content, v.ptr, v.len);
                     chunks[chunk_count].content[v.len] = '\0';
                     chunks[chunk_count].result = NULL;
-                    chunks[chunk_count].is_priority_block = 1;
+                    chunks[chunk_count].is_priority_block = is_prio ? 1 : 2;
                     chunks[chunk_count].original_index = chunk_count;
                     chunk_count++;
                     
@@ -3236,9 +3247,11 @@ static char *handle_priorities(Papagaio *ctx, const char *src, size_t len, const
     /* Process in priority order */
     ctx->disable_sandbox++;
     for (int j = 0; j < chunk_count; j++) {
-        if (chunks[j].is_priority_block) {
+        if (chunks[j].is_priority_block == 1) { // priority
             chunks[j].result = papagaio_process_text(ctx, chunks[j].content, strlen(chunks[j].content));
-        } else {
+        } else if (chunks[j].is_priority_block == 2) { // never
+            chunks[j].result = strdup(chunks[j].content ? chunks[j].content : "");
+        } else { // normal text
             const char *chunk_text = src + chunks[j].start;
             size_t chunk_len = chunks[j].end - chunks[j].start;
             chunks[j].result = papagaio_process_text(ctx, chunk_text, chunk_len);

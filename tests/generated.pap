@@ -1,0 +1,2 @@
+$pattern{HTML_ELEMENT}{<div>Hello World</div>}
+  HTML_ELEMENT

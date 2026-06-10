@@ -346,6 +346,53 @@ $L$list{,}$slice{1}{4}    → b,c,d
 
 ---
 
+---
+
+## Mathematical and Logical Evaluation (`$math`)
+
+Papagaio integrates the powerful **Louro Engine** for deterministic, AOT-capable mathematical and logical evaluation. 
+
+### Syntax
+```
+$math{ expression }
+```
+
+### Features
+- **Arithmetic Operators:** `+`, `-`, `*`, `/`, `%` (modulo), `^` (exponentiation)
+- **Logical Operators:** `&&` (AND), `||` (OR), `!` (NOT)
+- **Comparisons:** `==`, `!=`, `<`, `<=`, `>`, `>=`
+- **Conditionals:** `if X then Y else Z end` (lazy evaluation)
+- **Variables:** Variables can be injected into math blocks by name or via `$pattern` substitution.
+- **Functions:** Includes a full standard math library (`sqrt`, `sin`, `cos`, `tan`, `log`, `exp`, `ceil`, `floor`, `abs`, `pi`, etc.)
+
+### Examples
+```text
+$math{ 2 + 3 * 4 }             → 14
+$math{ if 10 > 5 then 1 else 0 end } → 1
+$math{ sqrt(16) * pi() }       → 12.56637...
+```
+
+---
+
+## Execution Control (`$once`, `$normalize`, `$never`)
+
+Papagaio operates as a one-pass text evaluator by default to ensure deterministic transpilation and avoid infinite recursion. To control the depth of evaluation dynamically, Papagaio provides explicit execution barriers.
+
+### `$once{...}`
+Forces the content inside to be fully evaluated **exactly one time** in an isolated sub-context before being returned to the parent string. The resulting output is "blinded" to the parent scope and will not trigger any further pattern replacements.
+
+### `$normalize{...}`
+Recursively evaluates the content **until it stops changing** (up to a safe internal limit). The final output is then returned to the parent scope, where it may trigger further pattern matching. This is ideal for deep transpilation and expanding generated code.
+
+### `$never{...}`
+Completely escapes evaluation. The contents are extracted early and bypassed during all engine passes, ensuring that no patterns, math blocks, or variables inside the block are touched. The raw text is safely emitted exactly as it was written.
+
+### Examples
+```text
+$once{ $pattern{A}{10} A }        → 10 (A remains unbound in outer scope)
+$never{ $math{2+3} }              → $math{2+3}
+```
+
 ## Flow Control Operators
 
 Papagaio provides operators for conditional logic and value chaining. These are treated as **suffix modifiers** that can be appended to any variable, list operation, or expression.
