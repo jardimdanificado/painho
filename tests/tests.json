@@ -1025,6 +1025,132 @@
       "name": "Lazy evaluation within custom delimiters",
       "code": "$changesymbols{$}{[}{]}{?}$pattern[$a + $b][$once[$math{$a + $b}]] 10 + 20",
       "expected": "30"
+    },
+    {
+      "name": "Math: Logical AND",
+      "code": "$math{1 && 1} | $math{1 && 0}",
+      "expected": "1 | 0",
+      "id": 173
+    },
+    {
+      "name": "Math: Conditional Expressions (Quaternary)",
+      "code": "$math{if 10 > 5 then 100 else 200 end} | $math{if 2 > 5 then 100 else 200 end}",
+      "expected": "100 | 200",
+      "id": 174
+    },
+    {
+      "name": "Math: Advanced Built-in Functions",
+      "code": "$math{2^3} | $math{sqrt(16)} | $math{abs(-10)}",
+      "expected": "8 | 4 | 10",
+      "id": 175
+    },
+    {
+      "name": "Math: Sequencing and Conditionals",
+      "code": "$math{10; 20} | $math{if 20 > 10 then 20 else 10 end}",
+      "expected": "20 | 20",
+      "id": 176
+    },
+    {
+      "name": "Math: Trigonometry Basic",
+      "code": "$math{sin(0)} | $math{cos(0)}",
+      "expected": "0 | 1",
+      "id": 177
+    },
+    {
+      "name": "Math: Modulo Operator",
+      "code": "$math{10 % 3} | $math{20 % 7}",
+      "expected": "1 | 6",
+      "id": 178
+    },
+    {
+      "name": "Math: Logical Conditionals (Ternary equivalent)",
+      "code": "$math{(1 > 0) * 10 + (1 <= 0) * 20} | $math{(0 > 0) * 10 + (0 <= 0) * 20}",
+      "expected": "10 | 20",
+      "id": 179
+    },
+    {
+      "name": "Math: Complex Nested Equations",
+      "code": "$math{sqrt(3^2 + 4^2)}",
+      "expected": "5",
+      "id": 180
+    },
+    {
+      "name": "Math: Floating point precision and variables",
+      "code": "$x$from{2.5} $y$from{3.5} $math{$x * $y}",
+      "expected": "8.75",
+      "id": 181
+    },
+    {
+      "name": "Math: Multiple function arguments with spacing",
+      "code": "$math{atan2( 15 , 15 )} | $math{atan2( 0 , -1 )}",
+      "expected": "0.785398 | 3.14159",
+      "id": 182
+    },
+    {
+      "name": "Default: Pattern Cascading (Sequential application)",
+      "code": "$pattern{A}{B} $pattern{B}{C} A",
+      "expected": "C",
+      "id": 183
+    },
+    {
+      "name": "Default: Pattern Generates Command (Dead String)",
+      "code": "$pattern{MACRO}{$math{2+3}} MACRO",
+      "expected": "$math{2+3}",
+      "id": 184
+    },
+    {
+      "name": "$once: Pattern Generates Command",
+      "code": "$pattern{MACRO}{$once{$math{2+3}}} MACRO",
+      "expected": "5",
+      "id": 185
+    },
+    {
+      "name": "$once: Evaluation of variables inside generated string",
+      "code": "$X$from{10} $pattern{MACRO}{$once{$X}} MACRO",
+      "expected": "10",
+      "id": 186
+    },
+    {
+      "name": "$once: Dynamic variable assignment order",
+      "code": "$pattern{MACRO}{$once{$X_dyn}} $X_dyn$from{20} MACRO",
+      "expected": "20",
+      "id": 187
+    },
+    {
+      "name": "$once: Nested once top-down passing",
+      "code": "$once{$once{$math{10+10}}}",
+      "expected": "20",
+      "id": 188
+    },
+    {
+      "name": "$once: Substitution inside $once before execution",
+      "code": "$pattern{MACRO}{10} $once{$sigil$math{MACRO + 5}}",
+      "expected": "15",
+      "id": 189
+    },
+    {
+      "name": "$once vs $normalize: Recursive Pattern Evaluation",
+      "code": "$pattern{X}{Y} $pattern{Y}{Z} $pattern{START_ONCE}{$once{X}} $pattern{START_NORM}{$normalize{X}} START_ONCE START_NORM",
+      "expected": "X Z",
+      "id": 190
+    },
+    {
+      "name": "$normalize: Basic command evaluation",
+      "code": "$normalize{$math{5+5}}",
+      "expected": "10",
+      "id": 191
+    },
+    {
+      "name": "Complex DSL Transpilation Test: $normalize with deep nesting",
+      "code": "$pattern{DEF($n, $v)}{let $n = $v;} $pattern{VARS}{$normalize{DEF(x, 10) DEF(y, 20)}} VARS",
+      "expected": "let x = 10; let y = 20;",
+      "id": 192
+    },
+    {
+      "name": "Complex DSL Transpilation Test: $once with deep nesting",
+      "code": "$pattern{DEF($n, $v)}{let $n = $v;} $pattern{VARS}{$once{DEF(x, 10) DEF(y, 20)}} VARS",
+      "expected": "DEF(x, 10) DEF(y, 20)",
+      "id": 193
     }
   ]
 }
