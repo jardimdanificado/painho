@@ -142,6 +142,7 @@ struct Papagaio {
     int          depth;
     int          disable_sandbox;
     int          disable_patterns;
+    int          normalize_mode;
 
     /* original document for $document$original */
     char        *original_doc;
@@ -1956,6 +1957,7 @@ Papagaio *papagaio_open(void)
     ctx->depth = 0;
     ctx->disable_sandbox = 0;
     ctx->disable_patterns = 0;
+    ctx->normalize_mode = 0;
     ctx->original_doc = NULL; ctx->original_len = 0;
 
     papagaio_register_command(ctx, "file", file_handler, NULL);
@@ -2990,6 +2992,47 @@ static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sy
                     i = j; continue;
                 }
                 
+                /* $once{...} logic */
+                if (klen == 4 && memcmp(src + ks, "once", 4) == 0) {
+                    size_t sj = j;
+                    while(j < len && isspace((unsigned char)src[j])) j++;
+                    if (j < len && sv_pfx(src + j, so)) {
+                        StrView blk; j = (size_t)extract_block(src, (int)j, so, sc, &blk);
+                        char *arg = (char*)malloc(blk.len + 1);
+                        if (arg) {
+                            memcpy(arg, blk.ptr, blk.len); arg[blk.len] = '\0';
+                            ctx->disable_patterns++;
+                            char *res = papagaio_process_text(ctx, arg, blk.len);
+                            ctx->disable_patterns--;
+                            if (res) { sb_append_n(&out, res, strlen(res)); free(res); }
+                            free(arg);
+                        }
+                        i = j; continue;
+                    }
+                    j = sj;
+                }
+
+                /* $normalize logic */
+                if (klen == 9 && memcmp(src + ks, "normalize", 9) == 0) {
+                    size_t sj = j;
+                    while(j < len && isspace((unsigned char)src[j])) j++;
+                    if (j < len && sv_pfx(src + j, so)) {
+                        StrView blk; j = (size_t)extract_block(src, (int)j, so, sc, &blk);
+                        char *arg = (char*)malloc(blk.len + 1);
+                        if (arg) {
+                            memcpy(arg, blk.ptr, blk.len); arg[blk.len] = '\0';
+                            int old_norm = ctx->normalize_mode;
+                            ctx->normalize_mode = 1;
+                            char *res = papagaio_process_text(ctx, arg, blk.len);
+                            ctx->normalize_mode = old_norm;
+                            if (res) { sb_append_n(&out, res, strlen(res)); free(res); }
+                            free(arg);
+                        }
+                        i = j; continue;
+                    }
+                    j = sj;
+                }
+
                 /* $document logic */
                 if (klen == 8 && memcmp(src + ks, "document", 8) == 0) {
                     if (j < len && src[j] == '$') {
@@ -3325,9 +3368,14 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
                     if (is_aliases_rule) {
                         sb_append_n(&out, r, strlen(r));
                     } else {
-                        ctx->disable_patterns++;
-                        char *evaluated_r = papagaio_process_text(ctx, r, strlen(r));
-                        ctx->disable_patterns--;
+                        char *evaluated_r;
+                        if (ctx->normalize_mode) {
+                            ctx->disable_patterns++;
+                            evaluated_r = papagaio_process_text(ctx, r, strlen(r));
+                            ctx->disable_patterns--;
+                        } else {
+                            evaluated_r = strdup(r);
+                        }
                         sb_append_n(&out, evaluated_r, strlen(evaluated_r));
                         free(evaluated_r);
                     }
