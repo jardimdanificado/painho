@@ -18,6 +18,8 @@ test_plugins:
 	$(MAKE) -C modifiers
 	@echo "--- Building tcc plugin ---"
 	$(MAKE) -C tcc
+	@echo "--- Building wasm plugin ---"
+	$(MAKE) -C wasm
 
 test_louco:
 	@echo "--- Building and testing louco ---"
@@ -28,3 +30,4 @@ clean:
 	$(MAKE) -C modifiers clean
 	$(MAKE) -C tcc clean
 	$(MAKE) -C louco clean
+	$(MAKE) -C wasm clean

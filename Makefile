@@ -86,8 +86,8 @@ static: $(TARGET_A)
 
 test: test_c test_node
 
-test_c: $(TARGET_A)
-	$(CC) $(CFLAGS) -o tests/test_bin tests/test.c $(TARGET_A) $(LDFLAGS)
+test_c: $(TARGET_A) libpapagaio_dl.a
+	$(CC) $(CFLAGS) -UPAPAGAIO_NO_DL -o tests/test_bin tests/test.c libpapagaio_dl.a $(LDFLAGS)
 	@echo "=== Starting Papagaio C Tests ==="
 	./tests/test_bin
 
@@ -99,8 +99,8 @@ test_node: wasm
 		echo "Node.js not found, skipping Node tests."; \
 	fi
 
-test_valgrind: $(TARGET_A)
-	$(CC) $(CFLAGS) -o tests/test_bin tests/test.c $(TARGET_A) $(LDFLAGS)
+test_valgrind: $(TARGET_A) libpapagaio_dl.a
+	$(CC) $(CFLAGS) -UPAPAGAIO_NO_DL -o tests/test_bin tests/test.c libpapagaio_dl.a $(LDFLAGS)
 	@echo "=== Running Papagaio C Tests with Valgrind ==="
 	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 ./tests/test_bin
 	$(CC) $(CFLAGS) -o tests/test_priority_bin tests/test_priority.c $(TARGET_A) $(LDFLAGS)

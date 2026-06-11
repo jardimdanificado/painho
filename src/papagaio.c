@@ -3231,8 +3231,11 @@ static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sy
                                         }
                                         ctx->dl_handles[ctx->dl_count++] = handle;
                                     } else {
+                                        fprintf(stderr, "[ERROR] dlsym failed for '%s': %s\n", libname, dlerror());
                                         dlclose(handle);
                                     }
+                                } else {
+                                    fprintf(stderr, "[ERROR] dlopen failed for '%s': %s\n", libname, dlerror());
                                 }
 #endif
                                 free(libname);
