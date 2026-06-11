@@ -486,7 +486,7 @@ static inline LouroExpression *base(state *s) {
             ret->function = s->function;
             if (IS_CLOSURE(s->type)) ret->parameters[arity] = s->context;
             
-            s->expecting_operator = 0; // The next token must be '(' (not an operator, structural, fetched in primary mode)
+            s->expecting_operator = 0;
             next_token(s);
 
             if (s->type != TOK_OPEN) {
@@ -530,7 +530,7 @@ static inline LouroExpression *base(state *s) {
             ret = new_expr(0, 0);
             if(!ret) { s->type = TOK_ERROR;  { printf("NULL at %d\n", __LINE__); return NULL; }; }
             s->type = TOK_ERROR;
-            ret->value = NAN; // using NAN requires math.h but louro evaluate returns NAN anyway. We'll use 0.0/0.0 if NAN isn't available? Wait, louro.h doesn't include math.h at the top, but it uses fmod etc. It's fine.
+            ret->value = NAN;
             break;
     }
 

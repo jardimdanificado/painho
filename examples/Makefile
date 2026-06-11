@@ -16,6 +16,8 @@ test_scripts:
 test_plugins:
 	@echo "--- Building modifiers plugins ---"
 	$(MAKE) -C modifiers
+	@echo "--- Building math plugin ---"
+	$(MAKE) -C math
 	@echo "--- Building tcc plugin ---"
 	$(MAKE) -C tcc
 	@echo "--- Building wasm plugin ---"
@@ -28,6 +30,7 @@ test_louco:
 
 clean:
 	$(MAKE) -C modifiers clean
+	$(MAKE) -C math clean
 	$(MAKE) -C tcc clean
 	$(MAKE) -C louco clean
 	$(MAKE) -C wasm clean
