@@ -39,7 +39,7 @@ void       papagaio_get_args(Papagaio *ctx, int *argc, char ***argv);
 void       papagaio_set_cli_mode(Papagaio *ctx, int enabled);
 
 /* Extensibility Definitions */
-typedef char *(*PapCommandHandler)(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *userdata);
+typedef char *(*PapCommandHandler)(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, const char *piped_val, void *userdata);
 typedef char *(*PapModifierHandler)(const char *match, const char *modifier, size_t match_len, size_t mod_len, void *userdata);
 typedef void (*PapFinalizer)(void *userdata);
 typedef int (*PapagaioPluginInit)(Papagaio *ctx);

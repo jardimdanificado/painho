@@ -70,14 +70,14 @@ int main(void)
         printf("Test 22 [Wasm] - SKIPPED (clang wasm32 backend not available)\n");
     }
 
-    /* Test $file command */
-    printf("\n=== Testing $file command ===\n");
+    /* Test $include command */
+    printf("\n=== Testing $include command ===\n");
     system("echo 'FILE_CONTENT' > tests/test_file.txt");
-    const char *in28 = "$file{tests/test_file.txt}";
+    const char *in28 = "$include{tests/test_file.txt}";
     o = papagaio_process_text(ctx, in28, strlen(in28));
     /* Trim newline if any from echo */
     if (o && strlen(o) > 0 && o[strlen(o)-1] == '\n') o[strlen(o)-1] = '\0';
-    printf("Test 28 [$file] - %s (esperado: FILE_CONTENT)\n", o);
+    printf("Test 28 [$include] - %s (esperado: FILE_CONTENT)\n", o);
     free(o);
     system("rm -f tests/test_file.txt");
 

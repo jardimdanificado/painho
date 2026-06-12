@@ -184,7 +184,7 @@ int papagaio_register_math_quaternary(Papagaio *ctx, const char *name, const cha
     return 0;
 }
 
-static char *math_cmd_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *userdata) {
+static char *math_cmd_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, const char *piped_val, void *userdata) {
     if (argc != 1) return NULL;
     MathState *state = (MathState*)userdata;
     

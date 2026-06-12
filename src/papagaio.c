@@ -109,7 +109,7 @@ typedef struct {
 } RegisteredModifier;
 
 /* Forward declarations */
-static char *include_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud);
+static char *include_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, const char *piped_val, void *ud);
 
 typedef struct Scope {
     PatternPair *rules;
@@ -1897,6 +1897,127 @@ void papagaio_add_finalizer(Papagaio *ctx, PapFinalizer fn, void *userdata) {
  * Public C API
  * ====================================================================== */
 
+/* --- Standard Language Commands --- */
+
+static char *cmd_replace(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, const char *piped_val, void *ud) {
+    (void)name; (void)ud;
+    if (!piped_val || argc < 2) return strdup(piped_val ? piped_val : "");
+    char *pat_str = papagaio_process_text(ctx, argv[0], argl[0]);
+    char *rep_str = papagaio_process_text(ctx, argv[1], argl[1]);
+    Symbols sym = make_symbols("$", "{", "}");
+    Pattern p; memset(&p, 0, sizeof(p)); parse_pattern_ex(pat_str, &p, &sym);
+    Match m; memset(&m, 0, sizeof(m)); m.ctx = ctx;
+    char *result = strdup(piped_val);
+    for (int s = 0; result[s]; s++) {
+        if (match_pattern(ctx, result, (int)strlen(result), &p, s, &m)) {
+            char *r = apply_replacement_ex(rep_str, &m, &sym);
+            size_t rl = strlen(r), cl = strlen(result);
+            size_t new_len = (size_t)m.start + rl + (cl - (size_t)m.end);
+            char *new_val = (char *)malloc(new_len + 1);
+            memcpy(new_val, result, (size_t)m.start);
+            memcpy(new_val + m.start, r, rl);
+            strcpy(new_val + m.start + rl, result + m.end);
+            free(result); result = new_val;
+            free(r); free_match(&m);
+            break;
+        }
+    }
+    free_pattern(&p); free(pat_str); free(rep_str);
+    return result;
+}
+
+static char *cmd_slice(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, const char *piped_val, void *ud) {
+    (void)name; (void)ud;
+    if (!piped_val || argc < 1) return strdup(piped_val ? piped_val : "");
+    char *s1 = papagaio_process_text(ctx, argv[0], argl[0]);
+    int start = atoi(s1); free(s1);
+    int end = (int)strlen(piped_val);
+    if (argc >= 2) {
+        char *s2 = papagaio_process_text(ctx, argv[1], argl[1]);
+        end = atoi(s2); free(s2);
+    }
+    int len_cv = (int)strlen(piped_val);
+    if (start < 0) start = len_cv + start;
+    if (end < 0) end = len_cv + end;
+    if (start < 0) start = 0;
+    if (end > len_cv) end = len_cv;
+    if (start < end) {
+        char *slice_res = (char*)malloc((size_t)(end - start + 1));
+        memcpy(slice_res, piped_val + start, (size_t)(end - start));
+        slice_res[end - start] = '\0';
+        return slice_res;
+    }
+    return strdup("");
+}
+
+static char *cmd_find(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, const char *piped_val, void *ud) {
+    (void)name; (void)ud;
+    if (!piped_val || argc < 1) return strdup("");
+    char *pat_str = papagaio_process_text(ctx, argv[0], argl[0]);
+    Symbols sym = make_symbols("$", "{", "}");
+    Pattern p; memset(&p, 0, sizeof(p)); parse_pattern_ex(pat_str, &p, &sym);
+    Match m; memset(&m, 0, sizeof(m)); m.ctx = ctx;
+    char *match_res = strdup("");
+    for (int s = 0; piped_val[s]; s++) {
+        if (match_pattern(ctx, piped_val, (int)strlen(piped_val), &p, s, &m)) {
+            free(match_res);
+            match_res = (char*)malloc((size_t)(m.end - m.start + 1));
+            memcpy(match_res, piped_val + m.start, (size_t)(m.end - m.start));
+            match_res[m.end - m.start] = '\0';
+            free_match(&m);
+            break;
+        }
+    }
+    free_pattern(&p); free(pat_str);
+    return match_res;
+}
+
+static char *cmd_contains(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, const char *piped_val, void *ud) {
+    (void)name; (void)ud;
+    if (!piped_val || argc < 1) return strdup("");
+    char *pat_str = papagaio_process_text(ctx, argv[0], argl[0]);
+    Symbols sym = make_symbols("$", "{", "}");
+    Pattern p; memset(&p, 0, sizeof(p)); parse_pattern_ex(pat_str, &p, &sym);
+    Match m; memset(&m, 0, sizeof(m)); m.ctx = ctx;
+    char *idx_res = strdup("");
+    for (int s = 0; piped_val[s]; s++) {
+        if (match_pattern(ctx, piped_val, (int)strlen(piped_val), &p, s, &m)) {
+            free(idx_res);
+            char nbuf[32]; snprintf(nbuf, sizeof(nbuf), "%d", m.start);
+            idx_res = strdup(nbuf);
+            free_match(&m);
+            break;
+        }
+    }
+    free_pattern(&p); free(pat_str);
+    return idx_res;
+}
+
+static char *cmd_byte(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, const char *piped_val, void *ud) {
+    (void)name; (void)ud;
+    if (argc < 1) return strdup(piped_val ? piped_val : "");
+    char *code_str = papagaio_process_text(ctx, argv[0], argl[0]);
+    int code = atoi(code_str); free(code_str);
+    
+    size_t cl = piped_val ? strlen(piped_val) : 0;
+    char *nv = (char *)malloc(cl + 2);
+    if (nv) {
+        if (piped_val && cl > 0) memcpy(nv, piped_val, cl);
+        nv[cl] = (char)code;
+        nv[cl + 1] = '\0';
+        return nv;
+    }
+    return strdup(piped_val ? piped_val : "");
+}
+
+static void papagaio_register_std_commands(Papagaio *ctx) {
+    papagaio_register_command(ctx, "replace", cmd_replace, NULL);
+    papagaio_register_command(ctx, "slice", cmd_slice, NULL);
+    papagaio_register_command(ctx, "find", cmd_find, NULL);
+    papagaio_register_command(ctx, "contains", cmd_contains, NULL);
+    papagaio_register_command(ctx, "byte", cmd_byte, NULL);
+}
+
 Papagaio *papagaio_open(void)
 {
     Papagaio *ctx = (Papagaio *)malloc(sizeof(Papagaio));
@@ -1921,6 +2042,7 @@ Papagaio *papagaio_open(void)
     ctx->dl_handles = NULL; ctx->dl_count = 0; ctx->dl_cap = 0;
 
     papagaio_register_command(ctx, "include", include_handler, NULL);
+    papagaio_register_std_commands(ctx);
     return ctx;
 }
 
@@ -2052,8 +2174,8 @@ char *papagaio_process_pairs(Papagaio *ctx, const char *input,
     sb_free(&out); return result;
 }
 
-static char *include_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud) {
-    (void)ctx; (void)name; (void)ud; (void)argl;
+static char *include_handler(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, const char *piped_val, void *ud) {
+    (void)ctx; (void)name; (void)ud; (void)argl; (void)piped_val;
     if (argc < 1) return strdup("");
     
     char trim_path[256]; size_t pl = strlen(argv[0]);
@@ -2473,15 +2595,16 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                     int cur_is_repeat   = (klen == 6 && memcmp(src + ks, "repeat",   6) == 0);
                     int cur_is_while    = (klen == 5 && memcmp(src + ks, "while",    5) == 0);
                     int cur_is_until    = (klen == 5 && memcmp(src + ks, "until",    5) == 0);
-                    int cur_is_byte     = (klen == 4 && memcmp(src + ks, "byte",     4) == 0);
-                    int cur_is_find     = (klen == 4 && memcmp(src + ks, "find",     4) == 0);
-                    int cur_is_contains = (klen == 8 && memcmp(src + ks, "contains", 8) == 0);
-                    int cur_is_replace  = (klen == 7 && memcmp(src + ks, "replace",  7) == 0);
-                    int cur_is_slice    = (klen == 5 && memcmp(src + ks, "slice",    5) == 0);
                     int cur_is_flow     = cur_is_then || cur_is_else || cur_is_compare ||
-                                          cur_is_repeat || cur_is_while || cur_is_until || 
-                                          cur_is_byte || cur_is_find || cur_is_contains || 
-                                          cur_is_replace || cur_is_slice;
+                                          cur_is_repeat || cur_is_while || cur_is_until;
+                    int cur_is_cmd      = -1;
+                    if (!cur_is_flow) {
+                        for (int ci = 0; ci < ctx->cmd_count; ci++) {
+                            if (strlen(ctx->commands[ci].name) == klen && memcmp(ctx->commands[ci].name, src + ks, klen) == 0) {
+                                cur_is_cmd = ci; break;
+                            }
+                        }
+                    }
 
                     /* Check if current NAME is followed by a flow op */
                     int next_is_flow = 0;
@@ -2496,14 +2619,14 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                             (nfl == 4 && memcmp(src + njs, "else",     4) == 0) ||
                             (nfl == 6 && memcmp(src + njs, "repeat",   6) == 0) ||
                             (nfl == 5 && memcmp(src + njs, "while",    5) == 0) ||
-                            (nfl == 5 && memcmp(src + njs, "until",    5) == 0) ||
-                            (nfl == 4 && memcmp(src + njs, "byte",     4) == 0)) {
+                            (nfl == 5 && memcmp(src + njs, "until",    5) == 0)) {
                             is_flow = 1;
-                        } else if ((nfl == 4 && memcmp(src + njs, "find",     4) == 0) ||
-                                   (nfl == 8 && memcmp(src + njs, "contains", 8) == 0) ||
-                                   (nfl == 7 && memcmp(src + njs, "replace",  7) == 0) ||
-                                   (nfl == 5 && memcmp(src + njs, "slice",    5) == 0)) {
-                            is_flow = 1; is_conflicting = 1;
+                        } else {
+                            for (int ci = 0; ci < ctx->cmd_count; ci++) {
+                                if (strlen(ctx->commands[ci].name) == nfl && memcmp(ctx->commands[ci].name, src + njs, nfl) == 0) {
+                                    is_flow = 1; break;
+                                }
+                            }
                         }
                         
                         if (is_flow) {
@@ -2516,7 +2639,7 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                         }
                     }
 
-                    if (cur_is_flow || next_is_flow) {
+                    if (cur_is_flow || cur_is_cmd >= 0 || next_is_flow) {
                         StrView so_f = { sym->open,  strlen(sym->open)  };
                         StrView sc_f = { sym->close, strlen(sym->close) };
 
@@ -2527,6 +2650,9 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                         if (cur_is_flow) {
                             cur_val = strdup("");
                             cp = i; /* Start from the current $ to pick up the first op */
+                        } else if (cur_is_cmd >= 0) {
+                            cur_val = strdup("");
+                            cp = i; /* Start from the $ to process the command */
                         } else {
                             cur_val = pap_var_lookup(ctx, sym, src + ks, klen);
                             if (!cur_val) cur_val = strdup("");
@@ -2546,14 +2672,17 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                             int is_repeat   = (opl == 6 && memcmp(src + ops, "repeat",   6) == 0);
                             int is_while    = (opl == 5 && memcmp(src + ops, "while",    5) == 0);
                             int is_until    = (opl == 5 && memcmp(src + ops, "until",    5) == 0);
-                            int is_byte     = (opl == 4 && memcmp(src + ops, "byte",     4) == 0);
-                            int is_find     = (opl == 4 && memcmp(src + ops, "find",     4) == 0);
-                            int is_contains = (opl == 8 && memcmp(src + ops, "contains", 8) == 0);
-                            int is_replace  = (opl == 7 && memcmp(src + ops, "replace",  7) == 0);
-                            int is_slice    = (opl == 5 && memcmp(src + ops, "slice",    5) == 0);
+                            int is_cmd_op = -1;
+                            if (!is_cmp && !is_then && !is_else && !is_repeat && !is_while && !is_until) {
+                                for (int ci = 0; ci < ctx->cmd_count; ci++) {
+                                    if (strlen(ctx->commands[ci].name) == opl && memcmp(ctx->commands[ci].name, src + ops, opl) == 0) {
+                                        is_cmd_op = ci; break;
+                                    }
+                                }
+                            }
                             
                             if (!is_cmp && !is_then && !is_else && !is_repeat && !is_while && 
-                                !is_until && !is_byte && !is_find && !is_contains && !is_replace && !is_slice) break;
+                                !is_until && is_cmd_op < 0) break;
 
                             /* Consume optional whitespace, then expect a block */
                             size_t j3 = j2;
@@ -2562,7 +2691,7 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
 
                             StrView blk;
                             j3 = (size_t)extract_block(src, (int)j3, so_f, sc_f, &blk);
-                            char *arg = (is_repeat || is_while || is_until || is_find || is_contains || is_replace || is_slice) ? NULL : pap_process_sv(ctx, blk);
+                            char *arg = (is_repeat || is_while || is_until || is_cmd_op >= 0) ? NULL : pap_process_sv(ctx, blk);
 
                             if (is_cmp) {
                                 if (strcmp(cur_val, arg) != 0) { free(cur_val); cur_val = strdup(""); }
@@ -2571,114 +2700,6 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                                 else { free(cur_val); cur_val = strdup(""); }
                             } else if (is_else) {
                                 if (cur_val[0] == '\0') { free(cur_val); cur_val = arg; arg = NULL; }
-                            } else if (is_byte) {
-                                int code = atoi(arg);
-                                size_t cl = strlen(cur_val);
-                                char *nv = (char*)realloc(cur_val, cl + 2);
-                                if (nv) { 
-                                    cur_val = nv; cur_val[cl] = (char)code; cur_val[cl+1] = '\0'; 
-                                    /* Persist back to variable if we have a name */
-                                    if (klen > 0) {
-                                        pap_var_update(ctx, sym, src + ks, klen, cur_val);
-                                    }
-                                }
-                            } else if (is_find) {
-                                char *pat_str = pap_process_sv(ctx, blk);
-                                Pattern p; memset(&p, 0, sizeof(p)); parse_pattern_ex(pat_str, &p, sym);
-                                Match m; memset(&m, 0, sizeof(m)); m.ctx = ctx;
-                                char *match_res = strdup("");
-                                for (int s = 0; cur_val[s]; s++) {
-                                    if (match_pattern(ctx, cur_val, (int)strlen(cur_val), &p, s, &m)) {
-                                        free(match_res);
-                                        match_res = (char*)malloc((size_t)(m.end - m.start + 1));
-                                        memcpy(match_res, cur_val + m.start, (size_t)(m.end - m.start));
-                                        match_res[m.end - m.start] = '\0';
-                                        free_match(&m);
-                                        break;
-                                    }
-                                }
-                                free(cur_val); cur_val = match_res;
-                                free_pattern(&p); free(pat_str);
-                            } else if (is_slice) {
-                                char *s1 = pap_process_sv(ctx, blk);
-                                int start = atoi(s1); free(s1);
-                                int end = (int)strlen(cur_val);
-
-                                /* Look for second block {end} */
-                                size_t j2_sl = j3;
-                                while (j2_sl < len && isspace((unsigned char)src[j2_sl])) j2_sl++;
-                                if (j2_sl < len && str_pfx(src + j2_sl, sym->open)) {
-                                    StrView blk2;
-                                    j3 = (size_t)extract_block(src, (int)j2_sl, so_f, sc_f, &blk2);
-                                    char *s2 = pap_process_sv(ctx, blk2);
-                                    end = atoi(s2); free(s2);
-                                }
-
-                                int len_cv = (int)strlen(cur_val);
-                                if (start < 0) start = len_cv + start;
-                                if (end < 0) end = len_cv + end;
-                                if (start < 0) start = 0;
-                                if (end > len_cv) end = len_cv;
-                                char *slice_res = strdup("");
-                                if (start < end) {
-                                    slice_res = (char*)malloc((size_t)(end - start + 1));
-                                    memcpy(slice_res, cur_val + start, (size_t)(end - start));
-                                    slice_res[end - start] = '\0';
-                                }
-                                free(cur_val); cur_val = slice_res;
-                            } else if (is_contains) {
-                                char *pat_str = pap_process_sv(ctx, blk);
-                                Pattern p; memset(&p, 0, sizeof(p)); parse_pattern_ex(pat_str, &p, sym);
-                                Match m; memset(&m, 0, sizeof(m)); m.ctx = ctx;
-                                char *idx_res = strdup("");
-                                for (int s = 0; cur_val[s]; s++) {
-                                    if (match_pattern(ctx, cur_val, (int)strlen(cur_val), &p, s, &m)) {
-                                        free(idx_res);
-                                        char nbuf[32]; snprintf(nbuf, sizeof(nbuf), "%d", m.start);
-                                        idx_res = strdup(nbuf);
-                                        free_match(&m);
-                                        break;
-                                    }
-                                }
-                                free(cur_val); cur_val = idx_res;
-                                free_pattern(&p); free(pat_str);
-                            } else if (is_replace) {
-                                char *pat_str = pap_process_sv(ctx, blk);
-                                while (j3 < len && isspace((unsigned char)src[j3])) j3++;
-                                if (j3 < len && str_pfx(src + j3, sym->open)) {
-                                    StrView rep_blk;
-                                    j3 = (size_t)extract_block(src, (int)j3, so_f, sc_f, &rep_blk);
-                                    char *rep_str = pap_process_sv(ctx, rep_blk);
-                                    Pattern p; memset(&p, 0, sizeof(p)); parse_pattern_ex(pat_str, &p, sym);
-                                    Match m; memset(&m, 0, sizeof(m)); m.ctx = ctx;
-                                    int replaced = 0;
-                                    for (int s = 0; cur_val[s]; s++) {
-                                        if (match_pattern(ctx, cur_val, (int)strlen(cur_val), &p, s, &m)) {
-                                            char *old_match = (char*)malloc((size_t)(m.end - m.start + 1));
-                                            memcpy(old_match, cur_val + m.start, (size_t)(m.end - m.start));
-                                            old_match[m.end - m.start] = '\0';
-                                            char *r = apply_replacement_ex(rep_str, &m, sym);
-                                            size_t rl = strlen(r), cl = strlen(cur_val);
-                                            size_t new_len = (size_t)m.start + rl + (cl - (size_t)m.end);
-                                            char *new_val = (char *)malloc(new_len + 1);
-                                            memcpy(new_val, cur_val, (size_t)m.start);
-                                            memcpy(new_val + m.start, r, rl);
-                                            strcpy(new_val + m.start + rl, cur_val + m.end);
-                                            
-                                            /* Persistent update if applicable */
-                                            if (klen > 0) pap_var_update(ctx, sym, src + ks, klen, new_val);
-                                            
-                                            free(cur_val); cur_val = old_match;
-                                            free(new_val); free(r); free_match(&m);
-                                            replaced = 1; break;
-                                        }
-                                    }
-                                    if (!replaced) {
-                                        free(cur_val); cur_val = strdup("");
-                                    }
-                                    free_pattern(&p); free(rep_str);
-                                }
-                                free(pat_str);
                             } else if (is_repeat) {
                                 char *times_str = pap_process_sv(ctx, blk);
                                 int times = atoi(times_str); free(times_str);
@@ -2743,6 +2764,26 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                                 }
                                 free_pattern(&pat);
                                 free(pat_str);
+                            } else if (is_cmd_op >= 0) {
+                                char *vargv[32]; size_t vargl[32]; int vargc = 0;
+                                j3 = j2; /* Rewind to start parsing blocks */
+                                while (vargc < 32) {
+                                    size_t sj = j3;
+                                    while(j3 < len && isspace((unsigned char)src[j3])) j3++;
+                                    if (j3 < len && str_pfx(src + j3, sym->open)) {
+                                        StrView blk_cmd; j3 = (size_t)extract_block(src, (int)j3, so_f, sc_f, &blk_cmd);
+                                        char *arg_cmd = (char*)malloc(blk_cmd.len + 1);
+                                        if (arg_cmd) { memcpy(arg_cmd, blk_cmd.ptr, blk_cmd.len); arg_cmd[blk_cmd.len] = '\0'; }
+                                        vargv[vargc] = arg_cmd; vargl[vargc] = blk_cmd.len; vargc++;
+                                    } else { j3 = sj; break; }
+                                }
+                                RegisteredCommand *cmd = &ctx->commands[is_cmd_op];
+                                char *res = cmd->handler(ctx, cmd->name, vargc, (const char **)vargv, vargl, cur_val, cmd->userdata);
+                                for (int ci = 0; ci < vargc; ci++) if (vargv[ci]) free(vargv[ci]);
+                                free(cur_val); cur_val = res ? res : strdup("");
+                                
+                                /* Persistent update if applicable */
+                                if (klen > 0) pap_var_update(ctx, sym, src + ks, klen, cur_val);
                             }
                              if (arg) free(arg);
                             cp = j3;
@@ -2930,7 +2971,7 @@ static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sy
                         } else { j = sj; break; }
                     }
                     RegisteredCommand *cmd = &ctx->commands[found];
-                    char *res = cmd->handler(ctx, cmd->name, vargc, (const char **)vargv, vargl, cmd->userdata);
+                    char *res = cmd->handler(ctx, cmd->name, vargc, (const char **)vargv, vargl, NULL, cmd->userdata);
                     if (res) { sb_append_n(&out, res, strlen(res)); free(res); }
                     for (int ci = 0; ci < vargc; ci++) if (vargv[ci]) free(vargv[ci]);
                     i = j; continue;

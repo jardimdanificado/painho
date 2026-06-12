@@ -794,9 +794,9 @@
     },
     {
       "id": 134,
-      "name": "$replace basic (returns match, updates var)",
+      "name": "$replace basic (returns replaced string)",
       "code": "$A$from{hello123world} $A$replace{123}{XXX} $A",
-      "expected": "123 helloXXXworld"
+      "expected": "helloXXXworld helloXXXworld"
     },
     {
       "id": 135,

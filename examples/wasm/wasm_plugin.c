@@ -105,7 +105,7 @@ static void link_host_functions(WasmContext *wctx, IM3Module module) {
     m3_LinkRawFunction(module, "env", "__host_abort",     "v(*)",  host_abort);
 }
 
-static char *wasm_command_bridge(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *ud) {
+static char *wasm_command_bridge(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, const char *piped_val, void *ud) {
     (void)name;
     WasmCommandData *data = (WasmCommandData *)ud;
     IM3Function f = data->function;
@@ -219,7 +219,7 @@ static void papagaio_load_wasm_file(WasmContext *wctx, const char *path) {
     fclose(f);
 }
 
-static char *wasm_eval_command(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *userdata) {
+static char *wasm_eval_command(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, const char *piped_val, void *userdata) {
     (void)name;
     (void)userdata;
     (void)argl;

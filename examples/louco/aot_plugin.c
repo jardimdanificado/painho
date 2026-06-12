@@ -116,7 +116,7 @@ static void louro_emit_c_stream(FILE *f, const LouroExpression *n, int start_id)
 
 /* Papagaio Command Handlers */
 
-char *cmd_aot_thunks(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *userdata) {
+char *cmd_aot_thunks(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, const char *piped_val, void *userdata) {
     if (argc < 1) return strdup("");
     
     int err;
@@ -137,7 +137,7 @@ char *cmd_aot_thunks(Papagaio *ctx, const char *name, int argc, const char **arg
     return buf;
 }
 
-char *cmd_aot_c(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *userdata) {
+char *cmd_aot_c(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, const char *piped_val, void *userdata) {
     if (argc < 1) return strdup("");
     
     int err;

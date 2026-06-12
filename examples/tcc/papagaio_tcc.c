@@ -12,7 +12,7 @@ typedef struct {
 
 static TCCPool pool = {0};
 
-static char *tcc_eval_command(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, void *userdata) {
+static char *tcc_eval_command(Papagaio *ctx, const char *name, int argc, const char **argv, const size_t *argl, const char *piped_val, void *userdata) {
     (void)name;
     (void)userdata;
     if (argc < 1) return strdup("");
@@ -27,8 +27,7 @@ static char *tcc_eval_command(Papagaio *ctx, const char *name, int argc, const c
         "#include <stdlib.h>\n"
         "#include <stdio.h>\n"
         "typedef struct Papagaio Papagaio;\n"
-        "void papagaio_register_command(Papagaio *ctx, const char *name, void *func, void *userdata);\n"
-        "void papagaio_register_math_generic(Papagaio *ctx, const char *name, void *func, int arity, int is_closure, int is_pure, ...);\n";
+        "void papagaio_register_command(Papagaio *ctx, const char *name, void *func, void *userdata);\n";
         
     char *code = malloc(strlen(header) + argl[0] + 10);
     strcpy(code, header);
@@ -42,7 +41,6 @@ static char *tcc_eval_command(Papagaio *ctx, const char *name, int argc, const c
     free(code);
     
     tcc_add_symbol(s, "papagaio_register_command", papagaio_register_command);
-    tcc_add_symbol(s, "papagaio_register_math_generic", papagaio_register_math_generic);
     
     if (tcc_relocate(s) < 0) {
         tcc_delete(s);
