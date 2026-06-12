@@ -38,11 +38,6 @@ int main(void)
     printf("Test 8 [Braced] - %s (esperado: foox)\n", o);
     free(o);
 
-    /* Test multi-char optional marker */
-    const char *in20 = "$changesymbols{$}{[}{]}{MAYBE} $pattern{[fooMAYBE]}{[MATCH]}\nfoo";
-    o = papagaio_process_text(ctx, in20, strlen(in20));
-    printf("Test 20 - %s (esperado:  MATCH)\n", o);
-    free(o);
 
     /* Test group with named capture */
     const char *in21 = "$pattern {{$meta$group{ID: $id$int}?}} {ID=$id}\nID: 42";

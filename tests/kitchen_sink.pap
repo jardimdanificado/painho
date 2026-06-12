@@ -1,12 +1,9 @@
-$priority$max{
-  $pattern{TITLE}{Papagaio & Louro Kitchen Sink}
-}
-$never{
+$pattern{TITLE}{Papagaio & Louro Kitchen Sink}
+
 ========================================================================
   Welcome to $TITLE
   This file demonstrates ALL features of the Papagaio language engine!
 ========================================================================
-}
 
 $GLOBAL_NAME$from{Kitchen Sink Processor}
 
@@ -74,14 +71,14 @@ $pattern{ALIASES_DEMO}{
 }
 $ALIASES_DEMO
 
-// 8. Evaluation Control ($once and $normalize)
+// 8. Evaluation Control ($once)
 $pattern{CODE_GEN}{
   $pattern{DYNAMIC_VAR}{42}
   The dynamic var is DYNAMIC_VAR.
 }
 
 Normal Call:     $CODE_GEN (The pattern is not processed recursively by default)
-$normalize Call: $normalize{CODE_GEN}
+$once Call:      $once{CODE_GEN}
 
 $once Barrier:
 $once{
@@ -90,8 +87,6 @@ $once{
 }
 Outside: LOCAL_MACRO (Leaked! Patterns are hoisted before $once runs)
 
-$priority$min{
 ------------------------------------------------------------------------
 Kitchen Sink Execution Complete!
 ------------------------------------------------------------------------
-}

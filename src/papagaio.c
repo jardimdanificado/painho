@@ -140,7 +140,7 @@ struct Papagaio {
     int          depth;
     int          disable_sandbox;
     int          disable_patterns;
-    int          normalize_mode;
+    int          once_mode;
 
     /* original document for $document$original */
     char        *original_doc;
@@ -2037,7 +2037,7 @@ Papagaio *papagaio_open(void)
     ctx->depth = 0;
     ctx->disable_sandbox = 0;
     ctx->disable_patterns = 0;
-    ctx->normalize_mode = 0;
+    ctx->once_mode = 0;
     ctx->original_doc = NULL; ctx->original_len = 0;
     ctx->dl_handles = NULL; ctx->dl_count = 0; ctx->dl_cap = 0;
 
@@ -2796,46 +2796,6 @@ static char *resolve_preprocessor(Papagaio *ctx, const char *src, Symbols *sym)
                     }
                 }
 
-                int is_sym = (klen == 13 && memcmp(src + ks, "changesymbols", 13) == 0);
-                
-                if (is_sym) {
-                    size_t saved_j = j;
-                    while (j < len && isspace((unsigned char)src[j])) j++;
-                    if (j < len && src[j] == '{') {
-                        StrView b1, b2, b3, b4;
-                        if (is_sym) {
-                            int next1 = extract_block(src, (int)j, (StrView){"{",1}, (StrView){"}",1}, &b1);
-                            size_t j2 = (size_t)next1; while (j2 < len && isspace((unsigned char)src[j2])) j2++;
-                            if (j2 < len && src[j2] == '{') {
-                                int next2 = extract_block(src, (int)j2, (StrView){"{",1}, (StrView){"}",1}, &b2);
-                                size_t j3 = (size_t)next2; while (j3 < len && isspace((unsigned char)src[j3])) j3++;
-                                if (j3 < len && src[j3] == '{') {
-                                    int next3 = extract_block(src, (int)j3, (StrView){"{",1}, (StrView){"}",1}, &b3);
-                                    size_t j4 = (size_t)next3; while (j4 < len && isspace((unsigned char)src[j4])) j4++;
-                                    if (j4 < len && src[j4] == '{') {
-                                        int next4 = extract_block(src, (int)j4, (StrView){"{",1}, (StrView){"}",1}, &b4);
-                                        StrView t1 = trim_sv(b1), t2 = trim_sv(b2), t3 = trim_sv(b3), t4 = trim_sv(b4);
-                                        
-                                        if (t1.len > 0 && t1.len < 16) {
-                                            memcpy(sym->sigil, t1.ptr, t1.len); sym->sigil[t1.len] = '\0';
-                                        }
-                                        if (t2.len > 0 && t2.len < 16 && t3.len > 0 && t3.len < 16) {
-                                            memcpy(sym->open,  t2.ptr, t2.len); sym->open[t2.len]  = '\0';
-                                            memcpy(sym->close, t3.ptr, t3.len); sym->close[t3.len] = '\0';
-                                        }
-                                        if (t4.len > 0 && t4.len < 16) {
-                                            memcpy(sym->optional, t4.ptr, t4.len);
-                                            sym->optional[t4.len] = '\0';
-                                        }
-                                        i = (size_t)next4; continue;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    j = saved_j; /* restore if blocks didn't match perfectly */
-                }
-
                 if (klen == 4 && memcmp(src + ks, "args", 4) == 0 && j < len && src[j] == '$') {
                     j++; /* skip the second $ in $args$ */
                     size_t start = j;
@@ -2986,30 +2946,10 @@ static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sy
                         char *arg = (char*)malloc(blk.len + 1);
                         if (arg) {
                             memcpy(arg, blk.ptr, blk.len); arg[blk.len] = '\0';
-                            ctx->disable_patterns++;
+                            int old_once = ctx->once_mode;
+                            ctx->once_mode = 1;
                             char *res = papagaio_process_text(ctx, arg, blk.len);
-                            ctx->disable_patterns--;
-                            if (res) { sb_append_n(&out, res, strlen(res)); free(res); }
-                            free(arg);
-                        }
-                        i = j; continue;
-                    }
-                    j = sj;
-                }
-
-                /* $normalize logic */
-                if (klen == 9 && memcmp(src + ks, "normalize", 9) == 0) {
-                    size_t sj = j;
-                    while(j < len && isspace((unsigned char)src[j])) j++;
-                    if (j < len && sv_pfx(src + j, so)) {
-                        StrView blk; j = (size_t)extract_block(src, (int)j, so, sc, &blk);
-                        char *arg = (char*)malloc(blk.len + 1);
-                        if (arg) {
-                            memcpy(arg, blk.ptr, blk.len); arg[blk.len] = '\0';
-                            int old_norm = ctx->normalize_mode;
-                            ctx->normalize_mode = 1;
-                            char *res = papagaio_process_text(ctx, arg, blk.len);
-                            ctx->normalize_mode = old_norm;
+                            ctx->once_mode = old_once;
                             if (res) { sb_append_n(&out, res, strlen(res)); free(res); }
                             free(arg);
                         }
@@ -3138,188 +3078,7 @@ static char *dispatch_commands(Papagaio *ctx, const char *src, const Symbols *sy
     return result;
 }
 
-typedef struct {
-    int priority;
-    size_t start;
-    size_t end;
-    char *content;
-    char *result;
-    int is_priority_block;
-    int original_index;
-} PChunk;
 
-static int compare_pchunks_priority(const void *a, const void *b) {
-    const PChunk *ca = (const PChunk *)a;
-    const PChunk *cb = (const PChunk *)b;
-    if (ca->priority < cb->priority) return -1;
-    if (ca->priority > cb->priority) return 1;
-    return ca->original_index - cb->original_index;
-}
-
-static int compare_pchunks_original(const void *a, const void *b) {
-    const PChunk *ca = (const PChunk *)a;
-    const PChunk *cb = (const PChunk *)b;
-    return (int)ca->original_index - (int)cb->original_index;
-}
-
-static char *handle_priorities(Papagaio *ctx, const char *src, size_t len, const Symbols *sym) {
-    size_t i = 0;
-    size_t last_pos = 0;
-    size_t sl = strlen(sym->sigil);
-    
-    PChunk *chunks = NULL;
-    int chunk_count = 0;
-    int chunk_cap = 0;
-    int found_any = 0;
-
-    while (i < len) {
-        int is_prio = (i + sl + 8 + sl < len && 
-                       memcmp(src + i, sym->sigil, sl) == 0 &&
-                       memcmp(src + i + sl, "priority", 8) == 0 &&
-                       memcmp(src + i + sl + 8, sym->sigil, sl) == 0);
-        int is_never = (i + sl + 5 < len && 
-                        memcmp(src + i, sym->sigil, sl) == 0 &&
-                        memcmp(src + i + sl, "never", 5) == 0);
-
-        if (is_prio || is_never) {
-            size_t ps = i;
-            size_t j = i + sl + (is_prio ? 8 + sl : 5);
-            int prio = 0;
-            int valid_syntax = 0;
-            
-            if (is_prio) {
-                if (j + 3 <= len && memcmp(src + j, "max", 3) == 0) {
-                    prio = INT_MIN + 1;
-                    j += 3;
-                    valid_syntax = 1;
-                } else if (j + 3 <= len && memcmp(src + j, "min", 3) == 0) {
-                    prio = INT_MAX - 1;
-                    j += 3;
-                    valid_syntax = 1;
-                } else {
-                    int sign = 1;
-                    if (j < len && src[j] == '-') {
-                        sign = -1;
-                        j++;
-                    }
-                    while (j < len && isdigit((unsigned char)src[j])) {
-                        prio = prio * 10 + (src[j] - '0');
-                        j++;
-                        valid_syntax = 1;
-                    }
-                    prio *= sign;
-                }
-            } else {
-                valid_syntax = 1; // never doesn't require arguments
-                prio = INT_MAX - 1; // normal priority
-            }
-
-            if (valid_syntax) {
-                while (j < len && isspace((unsigned char)src[j])) j++;
-                if (j < len && str_pfx(src + j, sym->open)) {
-                    found_any = 1;
-                    
-                    /* Add non-priority chunk before this */
-                    if (ps > last_pos) {
-                        if (chunk_count >= chunk_cap) {
-                            chunk_cap = chunk_cap ? chunk_cap * 2 : 8;
-                            chunks = (PChunk *)realloc(chunks, sizeof(PChunk) * chunk_cap);
-                        }
-                        chunks[chunk_count].priority = INT_MAX - 1;
-                        chunks[chunk_count].start = last_pos;
-                        chunks[chunk_count].end = ps;
-                        chunks[chunk_count].content = NULL;
-                        chunks[chunk_count].result = NULL;
-                        chunks[chunk_count].is_priority_block = 0;
-                        chunks[chunk_count].original_index = chunk_count;
-                        chunk_count++;
-                    }
-
-                    StrView v;
-                    StrView so = { sym->open, strlen(sym->open) };
-                    StrView sc = { sym->close, strlen(sym->close) };
-                    int next = extract_block(src, (int)j, so, sc, &v);
-                    
-                    if (chunk_count >= chunk_cap) {
-                        chunk_cap = chunk_cap ? chunk_cap * 2 : 8;
-                        chunks = (PChunk *)realloc(chunks, sizeof(PChunk) * chunk_cap);
-                    }
-                    chunks[chunk_count].priority = prio;
-                    chunks[chunk_count].start = ps;
-                    chunks[chunk_count].end = (size_t)next;
-                    chunks[chunk_count].content = (char *)malloc(v.len + 1);
-                    memcpy(chunks[chunk_count].content, v.ptr, v.len);
-                    chunks[chunk_count].content[v.len] = '\0';
-                    chunks[chunk_count].result = NULL;
-                    chunks[chunk_count].is_priority_block = is_prio ? 1 : 2;
-                    chunks[chunk_count].original_index = chunk_count;
-                    chunk_count++;
-                    
-                    i = (size_t)next;
-                    last_pos = i;
-                    continue;
-                }
-            }
-        }
-        i++;
-    }
-
-    if (!found_any) {
-        if (chunks) free(chunks);
-        return NULL;
-    }
-
-    /* Add trailing chunk */
-    if (last_pos < len) {
-        if (chunk_count >= chunk_cap) {
-            chunk_cap = chunk_cap ? chunk_cap * 2 : 8;
-            chunks = (PChunk *)realloc(chunks, sizeof(PChunk) * chunk_cap);
-        }
-        chunks[chunk_count].priority = INT_MAX - 1;
-        chunks[chunk_count].start = last_pos;
-        chunks[chunk_count].end = len;
-        chunks[chunk_count].content = NULL;
-        chunks[chunk_count].result = NULL;
-        chunks[chunk_count].is_priority_block = 0;
-        chunks[chunk_count].original_index = chunk_count;
-        chunk_count++;
-    }
-
-    /* Sort by priority */
-    qsort(chunks, chunk_count, sizeof(PChunk), compare_pchunks_priority);
-
-    /* Process in priority order */
-    ctx->disable_sandbox++;
-    for (int j = 0; j < chunk_count; j++) {
-        if (chunks[j].is_priority_block == 1) { // priority
-            chunks[j].result = papagaio_process_text(ctx, chunks[j].content, strlen(chunks[j].content));
-        } else if (chunks[j].is_priority_block == 2) { // never
-            chunks[j].result = strdup(chunks[j].content ? chunks[j].content : "");
-        } else { // normal text
-            const char *chunk_text = src + chunks[j].start;
-            size_t chunk_len = chunks[j].end - chunks[j].start;
-            chunks[j].result = papagaio_process_text(ctx, chunk_text, chunk_len);
-        }
-    }
-    ctx->disable_sandbox--;
-
-    /* Sort back to original order for reassembly */
-    qsort(chunks, chunk_count, sizeof(PChunk), compare_pchunks_original);
-
-    StrBuf out; sb_init(&out);
-    for (int j = 0; j < chunk_count; j++) {
-        if (chunks[j].result) {
-            sb_append_n(&out, chunks[j].result, strlen(chunks[j].result));
-            free(chunks[j].result);
-        }
-        if (chunks[j].content) free(chunks[j].content);
-    }
-    free(chunks);
-    
-    char *final_res = strdup(out.data);
-    sb_free(&out);
-    return final_res;
-}
 
 char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
 {
@@ -3342,13 +3101,7 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
         push_scope(ctx);
     }
 
-    /* 0. Handle Priorities */
-    char *prio_res = handle_priorities(ctx, input, len, &sym);
-    if (prio_res) {
-        if (ctx->depth > 1 && !ctx->disable_sandbox) pop_scope(ctx);
-        ctx->depth--;
-        return prio_res;
-    }
+
 
     char *buf = (char *)malloc(len + 1);
     if (!buf) {
@@ -3426,7 +3179,7 @@ char *papagaio_process_text(Papagaio *ctx, const char *input, size_t len)
                         sb_append_n(&out, r, strlen(r));
                     } else {
                         char *evaluated_r;
-                        if (ctx->normalize_mode) {
+                        if (ctx->once_mode) {
                             ctx->disable_patterns++;
                             evaluated_r = papagaio_process_text(ctx, r, strlen(r));
                             ctx->disable_patterns--;

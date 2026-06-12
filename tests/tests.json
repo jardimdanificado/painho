@@ -76,7 +76,7 @@
       "id": 13,
       "name": "Sigil escaping in replacement",
       "code": "$pattern {foo} {$once{$sigil$foo}}\nfoo",
-      "expected": "$foo"
+      "expected": "$$foo"
     },
     {
       "id": 14,
@@ -265,12 +265,6 @@
       "expected": "PET[dog] andPET[cat] and fish"
     },
     {
-      "id": 45,
-      "name": "Changequote",
-      "code": "$changesymbols{@}{<}{>}{?}@pattern <[@n]> <N:@n> [x] [y]",
-      "expected": " N:x N:y"
-    },
-    {
       "id": 46,
       "name": "Starts modifier",
       "code": "$pattern {$w$starts{pre}} {MATCH[$w]}\nprepare\npremium\npost\npre",
@@ -349,24 +343,6 @@
       "expected": "M[foo] andM[bar]"
     },
     {
-      "id": 59,
-      "name": "Changeoptional",
-      "code": "$changesymbols{$}{[}{]}{!} $pattern [a!b] [MATCH]\nab and b",
-      "expected": " MATCH and MATCH"
-    },
-    {
-      "id": 60,
-      "name": "Changequote (2 args)",
-      "code": "$changesymbols{$}{<<}{>>}{?}$pattern <<x>> <<y>>\nx",
-      "expected": "y"
-    },
-    {
-      "id": 61,
-      "name": "Multi-char optional marker",
-      "code": "$changesymbols{#}{[}{]}{MAYBE} #pattern[#fooMAYBE][MATCH]\nfoo",
-      "expected": " MATCH"
-    },
-    {
       "id": 62,
       "name": "Trivial Group",
       "code": "$pattern {$x$group{abc}} {OK-$x}\nabc",
@@ -416,21 +392,21 @@
     },
     {
       "id": 71,
-      "name": "Priority system: basic reordering",
-      "code": "$priority$1{Result: A} $priority$0{$pattern{A}{OK}}",
-      "expected": "Result: OK"
+      "name": "Top-down execution: sequential pattern overriding",
+      "code": "$pattern{A}{OK} $pattern{A}{FAIL} A",
+      "expected": "  OK"
     },
     {
       "id": 72,
-      "name": "Priority system: recursive blocks",
-      "code": "$priority$0{A $priority$1{B}} $priority$1{C}",
-      "expected": "A B C"
+      "name": "Top-down execution: command execution order",
+      "code": "$X$from{A} $X$from{B} $X",
+      "expected": "  B"
     },
     {
       "id": 73,
-      "name": "Priority system: side effects order",
-      "code": "$priority$0{$pattern{X}{1} $priority$1{$pattern{X}{2}}} $priority$1{$pattern{X}{3}} X",
-      "expected": "2"
+      "name": "Top-down execution: pattern cascade",
+      "code": "$pattern{A}{B} $pattern{B}{C} A",
+      "expected": "  C"
     },
     {
       "id": 74,
@@ -895,12 +871,6 @@
       "expected": "  inner   inner  inner"
     },
     {
-      "id": 151,
-      "name": "Dynamic symbol operators",
-      "code": "$changesymbols{@}{<}{>}{!}$sigil $open $close $marker",
-      "expected": "@ < > !"
-    },
-    {
       "id": 152,
       "name": "Infinite interpretation resolution",
       "code": "$pattern {hello} {$once{world $sigil$A$sigil$from{X}}}\nhello",
@@ -931,76 +901,16 @@
       "expected": "c"
     },
     {
-      "id": 157,
-      "name": "Basic Math Addition",
-      "code": "$math{2 + 2}",
-      "expected": "4"
-    },
-    {
-      "id": 158,
-      "name": "Math Precedence",
-      "code": "$math{2 + 3 * 4}",
-      "expected": "14"
-    },
-    {
-      "id": 159,
-      "name": "Math Variable Injection",
-      "code": "$A$from{5}$math{$A * $A}",
-      "expected": "25"
-    },
-    {
-      "id": 160,
-      "name": "Math Advanced Function",
-      "code": "$math{sqrt(9)}",
-      "expected": "3"
-    },
-    {
-      "id": 161,
-      "name": "Math Comparison",
-      "code": "$math{10 > 5}",
-      "expected": "1"
-    },
-    {
-      "id": 162,
-      "name": "Math Complex Precedence and Parentheses",
-      "code": "$math{((10 + 5) * (3 - 1)) / (2 ^ 2)}",
-      "expected": "7.5"
-    },
-    {
-      "id": 163,
-      "name": "Math Functions and Negative Numbers",
-      "code": "$math{abs(-10) + sin(0) * cos(0) == 10}",
-      "expected": "1"
-    },
-    {
-      "id": 164,
-      "name": "Math Floating Point Variable Injection",
-      "code": "$X$from{5.5}$Y$from{4.5}$math{sqrt($X^2 + $Y^2 - 0.5)}",
-      "expected": "7.07107"
-    },
-    {
-      "id": 165,
-      "name": "Math Logic Gates Chaining",
-      "code": "$math{(1 < 2) + (3 > 1) + (5 == 5) + (10 != 10)}",
-      "expected": "3"
-    },
-    {
-      "id": 166,
-      "name": "Math Silent Error Handling",
-      "code": "X$math{5 + *}Y",
-      "expected": "XY"
-    },
-    {
       "id": 167,
       "name": "Lazy evaluation inside pattern replacement block",
-      "code": "$pattern{$a + $b}{$once{$math{$a + $b}}} 2 + 3",
-      "expected": " 5"
+      "code": "$pattern{$a + $b}{$once{$byte{65}}} 2 + 3",
+      "expected": " A"
     },
     {
       "id": 168,
       "name": "Lazy evaluation with variable lookup inside pattern replacement",
-      "code": "$x$from{10} $pattern{CALC}{$once{$math{$x + 5}}} CALC",
-      "expected": " 15"
+      "code": "$x$from{65} $pattern{CALC}{$once{$byte{$x}}} CALC",
+      "expected": " A"
     },
     {
       "id": 169,
@@ -1011,80 +921,14 @@
     {
       "id": 170,
       "name": "Nested pattern matching with lazy mathematical evaluation",
-      "code": "$pattern{Y}{X} $pattern{X}{$once{$math{10 + 10}}} Y",
-      "expected": "20"
+      "code": "$pattern{Y}{X} $pattern{X}{$once{$byte{65}}} Y",
+      "expected": "A"
     },
     {
       "id": 171,
       "name": "Lazy comparison and flow control inside pattern",
       "code": "$pattern{CHECK{$v}}{$once{$v_var$from{$v}$v_var$compare{5}$then{YES}$else{NO}}} CHECK{5} and CHECK{3}",
       "expected": " YES and NO"
-    },
-    {
-      "id": 172,
-      "name": "Lazy evaluation within custom delimiters",
-      "code": "$changesymbols{$}{[}{]}{?}$pattern[$a + $b][$once[$math{$a + $b}]] 10 + 20",
-      "expected": "30"
-    },
-    {
-      "name": "Math: Logical AND",
-      "code": "$math{1 && 1} | $math{1 && 0}",
-      "expected": "1 | 0",
-      "id": 173
-    },
-    {
-      "name": "Math: Conditional Expressions (Quaternary)",
-      "code": "$math{if 10 > 5 then 100 else 200 end} | $math{if 2 > 5 then 100 else 200 end}",
-      "expected": "100 | 200",
-      "id": 174
-    },
-    {
-      "name": "Math: Advanced Built-in Functions",
-      "code": "$math{2^3} | $math{sqrt(16)} | $math{abs(-10)}",
-      "expected": "8 | 4 | 10",
-      "id": 175
-    },
-    {
-      "name": "Math: Sequencing and Conditionals",
-      "code": "$math{10; 20} | $math{if 20 > 10 then 20 else 10 end}",
-      "expected": "20 | 20",
-      "id": 176
-    },
-    {
-      "name": "Math: Trigonometry Basic",
-      "code": "$math{sin(0)} | $math{cos(0)}",
-      "expected": "0 | 1",
-      "id": 177
-    },
-    {
-      "name": "Math: Modulo Operator",
-      "code": "$math{10 % 3} | $math{20 % 7}",
-      "expected": "1 | 6",
-      "id": 178
-    },
-    {
-      "name": "Math: Logical Conditionals (Ternary equivalent)",
-      "code": "$math{(1 > 0) * 10 + (1 <= 0) * 20} | $math{(0 > 0) * 10 + (0 <= 0) * 20}",
-      "expected": "10 | 20",
-      "id": 179
-    },
-    {
-      "name": "Math: Complex Nested Equations",
-      "code": "$math{sqrt(3^2 + 4^2)}",
-      "expected": "5",
-      "id": 180
-    },
-    {
-      "name": "Math: Floating point precision and variables",
-      "code": "$x$from{2.5} $y$from{3.5} $math{$x * $y}",
-      "expected": "8.75",
-      "id": 181
-    },
-    {
-      "name": "Math: Multiple function arguments with spacing",
-      "code": "$math{atan2( 15 , 15 )} | $math{atan2( 0 , -1 )}",
-      "expected": "0.785398 | 3.14159",
-      "id": 182
     },
     {
       "name": "Default: Pattern Cascading (Sequential application)",
@@ -1094,14 +938,14 @@
     },
     {
       "name": "Default: Pattern Generates Command (Dead String)",
-      "code": "$pattern{MACRO}{$math{2+3}} MACRO",
-      "expected": "$math{2+3}",
+      "code": "$pattern{MACRO}{$unregistered{hello}} MACRO",
+      "expected": "$unregistered{hello}",
       "id": 184
     },
     {
       "name": "$once: Pattern Generates Command",
-      "code": "$pattern{MACRO}{$once{$math{2+3}}} MACRO",
-      "expected": "5",
+      "code": "$pattern{MACRO}{$once{$byte{65}}} MACRO",
+      "expected": " A",
       "id": 185
     },
     {
@@ -1118,51 +962,39 @@
     },
     {
       "name": "$once: Nested once top-down passing",
-      "code": "$once{$once{$math{10+10}}}",
-      "expected": "20",
+      "code": "$once{$once{$byte{65}}}",
+      "expected": "A",
       "id": 188
     },
     {
       "name": "$once: Substitution inside $once before execution",
-      "code": "$pattern{MACRO}{10} $once{$sigil$math{MACRO + 5}}",
-      "expected": "15",
+      "code": "$pattern{MACRO}{65} $once{$sigil$byte{MACRO}}",
+      "expected": "A",
       "id": 189
     },
     {
-      "name": "$once vs $normalize: Recursive Pattern Evaluation",
-      "code": "$pattern{X}{Y} $pattern{Y}{Z} $pattern{START_ONCE}{$once{X}} $pattern{START_NORM}{$normalize{X}} START_ONCE START_NORM",
-      "expected": "X Z",
+      "name": "$once: Recursive Pattern Evaluation",
+      "code": "$pattern{X}{Y} $pattern{Y}{Z} $pattern{START_ONCE}{$once{X}} START_ONCE",
+      "expected": "  Z",
       "id": 190
     },
     {
-      "name": "$normalize: Basic command evaluation",
-      "code": "$normalize{$math{5+5}}",
-      "expected": "10",
+      "name": "$once: Basic pattern and command evaluation",
+      "code": "$pattern{A}{OK} $once{A}",
+      "expected": "  OK",
       "id": 191
-    },
-    {
-      "name": "Complex DSL Transpilation Test: $normalize with deep nesting",
-      "code": "$pattern{DEF($n, $v)}{let $n = $v;} $pattern{VARS}{$normalize{DEF(x, 10) DEF(y, 20)}} VARS",
-      "expected": "let x = 10; let y = 20;",
-      "id": 192
     },
     {
       "name": "Complex DSL Transpilation Test: $once with deep nesting",
       "code": "$pattern{DEF($n, $v)}{let $n = $v;} $pattern{VARS}{$once{DEF(x, 10) DEF(y, 20)}} VARS",
-      "expected": "DEF(x, 10) DEF(y, 20)",
-      "id": 193
-    },
-    {
-      "id": 194,
-      "name": "Execution Control: $never escapes evaluation completely",
-      "code": "$pattern{MACRO}{10} MACRO $never{ $pattern{OTHER}{20} $math{2+3} MACRO }",
-      "expected": "10  $pattern{OTHER}{20} $math{2+3} MACRO "
+      "expected": "let x = 10; let y = 20;",
+      "id": 192
     },
     {
       "id": 195,
-      "name": "Code Generation: $normalize evaluating generated Papagaio code",
-      "code": "$pattern{GENERATE_CODE}{$pattern{MACRO}{10} MACRO} $normalize{GENERATE_CODE}",
-      "expected": "10"
+      "name": "Code Generation: $once evaluating generated Papagaio code",
+      "code": "$pattern{GENERATE_CODE}{$pattern{MACRO}{10} MACRO} $once{GENERATE_CODE}",
+      "expected": " 10"
     }
   ]
 }

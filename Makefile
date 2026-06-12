@@ -103,9 +103,6 @@ test_valgrind: $(TARGET_A) libpapagaio_dl.a
 	$(CC) $(CFLAGS) -UPAPAGAIO_NO_DL -o tests/test_bin tests/test.c libpapagaio_dl.a $(LDFLAGS)
 	@echo "=== Running Papagaio C Tests with Valgrind ==="
 	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 ./tests/test_bin
-	$(CC) $(CFLAGS) -o tests/test_priority_bin tests/test_priority.c $(TARGET_A) $(LDFLAGS)
-	@echo "=== Running Papagaio Priority Tests with Valgrind ==="
-	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 ./tests/test_priority_bin
 
 bench: $(TARGET_BIN) wasm
 	@echo "=== Running Benchmark (Native C) ==="
