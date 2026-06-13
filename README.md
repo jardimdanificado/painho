@@ -73,7 +73,7 @@ int papagaio_register_modifier(Papagaio *ctx, const char *name,
 - Return a **heap-allocated** string to store as the capture value (freed by the engine)
 - Return `NULL` or an empty string to fail the match (like a typed modifier mismatch)
 
-**Example plugin** (`plugins/modifiers/papagaio_mod_alpha.c`):
+**Example plugin** (`examples/modifiers/papagaio_mod_alpha.c`):
 ```c
 #include "papagaio.h"
 #include <ctype.h>
@@ -111,7 +111,7 @@ Hello
 ```
 *Output: `[HELLO]`*
 
-Modifier names support alphanumeric characters and underscores, enabling argument-passing through the name itself. The length-modifier plugin (`plugins/modifiers/papagaio_mod_len.c`) uses this to encode min/max bounds:
+Modifier names support alphanumeric characters and underscores, enabling argument-passing through the name itself. The length-modifier plugin (`examples/modifiers/papagaio_mod_len.c`) uses this to encode min/max bounds:
 ```text
 $import{./mod_len.so}
 $pattern {$p$len_3_8} {[$p]}
@@ -153,7 +153,7 @@ $pattern {$n$aliases{$x$int}{abc}} {VALUE: $n}
 - **`$document`**: Injects the current state of the document (alias for `$document$current`).
 - **`$document$original`**: Injects the initial, unprocessed input text. Useful for referencing the source even after multiple transformations.
 - **`$document$current`**: Injects the current state of the document during the pre-processing pass.
-- **$include{path}**: Injects the content of a file from the file system. Path is relative to the working directory.
+- **`$include{path}`**: Injects the content of a file from the file system. Path is relative to the working directory.
 - **`$NAME$from{value}`**: Dynamically assigns a processed `value` to `$NAME`. The assignment itself is suppressed from the output, and the variable becomes available for exact-match replacement in the remaining document.
 
   ```text
@@ -227,7 +227,7 @@ cc -shared -fPIC -I/path/to/papagaio/src -o my_plugin.so my_plugin.c
 ### Usage in a template
 
 ```text
-$import{./plugins/modifiers/alpha.so}
+$import{./examples/modifiers/alpha.so}
 $pattern {$v$alpha} {[$v]}
 Hello
 ```
@@ -236,7 +236,7 @@ Hello
 The path argument is **processed recursively** before loading, so you can use variables:
 
 ```text
-$PLUGIN_DIR$from{./plugins}
+$PLUGIN_DIR$from{./examples}
 $import{$PLUGIN_DIR/modifiers/alpha.so}
 ```
 
@@ -255,19 +255,21 @@ Plugins can call any API function on the provided `ctx`:
 
 ### Built-in plugins
 
-Example plugins live in `plugins/`:
+Example plugins live in `examples/`:
 
 | Plugin | Description |
 |---|---|
-| `plugins/modifiers/alpha.so` | Matches only alphabetic text, uppercases |
-| `plugins/modifiers/alphanum.so` | Matches only alphanumeric text |
-| `plugins/modifiers/email.so` | Validates and extracts email addresses |
-| `plugins/modifiers/len.so` | Validates text length with min/max bounds |
-| `plugins/tcc/tcc.so` | JIT-compile C code at runtime via TCC |
+| `examples/modifiers/alpha.so` | Matches only alphabetic text, uppercases |
+| `examples/modifiers/alphanum.so` | Matches only alphanumeric text |
+| `examples/modifiers/email.so` | Validates and extracts email addresses |
+| `examples/modifiers/len.so` | Validates text length with min/max bounds |
+| `examples/tcc/papagaio_tcc.so` | JIT-compile C code at runtime via TCC |
+| `examples/math/papagaio_math.so` | Advanced mathematical and logical evaluation |
+| `examples/wasm/papagaio_wasm.so` | Execute WebAssembly plugins inside Papagaio |
 
 Build all modifier plugins:
 ```sh
-make -C plugins/modifiers clean all
+make -C examples/modifiers clean all
 ```
 
 ---
@@ -318,44 +320,6 @@ To generate specific binary characters (such as null bytes) or handle complex AS
 - **`$ascii$code`** (Inline): E.g., `$ascii$65` outputs `A`
 - **`$ascii{code}`** (Block): E.g., `$ascii{0}` outputs a binary null byte (`\0`)
 
-### Mathematical Evaluation
-The **`$math{...}`** operator allows native numerical processing and comparison directly on the preprocessor pipeline. Powered internally by `tinyexpr`, it supports floating point arithmetic, trigonometric functions, exponents, and logical evaluations. The mathematical string is processed recursively by Papagaio before being evaluated, meaning you can easily inject your workflow variables.
-
-```text
-$X$from{5.5}
-$Y$from{4.5}
-$math{sqrt($X^2 + $Y^2 - 0.5)}
-```
-*Output: `7.07107`*
-
-**Comparisons and Logic Gates**
-Since comparison operators (`<`, `>`, `==`, `!=`) evaluate to `1` (true) or `0` (false), `$math` is perfect for chained conditionals when paired with Papagaio's flow controllers:
-```text
-$math{10 > 5}$compare{1}$then{ Math confirms 10 is greater than 5! }
-```
-*(Note: If the expression contains syntax errors like `$math{5 + *}`, the operator fails silently and emits an empty string to maintain engine stability).*
-
----
-
-## Recursive Priority System
-
-Papagaio allows you to control the order of execution and side-effects (such as pattern definitions) using the **`$priority$N`** directive.
-
-- **`$priority$0{...}`**: Maximum priority.
-- **`$priority$max{...}`**: Alias for `INT_MIN + 1` (Absolute highest priority).
-- **`$priority$min{...}`**: Alias for `INT_MAX - 1` (Absolute lowest priority).
-- **`$priority$1`, `$priority$2`, ...**: Successively lower priorities.
-- **Recursive Evaluation**: Blocks with higher numerical priority (lower value) are fully processed — including their own nested patterns and commands — before any lower-priority blocks, regardless of their physical position in the file.
-- **Unspecified Priority**: Any text not wrapped in a `$priority` block is treated as priority `INT_MAX - 1` (processed last).
-
-#### Example:
-```text
-$priority$1{ Result: A }
-$priority$max{ $pattern{A}{OK} }
-```
-*Output: `Result: OK`* — even though `A` is used before being defined in the source, the `$priority$max` block ensures the pattern definition happens first.
-
----
 
 ## Dynamic Variable Assignment ($from)
 
@@ -489,9 +453,9 @@ $L$list{,}$slice{1}{4}    → b,c,d
 
 ---
 
-## Mathematical and Logical Evaluation (`$math`)
+## Mathematical and Logical Evaluation Plugin (`$math`)
 
-Papagaio integrates the powerful **Louro Engine** for deterministic, AOT-capable mathematical and logical evaluation. 
+Papagaio provides an optional plugin powered by the **Louro Engine** for deterministic, AOT-capable mathematical and logical evaluation. Load it via `$import{./examples/math/papagaio_math.so}`.
 
 ### Syntax
 ```
@@ -515,24 +479,6 @@ $math{ sqrt(16) * pi() }       → 12.56637...
 
 ---
 
-## Execution Control (`$once`, `$normalize`, `$never`)
-
-Papagaio operates as a one-pass text evaluator by default to ensure deterministic transpilation and avoid infinite recursion. To control the depth of evaluation dynamically, Papagaio provides explicit execution barriers.
-
-### `$once{...}`
-Forces the content inside to be fully evaluated **exactly one time** in an isolated sub-context before being returned to the parent string. The resulting output is "blinded" to the parent scope and will not trigger any further pattern replacements.
-
-### `$normalize{...}`
-Recursively evaluates the content **until it stops changing** (up to a safe internal limit). The final output is then returned to the parent scope, where it may trigger further pattern matching. This is ideal for deep transpilation and expanding generated code.
-
-### `$never{...}`
-Completely escapes evaluation. The contents are extracted early and bypassed during all engine passes, ensuring that no patterns, math blocks, or variables inside the block are touched. The raw text is safely emitted exactly as it was written.
-
-### Examples
-```text
-$once{ $pattern{A}{10} A }        → 10 (A remains unbound in outer scope)
-$never{ $math{2+3} }              → $math{2+3}
-```
 
 ## Flow Control Operators
 
