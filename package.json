@@ -1,6 +1,6 @@
 {
   "name": "papagaio",
-  "version": "0.47.1",
+  "version": "0.48.1",
   "description": "easy yet powerful preprocessor",
   "main": "dist/wasm/papagaio.js",
   "bin": {

@@ -73,43 +73,47 @@ int papagaio_register_modifier(Papagaio *ctx, const char *name,
 - Return a **heap-allocated** string to store as the capture value (freed by the engine)
 - Return `NULL` or an empty string to fail the match (like a typed modifier mismatch)
 
-**Example plugin** (`examples/modifiers/papagaio_mod_alpha.c`):
+**Built-in modifiers** `alpha` and `alphanum` are registered automatically — no `$import` needed:
+```text
+$pattern {$v$alpha} {[$v]}
+Hello
+```
+*Output: `[HELLO]`*
+
+**Example custom modifier** (`examples/modifiers/papagaio_mod_email.c`):
 ```c
 #include "papagaio.h"
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
-static char *alpha_modifier(const char *match, const char *modifier,
+static char *email_modifier(const char *match, const char *modifier,
                             size_t match_len, size_t mod_len, void *ud)
 {
     (void)modifier; (void)mod_len; (void)ud;
     if (!match || match_len == 0) return NULL;
-    for (size_t i = 0; i < match_len; i++)
-        if (!isalpha((unsigned char)match[i])) return NULL;
-    char *res = malloc(match_len + 1);
-    for (size_t i = 0; i < match_len; i++)
-        res[i] = toupper((unsigned char)match[i]);
-    res[match_len] = '\0';
-    return res;
+    const char *at = memchr(match, '@', match_len);
+    if (!at) return NULL;
+    /* ... validation logic ... */
+    return strndup(match, match_len);
 }
 
 int papagaio_plugin_init(Papagaio *ctx)
 {
-    return papagaio_register_modifier(ctx, "alpha", alpha_modifier, NULL);
+    return papagaio_register_modifier(ctx, "email", email_modifier, NULL);
 }
 ```
 
 Build as a shared library and load via `$import`:
 ```sh
-cc -shared -fPIC -I/path/to/papagaio/src -o alpha.so alpha.c
+cc -shared -fPIC -I/path/to/papagaio/src -o email.so email.c
 ```
 ```text
-$import{./alpha.so}
-$pattern {$v$alpha} {[$v]}
-Hello
+$import{./email.so}
+$pattern {$v$email} {[$v]}
+user@domain.com
 ```
-*Output: `[HELLO]`*
+*Output: `[user@domain.com]`*
 
 Modifier names support alphanumeric characters and underscores, enabling argument-passing through the name itself. The length-modifier plugin (`examples/modifiers/papagaio_mod_len.c`) uses this to encode min/max bounds:
 ```text
@@ -227,11 +231,11 @@ cc -shared -fPIC -I/path/to/papagaio/src -o my_plugin.so my_plugin.c
 ### Usage in a template
 
 ```text
-$import{./examples/modifiers/alpha.so}
-$pattern {$v$alpha} {[$v]}
-Hello
+$import{./examples/modifiers/email.so}
+$pattern {$v$email} {[$v]}
+user@domain.com
 ```
-*Output: `[HELLO]`*
+*Output: `[user@domain.com]`*
 
 The path argument is **processed recursively** before loading, so you can use variables:
 
@@ -253,21 +257,28 @@ Plugins can call any API function on the provided `ctx`:
 | `papagaio_clear_commands(ctx)` | Remove all registered commands |
 | `papagaio_clear_modifiers(ctx)` | Remove all registered modifiers |
 
-### Built-in plugins
+### Built-in features
 
-Example plugins live in `examples/`:
+These features are available out of the box, no `$import` needed:
+
+| Feature | Description |
+|---|---|
+| `$math{expr}` | Mathematical and logical expression evaluation |
+| `$var$alpha` | Matches only alphabetic text, uppercases |
+| `$var$alphanum` | Matches only alphanumeric text |
+
+### Plugin-only features
+
+Example plugins live in `examples/` and must be loaded via `$import`:
 
 | Plugin | Description |
 |---|---|
-| `examples/modifiers/alpha.so` | Matches only alphabetic text, uppercases |
-| `examples/modifiers/alphanum.so` | Matches only alphanumeric text |
 | `examples/modifiers/email.so` | Validates and extracts email addresses |
 | `examples/modifiers/len.so` | Validates text length with min/max bounds |
 | `examples/tcc/papagaio_tcc.so` | JIT-compile C code at runtime via TCC |
-| `examples/math/papagaio_math.so` | Advanced mathematical and logical evaluation |
 | `examples/wasm/papagaio_wasm.so` | Execute WebAssembly plugins inside Papagaio |
 
-Build all modifier plugins:
+Build modifier plugins:
 ```sh
 make -C examples/modifiers clean all
 ```
@@ -453,9 +464,9 @@ $L$list{,}$slice{1}{4}    → b,c,d
 
 ---
 
-## Mathematical and Logical Evaluation Plugin (`$math`)
+## Mathematical and Logical Evaluation (`$math`)
 
-Papagaio provides an optional plugin powered by the **Louro Engine** for deterministic, AOT-capable mathematical and logical evaluation. Load it via `$import{./examples/math/papagaio_math.so}`.
+Papagaio includes a built-in math engine powered by **louro** for deterministic, AOT-capable mathematical and logical evaluation.
 
 ### Syntax
 ```

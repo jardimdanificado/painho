@@ -995,6 +995,126 @@
       "name": "Code Generation: $once evaluating generated Papagaio code",
       "code": "$pattern{GENERATE_CODE}{$pattern{MACRO}{10} MACRO} $once{GENERATE_CODE}",
       "expected": " 10"
+    },
+    {
+      "id": 200,
+      "name": "Math: Basic Addition",
+      "code": "$math{2 + 2}",
+      "expected": "4"
+    },
+    {
+      "id": 201,
+      "name": "Math: Precedence",
+      "code": "$math{2 + 3 * 4}",
+      "expected": "14"
+    },
+    {
+      "id": 202,
+      "name": "Math: Variable Injection",
+      "code": "$A$from{5}$math{$A * $A}",
+      "expected": "25"
+    },
+    {
+      "id": 203,
+      "name": "Math: Advanced Function",
+      "code": "$math{sqrt(9)}",
+      "expected": "3"
+    },
+    {
+      "id": 204,
+      "name": "Math: Comparison",
+      "code": "$math{10 > 5}",
+      "expected": "1"
+    },
+    {
+      "id": 205,
+      "name": "Math: Complex Precedence and Parentheses",
+      "code": "$math{((10 + 5) * (3 - 1)) / (2 ^ 2)}",
+      "expected": "7.5"
+    },
+    {
+      "id": 206,
+      "name": "Math: Functions and Negative Numbers",
+      "code": "$math{abs(-10) + sin(0) * cos(0) == 10}",
+      "expected": "1"
+    },
+    {
+      "id": 207,
+      "name": "Math: Floating Point Variable Injection",
+      "code": "$X$from{5.5}$Y$from{4.5}$math{sqrt($X^2 + $Y^2 - 0.5)}",
+      "expected": "7.07107"
+    },
+    {
+      "id": 208,
+      "name": "Math: Logic Gates Chaining",
+      "code": "$math{(1 < 2) + (3 > 1) + (5 == 5) + (10 != 10)}",
+      "expected": "3"
+    },
+    {
+      "id": 209,
+      "name": "Math: Silent Error Handling",
+      "code": "X$math{5 + *}Y",
+      "expected": "XY"
+    },
+    {
+      "id": 210,
+      "name": "Math: Logical AND",
+      "code": "$math{1 && 1} | $math{1 && 0}",
+      "expected": "1 | 0"
+    },
+    {
+      "id": 211,
+      "name": "Math: Conditional Expressions (if/then/else/end)",
+      "code": "$math{if 10 > 5 then 100 else 200 end} | $math{if 2 > 5 then 100 else 200 end}",
+      "expected": "100 | 200"
+    },
+    {
+      "id": 212,
+      "name": "Math: Advanced Built-in Functions",
+      "code": "$math{2^3} | $math{sqrt(16)} | $math{abs(-10)}",
+      "expected": "8 | 4 | 10"
+    },
+    {
+      "id": 213,
+      "name": "Math: Sequencing and Conditionals",
+      "code": "$math{10; 20} | $math{if 20 > 10 then 20 else 10 end}",
+      "expected": "20 | 20"
+    },
+    {
+      "id": 214,
+      "name": "Math: Trigonometry Basic",
+      "code": "$math{sin(0)} | $math{cos(0)}",
+      "expected": "0 | 1"
+    },
+    {
+      "id": 215,
+      "name": "Math: Modulo Operator",
+      "code": "$math{10 % 3} | $math{20 % 7}",
+      "expected": "1 | 6"
+    },
+    {
+      "id": 216,
+      "name": "Math: Logical Conditionals (Ternary equivalent)",
+      "code": "$math{(1 > 0) * 10 + (1 <= 0) * 20} | $math{(0 > 0) * 10 + (0 <= 0) * 20}",
+      "expected": "10 | 20"
+    },
+    {
+      "id": 217,
+      "name": "Math: Complex Nested Equations",
+      "code": "$math{sqrt(3^2 + 4^2)}",
+      "expected": "5"
+    },
+    {
+      "id": 218,
+      "name": "Math: Floating Point Precision and Variables",
+      "code": "$x$from{2.5} $y$from{3.5} $math{$x * $y}",
+      "expected": "8.75"
+    },
+    {
+      "id": 219,
+      "name": "Math: Multiple Function Arguments with Spacing",
+      "code": "$math{atan2( 15 , 15 )} | $math{atan2( 0 , -1 )}",
+      "expected": "0.785398 | 3.14159"
     }
   ]
 }
