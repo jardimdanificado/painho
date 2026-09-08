@@ -212,6 +212,17 @@ export function parsePattern(patternStr, options = {}) {
     });
   }
 
+  // Calcula nextSig (próximo token não-whitespace) exatamente como no motor C (next_sig)
+  for (let a = 0; a < tokens.length; a++) {
+    tokens[a].nextSig = null;
+    for (let b = a + 1; b < tokens.length; b++) {
+      if (tokens[b].type !== TOK_WS) {
+        tokens[a].nextSig = tokens[b];
+        break;
+      }
+    }
+  }
+
   return tokens;
 }
 
@@ -383,9 +394,11 @@ export function matchTokens(tokens, src, startIndex = 0, options = {}) {
         return true;
       }
 
-      // Procura o término do capture da variável
-      if (nextTok && (nextTok.type === TOK_LITERAL || nextTok.type === TOK_BLOCK)) {
-        const stopCond = nextTok.type === TOK_LITERAL ? nextTok.value : nextTok.openDelim;
+      // Procura o término do capture da variável usando o próximo token significativo (nx = tok.nextSig)
+      const nx = tok.nextSig;
+
+      if (nx && (nx.type === TOK_LITERAL || nx.type === TOK_BLOCK)) {
+        const stopCond = nx.type === TOK_LITERAL ? nx.value : nx.openDelim;
         while (pos < src.length) {
           if (src[pos] === "\n") break;
           if (src.startsWith(stopCond, pos)) break;
@@ -397,10 +410,10 @@ export function matchTokens(tokens, src, startIndex = 0, options = {}) {
         }
       } else {
         while (pos < src.length) {
-          if (nextTok && /\s/.test(src[pos])) break;
-          if (nextTok && nextTok.type === TOK_LITERAL && src.startsWith(nextTok.value, pos)) break;
-          if (nextTok && nextTok.type === TOK_BLOCK && src.startsWith(nextTok.openDelim, pos)) break;
-          if (!nextTok && src[pos] === "\n") break;
+          if (nextTok && nextTok.type === TOK_WS && /\s/.test(src[pos])) break;
+          if (nx && nx.type === TOK_LITERAL && src.startsWith(nx.value, pos)) break;
+          if (nx && nx.type === TOK_BLOCK && src.startsWith(nx.openDelim, pos)) break;
+          if (!nx && src[pos] === "\n") break;
           if (!isCharValid(src[pos], pos, varStart)) break;
           pos++;
           if ((tok.modifier === "ends" || tok.modifier === "suffix") && tok.subPatternStr) {
