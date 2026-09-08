@@ -2,7 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import Papagaio from '../dist/wasm/papagaio.js';
+import { papagaio } from './index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -17,7 +17,7 @@ async function main() {
     }
 
     if (args.includes('--help') || args.includes('-h')) {
-        console.log("Papagaio - easy yet powerful preprocessor");
+        console.log("Papagaio - JavaScript Text Processing & Pattern Engine");
         console.log("Usage: papagaio <file.txt> [key=value ...]");
         process.exit(0);
     }
@@ -34,14 +34,21 @@ async function main() {
     }
 
     const input = fs.readFileSync(filePath, 'utf-8');
-    const p = new Papagaio();
-    await p.init();
     
-    // Set arguments in context (mimic C main.c behavior)
-    // argv[0] = papagaio, argv[1] = file, argv[2...] = extras
-    p.setArgs(process.argv.slice(1)); 
+    // Parse key=value arguments into context
+    const context = {};
+    for (let i = 1; i < args.length; i++) {
+        const eqIdx = args[i].indexOf('=');
+        if (eqIdx !== -1) {
+            const key = args[i].slice(0, eqIdx);
+            const val = args[i].slice(eqIdx + 1);
+            context[key] = val;
+        } else {
+            context[`arg${i}`] = args[i];
+        }
+    }
 
-    const output = p.process(input);
+    const output = papagaio(input, context);
     process.stdout.write(output);
 }
 
